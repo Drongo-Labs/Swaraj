@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+target/
+.lake/
+artifacts/
+*.tgz
+
+# pnpm cache (repo-local store, if used)
+.pnpm-store/
+
+# Local configuration — never commit real values
+.env
+.env.*
+!.env.example
+
+# OS noise
+.DS_Store

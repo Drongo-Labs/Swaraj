@@ -1,0 +1,42 @@
+# Swaraj development database.
+#
+# Bring it up with:  pnpm db:up   (or: docker compose up -d postgres)
+# It reads POSTGRES_PASSWORD from .env — copy .env.example to .env first.
+#
+# The packages/database/schema.sql file is executed once, on first boot of a
+# fresh volume, by the postgres image's init mechanism.
+
+name: swaraj-dev
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    shm_size: 64mb
+
+    environment:
+      # Credentials and database name come from .env so nothing real is committed.
+      POSTGRES_USER: ${POSTGRES_USER:-swaraj}
+      POSTGRES_DB: ${POSTGRES_DB:-swaraj}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required — copy .env.example to .env}
+
+    ports:
+      # Only reachable from localhost; the host port can be overridden when
+      # 5432 is already taken on the dev machine.
+      - "${POSTGRES_PORT:-5432}:5432"
+
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./packages/database/schema.sql:/docker-entrypoint-initdb.d/0001-init.sql:ro
+
+    healthcheck:
+      # Compose reports (healthy) once the server answers psql probes.
+      interval: 3s
+      timeout: 2s
+      retries: 12
+      test:
+        - CMD-SHELL
+        - pg_isready --dbname=$$POSTGRES_DB --username=$$POSTGRES_USER
+
+volumes:
+  db_data:
