@@ -1,0 +1,15 @@
+{
+  "intentId": "intent_0001",
+  "actionType": "SPOT_TRADE",
+  "venue": "UNISWAP_V3_BASE",
+  "accountRef": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "assetIn": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  "assetOut": "0x4200000000000000000000000000000000000006",
+  "amount": "50000000",
+  "maxSlippageBps": 0.5,
+  "limitPrice": "400000000000000",
+  "expiry": 1790000300,
+  "idempotencyKey": "idem_0001",
+  "policyVersion": 1,
+  "intentHash": "0x1111111111111111111111111111111111111111111111111111111111111111"
+}
