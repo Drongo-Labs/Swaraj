@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "itemId": "item_0002_log",
+      "sourceClass": "CANONICAL_CHAIN_STATE",
+      "tag": "TRANSFER_LOG",
+      "timestamp": 1790000100,
+      "payloadHash": "0x6666666666666666666666666666666666666666666666666666666666666666",
+      "integrity": {
+        "method": "CHAIN_STATE_PROOF"
+      }
+    },
+    {
+      "itemId": "item_0001_receipt",
+      "sourceClass": "CANONICAL_CHAIN_STATE",
+      "tag": "TX_RECEIPT",
+      "timestamp": 1790000100,
+      "payloadHash": "0x4444444444444444444444444444444444444444444444444444444444444444",
+      "integrity": {
+        "method": "CHAIN_STATE_PROOF",
+        "proofHash": "0x5555555555555555555555555555555555555555555555555555555555555555"
+      }
+    }
+  ],
+  "collectedAt": 1790000200,
+  "finalityResult": "PENDING",
+  "evidenceRoot": "0x7777777777777777777777777777777777777777777777777777777777777777"
+}

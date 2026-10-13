@@ -1,0 +1,19 @@
+{
+  "balances": [
+    {
+      "asset": "0x4200000000000000000000000000000000000006",
+      "amount": "0"
+    },
+    {
+      "asset": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "amount": "250000000"
+    }
+  ],
+  "reservedBudget": "0",
+  "usedDailyTurnover": "100000000",
+  "lastActionTime": 1789999000,
+  "policyStatus": "ACTIVE",
+  "freshnessSeconds": 5,
+  "timestamp": 1790000000,
+  "stateHash": "0x3333333333333333333333333333333333333333333333333333333333333333"
+}
