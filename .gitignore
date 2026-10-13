@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.pnpm-store/
+*.tgz
+.env
+.env.*
+!.env.example
+target/
+.lake/
+artifacts/
+.DS_Store
