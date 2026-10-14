@@ -1,0 +1,75 @@
+import { readdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import type pg from "pg";
+import type { PoolHandle } from "./pool.js";
+
+const MIGRATIONS_DIR = fileURLToPath(new URL("../migrations", import.meta.url));
+
+export interface MigrationStatus {
+  ordinal: number;
+  label: string;
+  appliedAt: string;
+}
+
+function parseOrdinal(fileName: string): number | undefined {
+  const match = /^(\d+)-[a-z0-9-]+\.sql$/.exec(fileName);
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Apply every pending migration in ordinal order. Each file is applied in
+ * its own transaction and self-registers in applied_migrations, so this is
+ * safe to call repeatedly — including right after the container's first
+ * boot already executed the same files via initdb.
+ */
+export async function applyMigrations(
+  handle: PoolHandle,
+  dir: string = MIGRATIONS_DIR,
+): Promise<MigrationStatus[]> {
+  const files = (await readdir(dir))
+    .map((name) => ({ name, ordinal: parseOrdinal(name) }))
+    .filter((entry): entry is { name: string; ordinal: number } => entry.ordinal !== undefined)
+    .sort((a, b) => a.ordinal - b.ordinal);
+
+  for (const entry of files) {
+    const client = await handle.raw.connect();
+    try {
+      const done = await client.query<{ ordinal: number }>(
+        "SELECT 1 FROM applied_migrations WHERE ordinal = $1",
+        [entry.ordinal],
+      );
+      if (!done.rowCount || done.rowCount === 0) {
+        const sql = await readFile(`${dir}/${entry.name}`, "utf8");
+        await client.query("BEGIN");
+        try {
+          await client.query(sql);
+          await client.query("COMMIT");
+        } catch (err) {
+          await client.query("ROLLBACK");
+          throw new Error(`migration ${entry.name} failed: ${String(err)}`);
+        }
+      }
+    } finally {
+      client.release();
+    }
+  }
+
+  return listMigrations(handle);
+}
+
+export async function listMigrations(handle: PoolHandle): Promise<MigrationStatus[]> {
+  const result = await handle.raw.query<{
+    ordinal: number;
+    label: string;
+    applied_at: Date;
+  }>(
+    "SELECT ordinal, label, applied_at FROM applied_migrations ORDER BY ordinal",
+  );
+  return result.rows.map((row) => ({
+    ordinal: row.ordinal,
+    label: row.label,
+    appliedAt: new Date(row.applied_at).toISOString(),
+  }));
+}
+
+export type DbClient = pg.PoolClient;

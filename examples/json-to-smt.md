@@ -1,78 +1,88 @@
-# Example: JSON constraints to SMT-LIB
+# Example: JSON rules to SMT-LIB
 
-Illustrates the translation the `packages/smt` compiler (Day 2) will perform:
-a JSON rule set becomes integer-only SMT-LIB assertions that Z3 checks for
-satisfiability.
+Shows the translation `packages/smt` performs: a typed JSON rule document
+becomes integer-only SMT-LIB assertions that Z3 checks for satisfiability.
+This is the exact wire shape the compiler accepts — try it against the
+gateway after `pnpm --filter @swaraj/smt test`.
 
-Two scenarios, one allow path and one block path.
-
-## Scenario A — within policy
-
-### Input rules
+## Rule document
 
 ```json
 {
-  "fields": { "limitCents": "int", "amountCents": "int" },
-  "assume": ["(= limitCents 100000)"],
-  "rules": [
-    { "id": "amount.positive", "expr": "(> amountCents 0)" },
-    { "id": "amount.cap", "expr": "(<= amountCents limitCents)" }
+  "policyId": "pol_trade_demo",
+  "revision": 1,
+  "fields": ["amountCents", "limitCents"],
+  "assumptions": [
+    {
+      "ruleId": "limit.fixed",
+      "assertion": {
+        "kind": "compare", "op": "eq",
+        "left": { "kind": "field", "name": "limitCents" },
+        "right": { "kind": "const", "value": 100000 }
+      }
+    }
   ],
-  "decideFor": "amountCents = 25000"
+  "rules": [
+    {
+      "ruleId": "amount.positive",
+      "assertion": {
+        "kind": "compare", "op": "gt",
+        "left": { "kind": "field", "name": "amountCents" },
+        "right": { "kind": "const", "value": 0 }
+      }
+    },
+    {
+      "ruleId": "amount.cap",
+      "assertion": {
+        "kind": "compare", "op": "le",
+        "left": { "kind": "field", "name": "amountCents" },
+        "right": { "kind": "field", "name": "limitCents" }
+      }
+    }
+  ]
 }
 ```
 
-### Generated SMT-LIB
+## Action under test
+
+```json
+{ "values": { "amountCents": "25000", "limitCents": "100000" } }
+```
+
+## Generated SMT-LIB (stored with every decision, replayable as-is)
 
 ```lisp
-(declare-const limitCents Int)
+; policy pol_trade_demo revision 1
+(set-logic QF_NIA)
 (declare-const amountCents Int)
+(declare-const limitCents Int)
 
-(assert (= limitCents 100000))
-(assert (> amountCents 0))
-(assert (<= amountCents limitCents))
+(assert ; assumption limit.fixed
+  (= limitCents 100000))
+
+(assert ; rule amount.positive
+  (> amountCents 0))
+(assert ; rule amount.cap
+  (<= amountCents limitCents))
+
+; ground action under test
 (assert (= amountCents 25000))
-
-(check-sat)
-```
-
-### Z3 answer
-
-```text
-sat
-```
-
-The proposed amount satisfies every rule, so the gateway returns **ALLOW**.
-
-## Scenario B — over the cap
-
-Same rules, but `decideFor` is `"amountCents = 250000"`:
-
-```lisp
-(declare-const limitCents Int)
-(declare-const amountCents Int)
-
 (assert (= limitCents 100000))
-(assert (> amountCents 0))
-(assert (<= amountCents limitCents))
-(assert (= amountCents 250000))
 
 (check-sat)
 ```
 
-```text
-unsat
-```
+Z3 answers `sat`, so the gateway returns **ALLOW**.
 
-Unsatisfiable, so the gateway returns **BLOCK**. In the real gateway an unsat
-core maps the contradiction back to rule IDs — here `amount.cap` — which is
-what the decision receipt records.
+## Blocking
+
+With `amountCents: "250000"` the same script ends `unsat` and the gateway
+returns **BLOCK** with `violatedRuleIds: ["amount.cap"]` — found by
+re-solving each rule's negation under the ground binding, not by guessing.
 
 ## Notes
 
-- Only integers. No floats, no string ordering — money is always integer
-  minor units (`*Cents`).
-- Rule IDs are stable and numeric in the real pipeline so TypeScript, the SP1
-  guest, and Lean all refer to them identically.
-- The actual compiler lands with `packages/smt` (Day 2). This file is the
-  interface contract it must honor.
+- Integers only; money is minor units (`*Cents`). Non-integer, missing, or
+  unknown values fail closed to BLOCK.
+- The same rule document, unchanged, is re-evaluated deterministically by
+  the Rust engine (`packages/proofs/engine`) inside the SP1 guest.

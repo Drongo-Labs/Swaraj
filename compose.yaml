@@ -27,7 +27,9 @@ services:
 
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./packages/database/schema.sql:/docker-entrypoint-initdb.d/0001-init.sql:ro
+      # Migrations are the single source of truth: the container runs them
+      # on first boot, and the app-level runner re-checks them idempotently.
+      - ./packages/database/migrations:/docker-entrypoint-initdb.d:ro
 
     healthcheck:
       # Compose reports (healthy) once the server answers psql probes.

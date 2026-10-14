@@ -18,3 +18,7 @@ artifacts/
 
 # OS noise
 .DS_Store
+# Rust
+**/engine/target/
+**/guest/target/
+**/host/target/

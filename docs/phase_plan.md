@@ -57,4 +57,15 @@ See `OWNERSHIP.md` (created Day 5). Current split per the restructure plan:
 
 | Date | Entry |
 |---|---|
-| 2026-10-18 | Day 1 (Ayush): workspace config, compose + Postgres scaffold, docs/ and examples/ skeletons. Phases 0 partially complete. |
+| 2026-10-18 | Day 1: workspace config, compose + Postgres scaffold, docs/ and examples/ skeletons. |
+| 2026-10-18 | Day 2: `packages/database` (migrations, pool, receipt lifecycle guarded in the DB, proof queue) — 6 tests against live Postgres. `packages/smt` (typed rule AST, SMT-LIB renderer, Z3 session, fail-closed gateway with rule attribution) — 10 tests. `packages/proofs` (Rust gate engine — 7 cargo tests; SP1 guest/host programs written, not yet compiled pending the SP1 toolchain; TS statement/bundle/worker layer with parity tests against the gateway) — 7 tests. Fresh-volume schema load verified. |
+
+### Day 2 notes / carried into Day 3
+
+- `pnpm build:sp1` needs the SP1 toolchain (`cargo prove`), not installed on
+  this machine; guest and host are written but uncompiled.
+- The zkVerify sink is currently local-deterministic only; network
+  submission wiring (zkverifyjs / Kurier) is a Day 3–4 task.
+- Statement canonical text and id are pinned identically in TS and Rust
+  tests; a shared test-vector file for the policy digest is a Day 3 task.
+
