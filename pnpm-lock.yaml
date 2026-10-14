@@ -24,6 +24,18 @@ importers:
         specifier: ^2.21.0
         version: 2.57.7(typescript@5.9.3)(zod@4.6.7)
 
+  packages/evidence:
+    dependencies:
+      '@swaraj/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@swaraj/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      viem:
+        specifier: ^2.21.0
+        version: 2.57.7(typescript@5.9.3)(zod@4.6.7)
+
   packages/schemas:
     dependencies:
       zod:
