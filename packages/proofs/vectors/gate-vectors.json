@@ -1,0 +1,342 @@
+{
+  "domain": "swaraj/gate-vectors/v1",
+  "policies": {
+    "pol_vectors_trade": {
+      "policyId": "pol_vectors_trade",
+      "revision": 1,
+      "fields": [
+        "amountCents",
+        "limitCents",
+        "dailyUsedCents",
+        "dailyCapCents"
+      ],
+      "assumptions": [
+        {
+          "ruleId": "limit.fixed",
+          "assertion": {
+            "kind": "compare",
+            "op": "eq",
+            "left": {
+              "kind": "field",
+              "name": "limitCents"
+            },
+            "right": {
+              "kind": "const",
+              "value": 100000
+            }
+          }
+        }
+      ],
+      "rules": [
+        {
+          "ruleId": "amount.positive",
+          "assertion": {
+            "kind": "compare",
+            "op": "gt",
+            "left": {
+              "kind": "field",
+              "name": "amountCents"
+            },
+            "right": {
+              "kind": "const",
+              "value": 0
+            }
+          }
+        },
+        {
+          "ruleId": "amount.cap",
+          "assertion": {
+            "kind": "compare",
+            "op": "le",
+            "left": {
+              "kind": "field",
+              "name": "amountCents"
+            },
+            "right": {
+              "kind": "field",
+              "name": "limitCents"
+            }
+          }
+        },
+        {
+          "ruleId": "daily.budget",
+          "assertion": {
+            "kind": "compare",
+            "op": "le",
+            "left": {
+              "kind": "sum",
+              "parts": [
+                {
+                  "kind": "field",
+                  "name": "dailyUsedCents"
+                },
+                {
+                  "kind": "field",
+                  "name": "amountCents"
+                }
+              ]
+            },
+            "right": {
+              "kind": "field",
+              "name": "dailyCapCents"
+            }
+          }
+        }
+      ]
+    },
+    "pol_vectors_compound": {
+      "policyId": "pol_vectors_compound",
+      "revision": 2,
+      "fields": [
+        "x",
+        "y"
+      ],
+      "assumptions": [],
+      "rules": [
+        {
+          "ruleId": "x.positive",
+          "assertion": {
+            "kind": "compare",
+            "op": "gt",
+            "left": {
+              "kind": "field",
+              "name": "x"
+            },
+            "right": {
+              "kind": "const",
+              "value": 0
+            }
+          }
+        },
+        {
+          "ruleId": "y.zero_or_one",
+          "assertion": {
+            "kind": "any",
+            "parts": [
+              {
+                "kind": "compare",
+                "op": "eq",
+                "left": {
+                  "kind": "field",
+                  "name": "y"
+                },
+                "right": {
+                  "kind": "const",
+                  "value": 0
+                }
+              },
+              {
+                "kind": "compare",
+                "op": "eq",
+                "left": {
+                  "kind": "field",
+                  "name": "y"
+                },
+                "right": {
+                  "kind": "const",
+                  "value": 1
+                }
+              }
+            ]
+          }
+        },
+        {
+          "ruleId": "spread.requires_flag",
+          "assertion": {
+            "kind": "implies",
+            "when": {
+              "kind": "compare",
+              "op": "gt",
+              "left": {
+                "kind": "field",
+                "name": "x"
+              },
+              "right": {
+                "kind": "const",
+                "value": 10
+              }
+            },
+            "then": {
+              "kind": "compare",
+              "op": "eq",
+              "left": {
+                "kind": "field",
+                "name": "y"
+              },
+              "right": {
+                "kind": "const",
+                "value": 1
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "y.not_negative",
+          "assertion": {
+            "kind": "not",
+            "part": {
+              "kind": "compare",
+              "op": "lt",
+              "left": {
+                "kind": "field",
+                "name": "y"
+              },
+              "right": {
+                "kind": "const",
+                "value": 0
+              }
+            }
+          }
+        },
+        {
+          "ruleId": "spread.leq_cap",
+          "assertion": {
+            "kind": "compare",
+            "op": "le",
+            "left": {
+              "kind": "diff",
+              "left": {
+                "kind": "field",
+                "name": "x"
+              },
+              "right": {
+                "kind": "field",
+                "name": "y"
+              }
+            },
+            "right": {
+              "kind": "const",
+              "value": 100
+            }
+          }
+        },
+        {
+          "ruleId": "product.leq_cap",
+          "assertion": {
+            "kind": "compare",
+            "op": "le",
+            "left": {
+              "kind": "prod",
+              "parts": [
+                {
+                  "kind": "field",
+                  "name": "x"
+                },
+                {
+                  "kind": "field",
+                  "name": "y"
+                }
+              ]
+            },
+            "right": {
+              "kind": "const",
+              "value": 1000
+            }
+          }
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "within_limits",
+      "policy": "pol_vectors_trade",
+      "action": {
+        "values": {
+          "amountCents": "25000",
+          "limitCents": "100000",
+          "dailyUsedCents": "0",
+          "dailyCapCents": "500000"
+        }
+      },
+      "expect": {
+        "outcome": "ALLOW",
+        "violated": []
+      }
+    },
+    {
+      "name": "over_cap",
+      "policy": "pol_vectors_trade",
+      "action": {
+        "values": {
+          "amountCents": "250000",
+          "limitCents": "100000",
+          "dailyUsedCents": "0",
+          "dailyCapCents": "500000"
+        }
+      },
+      "expect": {
+        "outcome": "BLOCK",
+        "violated": [
+          "amount.cap"
+        ]
+      }
+    },
+    {
+      "name": "negative_amount",
+      "policy": "pol_vectors_trade",
+      "action": {
+        "values": {
+          "amountCents": "-5",
+          "limitCents": "100000",
+          "dailyUsedCents": "0",
+          "dailyCapCents": "500000"
+        }
+      },
+      "expect": {
+        "outcome": "BLOCK",
+        "violated": [
+          "amount.positive"
+        ]
+      }
+    },
+    {
+      "name": "daily_budget_exhausted",
+      "policy": "pol_vectors_trade",
+      "action": {
+        "values": {
+          "amountCents": "20000",
+          "limitCents": "100000",
+          "dailyUsedCents": "490000",
+          "dailyCapCents": "500000"
+        }
+      },
+      "expect": {
+        "outcome": "BLOCK",
+        "violated": [
+          "daily.budget"
+        ]
+      }
+    },
+    {
+      "name": "compound_allows",
+      "policy": "pol_vectors_compound",
+      "action": {
+        "values": {
+          "x": "5",
+          "y": "0"
+        }
+      },
+      "expect": {
+        "outcome": "ALLOW",
+        "violated": []
+      }
+    },
+    {
+      "name": "compound_blocks_on_implies",
+      "policy": "pol_vectors_compound",
+      "action": {
+        "values": {
+          "x": "50",
+          "y": "0"
+        }
+      },
+      "expect": {
+        "outcome": "BLOCK",
+        "violated": [
+          "spread.requires_flag"
+        ]
+      }
+    }
+  ]
+}

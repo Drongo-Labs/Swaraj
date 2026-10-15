@@ -23,4 +23,10 @@ export {
   type ProofSink,
   type SinkAttestation,
 } from "./zkverify.js";
+export {
+  RemoteProofSink,
+  type AttestationStatus,
+  type RemoteSinkConfig,
+  type SubmissionAccepted,
+} from "./remote-sink.js";
 export { runOneProofJob, type GateJobPayload, type WorkerOptions, type WorkerOutcome } from "./worker.js";

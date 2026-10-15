@@ -71,6 +71,8 @@ async function seedProvableReceipt(): Promise<string> {
 }
 
 test("worker proves a job end to end: artifact, sink reference, PROVED receipt, DONE job", async () => {
+  // The lease takes the globally oldest queued job; clear stale rows first.
+  await pool.raw.query("DELETE FROM proof_jobs");
   const receiptId = await seedProvableReceipt();
   await enqueueProofJob(pool, {
     receiptId,
@@ -96,6 +98,7 @@ test("worker proves a job end to end: artifact, sink reference, PROVED receipt, 
 });
 
 test("worker refuses a parity mismatch and leaves the receipt PENDING", async () => {
+  await pool.raw.query("DELETE FROM proof_jobs");
   const receiptId = await seedProvableReceipt();
   await enqueueProofJob(pool, {
     receiptId,
@@ -122,6 +125,7 @@ test("worker refuses a parity mismatch and leaves the receipt PENDING", async ()
 });
 
 test("worker on a NON_PROVABLE receipt cannot advance it further", async () => {
+  await pool.raw.query("DELETE FROM proof_jobs");
   const receiptId = await seedProvableReceipt();
   await advanceReceipt(pool, receiptId, "NON_PROVABLE", { note: "evidence rejected" });
   await enqueueProofJob(pool, {

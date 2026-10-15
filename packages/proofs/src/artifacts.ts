@@ -10,6 +10,8 @@ import { join } from "node:path";
 export interface VerificationBundle {
   statementId: string;
   canonicalText: string;
+  /** Digest of the evidence the proof was produced against, when the pipeline supplied one. */
+  evidenceDigest?: string | undefined;
   createdAt: string;
 }
 

@@ -22,6 +22,8 @@ export interface GateJobPayload {
   policy: PolicyDoc;
   action: GroundBinding;
   expected: GroundDecision;
+  /** Evidence the proof covers, when the evidence stage has run. */
+  evidence?: { digest: string };
 }
 
 export interface WorkerOutcome {
@@ -69,6 +71,7 @@ export async function runOneProofJob(
     const bundle = {
       statementId: id,
       canonicalText: canonicalStatementText(statement),
+      evidenceDigest: payload.evidence?.digest,
       createdAt: new Date().toISOString(),
     };
 
