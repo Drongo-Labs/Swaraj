@@ -37,8 +37,27 @@ integrator to do or not do.
 
 ### 5. MCP access
 
-TODO (Day 4): tool surface mirroring the SDK, stdio bridge vs hosted
-transport, authorization differences.
+Implemented: `apps/mcp` (`swaraj-mcp`) speaks MCP over stdio (JSON-RPC,
+newline-delimited) and calls the API over HTTP using the same routes and
+credentials as the SDK. Requires `SWARAJ_URL` and `SWARAJ_DEV_TOKEN` in
+the environment. Start it with `pnpm dev:mcp`.
+
+| Tool | Arguments | Result |
+|---|---|---|
+| `swaraj_submit_action` | `applicationId`, `policyId`, `input` (decimal strings), optional `idempotencyKey` | Decision JSON: `decision`, `receiptId` (ALLOW only), `violatedRuleIds`, `policyDigest`. A BLOCK is returned with `isError: true` — it is a decision, not a transport failure |
+| `swaraj_get_receipt` | `receiptId` | Receipt state (`PENDING`/`PROVED`/`NON_PROVABLE`/`INVALIDATED`), `proofRef`, claim |
+| `swaraj_get_policy` | `policyId` | Revision, canonical digest, rule ids |
+
+Invalid tool arguments come back as tool results with `isError: true`;
+unknown tools are JSON-RPC errors (-32602). Policy administration and
+credential provisioning stay outside the tool surface. The hosted
+transport (Streamable HTTP with the MCP authorization flow) remains
+planned; today the bridge is stdio-only, pointed at the configured API.
+
+Until the production `apps/api` lands, the integration tests run the
+bridge against `apps/mcp/test/pipeline-fixture.ts`, which implements
+this API contract directly on the real packages (SMT gateway, Postgres
+persistence, proof queue).
 
 ### 6. Retries, policy changes, and failure
 

@@ -16,6 +16,7 @@
     "live": "pnpm --filter @swaraj/example... build && pnpm --filter @swaraj/example start --live",
     "dev:api": "pnpm --filter @swaraj/api... build && pnpm --filter @swaraj/api start",
     "dev:web": "pnpm --filter @swaraj/web dev",
+    "dev:mcp": "pnpm --filter @swaraj/mcp start",
 
     "db:up": "docker compose up -d postgres",
     "db:stop": "docker compose stop postgres",
