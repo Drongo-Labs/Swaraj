@@ -1,70 +1,117 @@
 # Integrating with Swaraj
 
-Day 1 skeleton for the integration guide. Sections below are the outline the
-finished document will follow; prose is filled in as the pieces it describes
-land (Day 4–5 of the restructure plan). When in doubt, the code under
-`packages/sdk` and `apps/api` is the source of truth.
+How an application and its agents talk to Swaraj. Sections marked
+**implemented** are verified by tests in this repo; the rest state the
+contract the remaining pieces must honor. When in doubt, the code under
+`packages/smt`, `packages/database`, `packages/proofs`, and `apps/mcp`
+is the source of truth.
 
 ## Model
 
-Swaraj is a backend service between agents and effects. An application owner
-registers actions, rules, and integrations; agents submit actions through the
-SDK or MCP; Swaraj decides, executes through a controlled adapter, and emits
-signed, eventually proof-bound receipts.
+Swaraj sits between agents and effects. An application owner registers
+actions, rules, and integrations; agents submit actions through the SDK
+or MCP; Swaraj decides through the policy gateway, executes through a
+controlled adapter, and emits receipts that are eventually proof-bound.
 
-## Outline
+## 1. What the application owner defines
 
-### 1. What the application owner defines
+**Pending.** Action schemas, policies, trusted state sources, execution
+adapters, evidence rules — activated by owner-approved configuration
+changes. The policy format itself is implemented (see
+`examples/json-to-smt.md`): a typed integer rule document with
+assumptions, rules, and stable rule ids.
 
-TODO (Day 4): action schemas, policies, trusted state sources, execution
-adapter, evidence rules — and what the backend validates before activation.
+## 2. Registration and activation
 
-### 2. Registration and activation
+**Pending** (owner-side API). The persistence layer is ready:
+`policy_revisions` stores versioned rule documents with canonical
+digests and a single-live-revision constraint.
 
-TODO (Day 4): owner-side setup flow, credential scoping, versioning of
-configuration.
+## 3. Submitting an action
 
-### 3. Submitting an action from an agent
+**Implemented and tested** (against `apps/mcp/test/pipeline-fixture.ts`,
+which pins the route contract on the real packages):
 
-TODO (Day 4): SDK `submitAction` contract, idempotency keys, canonical intent
-envelope, what ALLOW does and does not mean.
+```text
+POST /actions
+Authorization: Bearer <token>
+{ "applicationId": "app_demo", "policyId": "pol_…",
+  "input": { "amountCents": "25000", "limitCents": "100000" },
+  "idempotencyKey": "invoice-1042" }
+```
 
-### 4. Decisions and receipts
+Responses:
 
-TODO (Day 4): ALLOW/BLOCK semantics, receipt statuses
-(PENDING / PROVED / NON_PROVABLE / INVALIDATED), what each status obliges the
-integrator to do or not do.
+```json
+{ "decision": "ALLOW", "receiptId": "rcpt_…", "violatedRuleIds": [], "policyDigest": "pol_…" }
+{ "decision": "BLOCK", "violatedRuleIds": ["amount.cap"], "policyDigest": "pol_…" }
+```
 
-### 5. MCP access
+Semantics, enforced by tests:
 
-Implemented: `apps/mcp` (`swaraj-mcp`) speaks MCP over stdio (JSON-RPC,
-newline-delimited) and calls the API over HTTP using the same routes and
-credentials as the SDK. Requires `SWARAJ_URL` and `SWARAJ_DEV_TOKEN` in
-the environment. Start it with `pnpm dev:mcp`.
+- Every field value is a decimal string; non-integer, missing, or
+  unknown values fail closed to BLOCK.
+- ALLOW means accepted into the execution workflow — a receipt exists in
+  `PENDING`; it does not mean executed or proved.
+- BLOCK is a decision, not an error: the violated rule ids come from the
+  gateway's per-rule negation probes, are stored with the decision
+  record, and are reproducible from the stored SMT-LIB script.
+- Reusing an `idempotencyKey` returns the original receipt instead of
+  creating a second economic action.
+
+## 4. Reading receipts
+
+**Implemented and tested:**
+
+```text
+GET /receipts/:id  → { receiptId, state, proofRef?, claim }
+GET /policies/:id → { policyId, revision, digest, ruleIds }
+```
+
+| `state` | Meaning |
+|---|---|
+| `PENDING` | Execution/evidence/proof processing incomplete; do not report a verified outcome |
+| `PROVED` | The statement was attested (and, when SP1 is configured, guest-proven); `proofRef` names the sink attestation |
+| `NON_PROVABLE` | The required claim could not be established; terminal |
+| `INVALIDATED` | A previously accepted claim lost validity (e.g. reorg); terminal |
+
+Illegal transitions are rejected by a database trigger, not only by
+application code, and every transition is appended to `receipt_events`.
+
+## 5. MCP access
+
+**Implemented.** `swaraj-mcp` (`apps/mcp`, start with `pnpm dev:mcp`)
+speaks MCP over stdio and calls the API above with the same credentials
+as the SDK. Requires `SWARAJ_URL` and `SWARAJ_DEV_TOKEN`.
 
 | Tool | Arguments | Result |
 |---|---|---|
-| `swaraj_submit_action` | `applicationId`, `policyId`, `input` (decimal strings), optional `idempotencyKey` | Decision JSON: `decision`, `receiptId` (ALLOW only), `violatedRuleIds`, `policyDigest`. A BLOCK is returned with `isError: true` — it is a decision, not a transport failure |
-| `swaraj_get_receipt` | `receiptId` | Receipt state (`PENDING`/`PROVED`/`NON_PROVABLE`/`INVALIDATED`), `proofRef`, claim |
-| `swaraj_get_policy` | `policyId` | Revision, canonical digest, rule ids |
+| `swaraj_submit_action` | `applicationId`, `policyId`, `input` (decimal strings), optional `idempotencyKey` | Decision JSON; BLOCK carries `isError: true` with the violated rules |
+| `swaraj_get_receipt` | `receiptId` | Receipt state, `proofRef`, claim |
+| `swaraj_get_policy` | `policyId` | Revision, digest, rule ids |
 
-Invalid tool arguments come back as tool results with `isError: true`;
-unknown tools are JSON-RPC errors (-32602). Policy administration and
-credential provisioning stay outside the tool surface. The hosted
-transport (Streamable HTTP with the MCP authorization flow) remains
-planned; today the bridge is stdio-only, pointed at the configured API.
+Invalid arguments are tool results with `isError: true`; unknown tools
+are JSON-RPC errors (-32602). Administration and credential provisioning
+stay outside the tool surface. Hosted transport (Streamable HTTP with
+the MCP authorization flow) remains planned.
 
-Until the production `apps/api` lands, the integration tests run the
-bridge against `apps/mcp/test/pipeline-fixture.ts`, which implements
-this API contract directly on the real packages (SMT gateway, Postgres
-persistence, proof queue).
+## 6. Retries and configuration changes
 
-### 6. Retries, policy changes, and failure
+**Partially implemented and tested** (idempotency, decision records):
 
-TODO (Day 4): idempotency-key discipline across retries, reconciliation after
-timeouts, behavior on policy version bumps and stale state.
+- Persist the idempotency key before first submission; retries with the
+  same key return the same receipt (tested).
+- Every decision is stored with its SMT-LIB script, so any ALLOW/BLOCK
+  is replayable against any SMT solver (tested via the pinned vectors).
+- Policy versioning and stale-policy rejection land with the
+  owner-side API (section 2).
 
-### 7. Deployment topologies
+## 7. Deployment topologies
 
-TODO (Day 5): hosted vs self-hosted, what the Compose file covers today
-(development Postgres only), where proof work runs.
+Today the Compose file runs the development Postgres (the only
+infrastructure service); schema migrations load automatically on first
+boot and idempotently from the application. The proof worker runs
+in-process (`pnpm proofs:worker`) against the same Postgres queue — no
+separate queue service. Lean checking (`pnpm check:lean`) and Rust tests
+(`pnpm check:rust`) belong to the development pipeline, not the runtime.
+A hosted deployment bundle does not exist yet.

@@ -7,8 +7,10 @@ import {
   type PoolHandle,
 } from "@swaraj/database";
 import type { PolicyDoc } from "@swaraj/smt";
-import { openArtifactStore } from "./artifacts.js";
+import { readFile } from "node:fs/promises";
+import { openArtifactStore, storeProofArtifact } from "./artifacts.js";
 import { buildStatement, canonicalStatementText, statementId } from "./statement.js";
+import { proveStatementViaSp1, type Sp1ProverConfig } from "./sp1-prover.js";
 import { reevaluateGround, fromWirePolicy, type GroundBinding, type GroundDecision } from "./verifier.js";
 import { selectProofSink, type ProofSink } from "./zkverify.js";
 
@@ -37,6 +39,8 @@ export interface WorkerOutcome {
 export interface WorkerOptions {
   artifactRoot: string;
   sink?: ProofSink;
+  /** When set, the SP1 guest proves the statement before submission. */
+  sp1?: Sp1ProverConfig;
 }
 
 /**
@@ -83,7 +87,34 @@ export async function runOneProofJob(
       content: bundle,
     });
 
+    if (options.sp1) {
+      const proof = await proveStatementViaSp1(options.sp1, {
+        policy: payload.policy,
+        action: payload.action,
+        policyDocDigest: statement.policyDocDigest,
+        expectedStatementId: id,
+      });
+      const proofArtifactPath = await storeProofArtifact(
+        options.artifactRoot,
+        receiptId,
+        id,
+        new Uint8Array(await readFile(proof.proofPath)),
+      );
+      await insertProofArtifact(pool, {
+        jobId: job.jobId,
+        receiptId,
+        kind: "SP1_PROOF",
+        content: { statementId: id, proofPath: proofArtifactPath },
+      });
+    }
+
     const attestation = await sink.submit(bundle);
+    await insertProofArtifact(pool, {
+      jobId: job.jobId,
+      receiptId,
+      kind: "ZKVERIFY_ATTESTATION",
+      content: { ref: attestation.ref, sink: attestation.sink, statementId: id },
+    });
     await advanceReceipt(pool, receiptId, "PROVED", {
       proofRef: attestation.ref,
       note: `statement ${id} via ${attestation.sink} sink`,

@@ -100,7 +100,12 @@ export async function failProofJob(
 
 export async function insertProofArtifact(
   handle: PoolHandle,
-  artifact: { jobId: number; receiptId: string; kind: "VERIFICATION_BUNDLE" | "ZKVERIFY_ATTESTATION"; content: unknown },
+  artifact: {
+    jobId: number;
+    receiptId: string;
+    kind: "VERIFICATION_BUNDLE" | "ZKVERIFY_ATTESTATION" | "SP1_PROOF";
+    content: unknown;
+  },
 ): Promise<number> {
   const result = await handle.raw.query<{ artifact_id: string | number }>(
     `INSERT INTO proof_artifacts (job_id, receipt_id, kind, content)

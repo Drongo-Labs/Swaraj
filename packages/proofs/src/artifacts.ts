@@ -30,3 +30,19 @@ export function openArtifactStore(root: string): ArtifactStore {
     },
   };
 }
+
+/**
+ * Copy a binary proof artifact (e.g. the SP1 proof file) into the store.
+ */
+export async function storeProofArtifact(
+  root: string,
+  receiptId: string,
+  statementId: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  const dir = join(root, receiptId);
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, `${statementId}.sp1.bin`);
+  await writeFile(path, bytes);
+  return path;
+}

@@ -1,5 +1,6 @@
 export {
   openArtifactStore,
+  storeProofArtifact,
   type ArtifactStore,
   type VerificationBundle,
 } from "./artifacts.js";
@@ -30,3 +31,10 @@ export {
   type SubmissionAccepted,
 } from "./remote-sink.js";
 export { runOneProofJob, type GateJobPayload, type WorkerOptions, type WorkerOutcome } from "./worker.js";
+export {
+  proveStatementViaSp1,
+  Sp1ProverError,
+  type Sp1GateInput,
+  type Sp1ProofOutcome,
+  type Sp1ProverConfig,
+} from "./sp1-prover.js";

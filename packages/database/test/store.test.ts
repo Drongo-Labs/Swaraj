@@ -62,10 +62,10 @@ async function seedReceipt(receiptId: string, intentDigest: string) {
 test("migrations are idempotent and self-registered", async () => {
   await applyMigrations(pool);
   const applied = await listMigrations(pool);
-  assert.equal(applied.length, 3);
+  assert.equal(applied.length, 4);
   assert.deepEqual(
     applied.map((m) => m.label),
-    ["core", "receipt-lifecycle", "proof-queue"],
+    ["core", "receipt-lifecycle", "proof-queue", "sp1-proof-kind"],
   );
 });
 

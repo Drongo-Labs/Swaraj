@@ -16,7 +16,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "pnpm build && node dist/main.js",
-    "test": "pnpm --filter @swaraj/database... build && pnpm --filter @swaraj/smt... build && pnpm --filter @swaraj/proofs... build && pnpm build && node --env-file ../../.env --test test/*.test.ts"
+    "test": "pnpm --filter @swaraj/database... build && pnpm --filter @swaraj/smt... build && pnpm --filter @swaraj/proofs... build && pnpm build && node --env-file ../../.env --test --test-concurrency 1 test/*.test.ts"
   },
   "dependencies": {},
   "devDependencies": {
