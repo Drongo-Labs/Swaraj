@@ -3,6 +3,8 @@
 //! decision, and commits to the resulting statement id. Every input is
 //! a commitment provided by the host; the guest recomputes everything.
 
+#![no_main]
+
 use serde::{Deserialize, Serialize};
 use swaraj_gate_engine::{
     build_statement, canonical_text, decide, statement_id, GroundBinding, PolicyDoc, Statement,
@@ -12,7 +14,9 @@ use swaraj_gate_engine::{
 struct GateInput {
     policy: PolicyDoc,
     action: GroundBinding,
+    #[serde(rename = "policyDocDigest")]
     policy_doc_digest: String,
+    #[serde(rename = "expectedStatementId")]
     expected_statement_id: String,
 }
 
@@ -20,7 +24,10 @@ sp1_zkvm::entrypoint!(main);
 
 fn main() {
     let raw = sp1_zkvm::io::read_vec();
-    let input: GateInput = serde_json::from_slice(&raw).expect("gate input json parses");
+    let input: GateInput = match serde_json::from_slice(&raw) {
+        Ok(parsed) => parsed,
+        Err(err) => panic!("gate input parse failed: {err}; raw len {}", raw.len()),
+    };
 
     let decision = decide(&input.policy, &input.action).expect("gate re-evaluation succeeds");
     let statement: Statement = build_statement(

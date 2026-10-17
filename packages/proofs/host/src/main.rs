@@ -5,7 +5,10 @@
 //! Usage:
 //!   swaraj-gate-host <elf-path> <input-json> [--prove]
 
-use sp1_sdk::{ProverClient, SP1Stdin};
+use std::sync::Arc;
+
+use sp1_sdk::blocking::{Elf, Prover, ProveRequest, ProverClient, SP1Stdin};
+use sp1_sdk::ProvingKey;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
@@ -17,36 +20,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let input_path = &args[2];
     let prove = args.iter().any(|arg| arg == "--prove");
 
-    let elf = std::fs::read(elf_path)?;
+    let elf_bytes = std::fs::read(elf_path)?;
+    let elf = Elf::Dynamic(Arc::from(elf_bytes.as_slice()));
     let input_json = std::fs::read_to_string(input_path)?;
 
-    let client = ProverClient::new();
+    let prover = ProverClient::builder().cpu().build();
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(input_json.into_bytes());
 
-    let (public_values, report) = if prove {
-        let (pk, vk) = client.setup(&elf);
-        let proof = client.prove(&pk, &stdin).run()?;
-        client.verify(&pk, &proof)?;
-        (proof.public_values, Some(proof.proof))
-    } else {
-        let (mut executor, _) = client.execute(&elf, &stdin);
-        let exec = executor.run()?;
-        (exec.public_values, None)
-    };
+    if prove {
+        let pk = prover.setup(elf)?;
+        let mut proof = prover.prove(&pk, stdin).run()?;
+        prover.verify(&proof, pk.verifying_key(), None)?;
 
-    let statement_id: String = public_values.read()?;
-    println!("statement_id={statement_id}");
+        let statement_id = proof.public_values.read::<String>();
+        println!("statement_id={statement_id}");
 
-    if let Some(proof) = report {
         let proof_path = format!("{statement_id}.bin");
-        std::fs::write(&proof_path, bincode_encode(&proof))?;
+        let bytes = bincode::serde::encode_to_vec(&proof, bincode::config::standard())?;
+        std::fs::write(&proof_path, bytes)?;
         println!("proof={proof_path}");
+    } else {
+        let (mut public_values, _report) = prover.execute(elf, stdin).run()?;
+        let statement_id = public_values.read::<String>();
+        println!("statement_id={statement_id}");
     }
     Ok(())
-}
-
-fn bincode_encode(proof: &sp1_sdk::SP1ProofWithPk) -> Vec<u8> {
-    bincode::serde::encode_to_vec(proof, bincode::config::standard())
-        .expect("proof serializes")
 }

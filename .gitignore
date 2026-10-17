@@ -22,3 +22,6 @@ artifacts/
 **/engine/target/
 **/guest/target/
 **/host/target/
+
+# Local SP1 proof outputs
+packages/proofs/stmt_*.bin

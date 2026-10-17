@@ -42,7 +42,7 @@ this workstream).
 | 4 | Policy gateway | Policy → SMT → Z3 ALLOW/BLOCK before any effect | done — fail-closed, rule attribution, replayable scripts, 10 tests + shared vectors |
 | 5 | Capabilities | Intent-bound tokens, reservations, execution | pending (capability owner) |
 | 6 | Product surface | API routes, UI, testnet demo | partial — API contract pinned and integration-tested via the fixture; production API/UI pending (api/web owners) |
-| 7 | SP1 program | Guest recomputes checks over committed inputs | partial — engine + guest + host written; SP1 toolchain installed, guest build in progress; TS↔Rust statement parity pinned |
+| 7 | SP1 program | Guest recomputes checks over committed inputs | done for the gate scope — guest ELF builds (SP1 6.9.0), the guest derives the same statement id inside the zkVM, and a real locally-verified proof was generated and driven through the e2e test |
 | 8 | zkVerify | Public verification bound to receipts | partial — job queue, artifacts, attestation recording, submit/poll/finalize sink flow done against a local relay; network endpoint pending |
 | 9 | Block proofs | Rejections are provable to third parties | pending — the BLOCK path is decided and attributed; decision receipts and their proofs are planned |
 | 10 | Lean suite | Framework properties kernel-checked | partial — attribution, monotonicity, ALLOW soundness proved on the shared DSL; more properties as phases land |
