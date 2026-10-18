@@ -3,8 +3,6 @@ import {
   checkPolicy,
   policyDigest,
   type BoundAction,
-  type BoolTerm,
-  type FieldBinding,
   type PolicyDoc,
 } from "./policy.js";
 import { renderSmtScript } from "./render.js";

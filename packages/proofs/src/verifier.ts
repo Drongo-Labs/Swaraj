@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { BoolTerm, IntTerm, PolicyDoc } from "@swaraj/smt";
 
 /**

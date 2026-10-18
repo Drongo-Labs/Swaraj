@@ -26,8 +26,9 @@ export class LocalProofSink implements ProofSink {
   }
 }
 
-export function selectProofSink(env: Record<string, string | undefined> = process.env): ProofSink {
-  // ZKVERIFY_SEED_PHRASE / KURIER_API_KEY select the network sink once
-  // the submission client is wired in; until then everything is local.
+export function selectProofSink(): ProofSink {
+  // ZKVERIFY_SEED_PHRASE / KURIER_API_KEY will select the network sink
+  // once the submission client is wired in; until then everything is
+  // local.
   return new LocalProofSink();
 }

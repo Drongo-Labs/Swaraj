@@ -1,4 +1,3 @@
-import type pg from "pg";
 import type { PoolHandle } from "./pool.js";
 
 export type DecisionOutcome = "ALLOW" | "BLOCK";
