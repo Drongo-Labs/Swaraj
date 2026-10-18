@@ -24,4 +24,4 @@ artifacts/
 **/host/target/
 
 # Local SP1 proof outputs
-packages/proofs/stmt_*.bin
+**/stmt_*.bin

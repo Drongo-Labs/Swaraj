@@ -68,6 +68,14 @@ export async function startPipelineFixture(): Promise<FixtureHandle> {
       await handleSubmitAction(body, res);
       return;
     }
+    if (req.method === "POST" && url.pathname === "/policies") {
+      const policy = fromWirePolicy(body as PolicyDoc);
+      policies.set(policy.policyId, policy);
+      const view = { policyId: policy.policyId, revision: policy.revision, digest: policyDigest(policy) };
+      res.writeHead(201, { "content-type": "application/json" });
+      res.end(JSON.stringify(view));
+      return;
+    }
     if (req.method === "GET" && url.pathname.startsWith("/receipts/")) {
       await handleGetReceipt(url.pathname.slice("/receipts/".length), res);
       return;

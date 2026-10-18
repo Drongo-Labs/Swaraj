@@ -7,7 +7,6 @@ import {
   type PoolHandle,
 } from "@swaraj/database";
 import type { PolicyDoc } from "@swaraj/smt";
-import { readFile } from "node:fs/promises";
 import { openArtifactStore, storeProofArtifact } from "./artifacts.js";
 import { buildStatement, canonicalStatementText, statementId } from "./statement.js";
 import { proveStatementViaSp1, type Sp1ProverConfig } from "./sp1-prover.js";
@@ -98,7 +97,7 @@ export async function runOneProofJob(
         options.artifactRoot,
         receiptId,
         id,
-        new Uint8Array(await readFile(proof.proofPath)),
+        proof.proofBytes,
       );
       await insertProofArtifact(pool, {
         jobId: job.jobId,

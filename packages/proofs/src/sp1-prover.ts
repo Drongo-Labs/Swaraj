@@ -9,7 +9,9 @@ import type { GroundBinding } from "./verifier.js";
  * Drives the SP1 host binary to prove the guest over a committed gate
  * input. The guest recomputes the statement id from the same canonical
  * text the TypeScript worker computed; a mismatch aborts the proof, so
- * a successful proof is also a cross-language parity check.
+ * a successful proof is also a cross-language parity check. The proof
+ * bytes are returned — the temporary work directory does not outlive
+ * this call.
  */
 
 export interface Sp1ProverConfig {
@@ -28,8 +30,7 @@ export interface Sp1GateInput {
 
 export interface Sp1ProofOutcome {
   statementId: string;
-  /** Path where the host wrote the serialized proof. */
-  proofPath: string;
+  proofBytes: Uint8Array;
 }
 
 export class Sp1ProverError extends Error {
@@ -50,6 +51,7 @@ export async function proveStatementViaSp1(
 
     const run = await new Promise<{ code: number; stdout: string; stderr: string }>((resolve, reject) => {
       const child = spawn(config.hostBin, [config.elfPath, inputPath, "--prove"], {
+        cwd: workDir,
         stdio: ["ignore", "pipe", "pipe"],
       });
       let stdout = "";
@@ -70,9 +72,9 @@ export async function proveStatementViaSp1(
       );
     }
 
-    const statementId = /^statement_id=(stmt_[0-9a-f]{64})$/m.exec(run.stdout)?.[1];
-    const proofPath = /^proof=(.+)$/m.exec(run.stdout)?.[1];
-    if (!statementId || !proofPath) {
+    const statementId = /^statement_id=(stmt_[0-9a-f]{64})\r?$/m.exec(run.stdout)?.[1];
+    const proofLine = /^proof=([^\r\n]+)\r?$/m.exec(run.stdout)?.[1];
+    if (!statementId || !proofLine) {
       throw new Sp1ProverError(`sp1 host output missing statement_id/proof: ${run.stdout.slice(0, 200)}`);
     }
     if (statementId !== input.expectedStatementId) {
@@ -80,9 +82,12 @@ export async function proveStatementViaSp1(
         `guest parity failure: guest derived ${statementId}, worker derived ${input.expectedStatementId}`,
       );
     }
-    await readFile(proofPath);
+    // The host runs with its working directory inside ours and prints a
+    // path relative to it; read the bytes now, before the cleanup below.
+    const proofPath = proofLine.startsWith("/") ? proofLine : join(workDir, proofLine);
+    const proofBytes = new Uint8Array(await readFile(proofPath));
 
-    return { statementId, proofPath };
+    return { statementId, proofBytes };
   } finally {
     await rm(workDir, { recursive: true, force: true });
   }
