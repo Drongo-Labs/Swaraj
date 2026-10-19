@@ -19,16 +19,15 @@ import {
   createBaseVenueAdapter,
   createMockVenueAdapter,
   DEFAULT_MOCK_FIXTURES,
+  resolveBaseNetwork,
   type VenueAdapter,
 } from "@swaraj/evidence";
 import {
-  createReceiptEngine,
   ReasonCode,
   type ReceiptEngine,
   type ReceiptRecord,
 } from "@swaraj/receipts";
 import type { PolicyDecision, PolicyGatewayInput } from "@swaraj/smt";
-import { resolveBaseNetwork } from "@swaraj/evidence";
 import {
   DEMO_POLICY,
   DEMO_STATE,
