@@ -18,7 +18,7 @@ import {
   upsertActivePolicy,
 } from "@swaraj/database";
 import type { Pool } from "pg";
-import { createRequire } from "node:module";
+import { buildTradeProofBundle } from "@swaraj/proofs/proof-bundles";
 import { createMemoryDecisionLog, createPostgresDecisionLog, createProofRecorder } from "./proofs.js";
 import { proofJobFields } from "./kurier.js";
 import {
@@ -52,11 +52,6 @@ export type ActivityItem = {
   status?: string;
   decisionReceipt?: Record<string, unknown>;
   proof?: Record<string, unknown>;
-};
-
-const require = createRequire(import.meta.url);
-const { buildTradeProofBundle } = require("@swaraj/proofs/proof-bundles") as {
-  buildTradeProofBundle: (input: ProveContext & { receipt: unknown }) => unknown;
 };
 
 export type BuildAppOptions = {

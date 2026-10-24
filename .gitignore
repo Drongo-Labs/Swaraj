@@ -1,11 +1,27 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-.pnpm-store/
-*.tgz
-.env
-.env.*
-!.env.example
 target/
 .lake/
 artifacts/
+*.tgz
+
+# pnpm cache (repo-local store, if used)
+.pnpm-store/
+
+# Local configuration — never commit real values
+.env
+.env.*
+!.env.example
+
+# OS noise
 .DS_Store
+# Rust
+**/engine/target/
+**/guest/target/
+**/host/target/
+
+# Local SP1 proof outputs
+**/stmt_*.bin

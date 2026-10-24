@@ -5,10 +5,11 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 function autoProveEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env.SWARAJ_FORCE_MOCK === "1") return false;
-  if (env.SWARAJ_AUTO_PROVE === "0") return false;
-  // Default on for live base mode when SP1 host is configured.
-  return Boolean(env.SWARAJ_SP1_HOST_BIN?.trim() && env.SWARAJ_SP1_ELF?.trim());
+  void env;
+  // The merged proof package exposes the generic runOneProofJob worker. The
+  // older receipt-specific prover/service scripts were never present in either
+  // branch, so spawning them would fail after an otherwise healthy API start.
+  return false;
 }
 
 function spawnProofs(script: string, label: string) {

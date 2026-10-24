@@ -34,7 +34,7 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
       try {
         await client.query("BEGIN");
         const existing = await client.query(
-          `SELECT * FROM receipts WHERE application_id = $1 AND id = $2`,
+          `SELECT * FROM runtime_receipts WHERE application_id = $1 AND id = $2`,
           [input.applicationId, input.receiptId],
         );
         if (existing.rows[0]) {
@@ -53,17 +53,17 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
         const intentJson = input.intentJson ?? {};
 
         await client.query(
-          `INSERT INTO applications (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
+          `INSERT INTO runtime_applications (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
           [input.applicationId, input.applicationId],
         );
         await client.query(
-          `INSERT INTO policies (application_id, id, version, action_type, status, definition, policy_hash)
+          `INSERT INTO runtime_policies (application_id, id, version, action_type, status, definition, policy_hash)
            VALUES ($1, $2, $3, 'SPOT_TRADE', 'ACTIVE', '{}'::jsonb, $4)
            ON CONFLICT (application_id, id, version) DO NOTHING`,
           [input.applicationId, policyId, policyVersion, input.signedReceipt.policyHash],
         );
         await client.query(
-          `INSERT INTO actions (application_id, id, account_ref, policy_id, policy_version, idempotency_key, intent_hash, intent)
+          `INSERT INTO runtime_actions (application_id, id, account_ref, policy_id, policy_version, idempotency_key, intent_hash, intent)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
            ON CONFLICT (application_id, id) DO NOTHING`,
           [
@@ -80,7 +80,7 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
 
         const record = recordFromCreate(input);
         await client.query(
-          `INSERT INTO receipts (
+          `INSERT INTO runtime_receipts (
              application_id, id, action_id, status, claim_type, reason_code,
              intent_hash, policy_hash, evidence_root, proof_reference, signed_receipt
            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
@@ -99,7 +99,7 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
           ],
         );
         await client.query(
-          `INSERT INTO receipt_jobs (application_id, receipt_id, state)
+          `INSERT INTO runtime_receipt_jobs (application_id, receipt_id, state)
            VALUES ($1, $2, 'PENDING')
            ON CONFLICT (application_id, receipt_id) DO NOTHING`,
           [record.applicationId, record.receiptId],
@@ -115,7 +115,7 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
     },
 
     async get(applicationId, receiptId) {
-      const result = await pool.query(`SELECT * FROM receipts WHERE application_id = $1 AND id = $2`, [
+      const result = await pool.query(`SELECT * FROM runtime_receipts WHERE application_id = $1 AND id = $2`, [
         applicationId,
         receiptId,
       ]);
@@ -125,7 +125,7 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
 
     async updateStatus(params) {
       const result = await pool.query(
-        `UPDATE receipts SET
+        `UPDATE runtime_receipts SET
            status = $3,
            reason_code = $4,
            proof_reference = COALESCE($5, proof_reference),

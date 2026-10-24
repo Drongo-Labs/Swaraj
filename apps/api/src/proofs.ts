@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createRequire } from "node:module";
 import type { Pool } from "pg";
 import {
   createDecisionProofJobQueue,
@@ -12,21 +11,19 @@ import {
 } from "@swaraj/database";
 import type { ReceiptRecord } from "@swaraj/receipts";
 import type { AuthorizationDecisionToStore, DecisionStore } from "@swaraj/smt";
+import {
+  buildDecisionProofBundle,
+  buildTradeProofBundle,
+  planDecisionReceipt,
+} from "@swaraj/proofs/proof-bundles";
+import { deriveGuestOutput } from "@swaraj/proofs/public-values";
 import type { PipelineBlockResult, ProveContext } from "./pipeline/index.js";
 
-type GuestBundle = Record<string, unknown> & { referenceTime: number };
+type GuestBundle = Record<string, unknown> & { schemaVersion: 1; referenceTime: number };
 type GuestOutput = { decisionAllow: boolean; claimType: string; violatedRuleIds: number[]; publicValues: string };
 type DecisionPlan =
   | { provable: true; receipt: Omit<DecisionReceiptRecord, "id" | "status" | "createdAt" | "updatedAt">; smtViolatedRuleIds: number[] }
   | { provable: false; reasonCode: string; detail?: string; guestRuleIds?: number[] };
-
-const require = createRequire(import.meta.url);
-const { buildTradeProofBundle, buildDecisionProofBundle, planDecisionReceipt } = require("@swaraj/proofs/proof-bundles") as {
-  buildTradeProofBundle(input: ProveContext & { receipt: unknown }): GuestBundle;
-  buildDecisionProofBundle(input: { intent: unknown; policy: unknown; state: unknown; decisionLogEntryHash: string }): GuestBundle;
-  planDecisionReceipt(input: { bundle: GuestBundle; decision: unknown; decisionLogEntryHash: string }): DecisionPlan;
-};
-const { deriveGuestOutput } = require("@swaraj/proofs/public-values") as { deriveGuestOutput(bundle: GuestBundle): GuestOutput };
 
 /** Proof eligibility of a trade receipt, decided once from the evidence it was created with. */
 export type TradeProofStatus =
@@ -183,7 +180,7 @@ export function createProofRecorder(options: { pool?: Pool; decisionLog: Decisio
           ...(plan.guestRuleIds ? { guestRuleIds: plan.guestRuleIds } : {}),
         }, bundle.referenceTime);
       }
-      const created = await backend.createDecisionReceipt({ id, applicationId, ...plan.receipt });
+      const created = await backend.createDecisionReceipt({ ...plan.receipt, id, applicationId });
       await backend.putBundle("DECISION_RECEIPT", applicationId, id, bundle);
       return { status: created.status, id, violatedRuleIds: created.violatedRuleIds, smtViolatedRuleIds: plan.smtViolatedRuleIds };
     },
