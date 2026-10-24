@@ -18,6 +18,8 @@ export const AtomicAmount = z
   .transform((value) => BigInt(value));
 /** Integer seconds since epoch. */
 export const UnixSeconds = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+/** Integer milliseconds since epoch, used by the unified action wire format. */
+export const UnixMilliseconds = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 /** Non-negative integer that fits a JSON number safely (counts, seconds, versions). */
 export const SafeUint = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const Bps = z.number().int().min(0).max(10_000);

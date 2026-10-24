@@ -1,0 +1,51 @@
+{
+  "mandateId": "mandate_treasury_v1",
+  "version": 1,
+  "agent": "agent:treasury",
+  "defaultEffect": "DENY",
+  "validFrom": 1789990000000,
+  "validUntil": 1800000000000,
+  "rules": [
+    {
+      "ruleId": "forbid_large_payment",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "5000000"
+        }
+      ]
+    },
+    {
+      "ruleId": "permit_payment",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "context.currency",
+          "operator": "IN",
+          "values": ["USD", "USDC"]
+        }
+      ]
+    },
+    {
+      "ruleId": "permit_trade",
+      "effect": "PERMIT",
+      "action": "SPOT_TRADE",
+      "predicates": [
+        {
+          "field": "context.amount",
+          "operator": "LTE",
+          "value": "100000000"
+        },
+        {
+          "field": "resource.venue",
+          "operator": "EQ",
+          "value": "UNISWAP_V3_BASE"
+        }
+      ]
+    }
+  ]
+}

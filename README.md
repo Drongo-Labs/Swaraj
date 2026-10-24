@@ -14,6 +14,7 @@ for the phase map and what is implemented today, and
 | Path | Contents |
 |---|---|
 | `packages/schemas` | Canonical request, policy, evidence, snapshot, and receipt schemas |
+| `packages/rules` | Unified-action Agent Mandate evaluation with forbid precedence and default deny |
 | `packages/crypto` | Canonicalization, hashing, signing, key registry, and shared vectors |
 | `packages/evidence` | Normalized venue evidence and Base RPC adapters |
 | `packages/capability` | Capability tokens, budget reservations, and execution adapters |
