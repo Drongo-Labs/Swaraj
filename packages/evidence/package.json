@@ -1,0 +1,17 @@
+{
+  "name": "@swaraj/evidence",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@swaraj/crypto": "workspace:*",
+    "@swaraj/schemas": "workspace:*",
+    "viem": "^2.21.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@swaraj/lean",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:vectors": "node scripts/sync-vectors.mjs",
+    "check:lean": "$HOME/.elan/bin/lake build"
+  }
+}
