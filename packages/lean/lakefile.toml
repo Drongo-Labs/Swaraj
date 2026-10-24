@@ -1,0 +1,10 @@
+name = "swaraj-gate"
+version = "0.1.0"
+defaultTargets = ["Gate"]
+warnLevenshtein = false
+
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "Gate"

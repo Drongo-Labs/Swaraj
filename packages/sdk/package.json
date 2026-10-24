@@ -1,0 +1,21 @@
+{
+  "name": "@swaraj/sdk",
+  "version": "0.0.0",
+  "description": "Prototype TypeScript client for the Swaraj verification service",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "pnpm build"
+  },
+  "dependencies": { "@swaraj/contracts": "workspace:*", "zod": "^4.1.0" }
+}
