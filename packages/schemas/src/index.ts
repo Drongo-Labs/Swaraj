@@ -6,3 +6,5 @@ export * from "./policyProfile.js";
 export * from "./stateSnapshot.js";
 export * from "./evidenceBundle.js";
 export * from "./receipt.js";
+export * from "./unifiedAction.js";
+export * from "./agentMandate.js";

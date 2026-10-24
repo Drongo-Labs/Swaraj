@@ -26,6 +26,7 @@ interface layers; the other owns the protocol core and product apps.
 | Package / area | Responsibility |
 |---|---|
 | `packages/schemas` | Zod schemas for the core objects, fixtures, normalization |
+| `packages/rules` | Unified action permit/forbid evaluation and default-deny semantics |
 | `packages/crypto` | Canonical hashing, signing, key management, test vectors |
 | `packages/receipts` | Receipt lifecycle engine, signing, storage adapters |
 | `packages/evidence` | Venue adapters (mock + Base RPC), evidence collection, finality |
