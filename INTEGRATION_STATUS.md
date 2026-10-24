@@ -1,5 +1,12 @@
 # Integration status (Phase 1–10)
 
+> Integration note (2026-10-24): the merged repository uses the generic
+> `@swaraj/proofs` statement worker (`runOneProofJob`) and its namespaced
+> database ledger as the supported automated proof path. The API still exports
+> receipt-bound guest bundles and validates their preflight gates, but the older
+> receipt-specific `prover:once`, `worker:service`, and decision-worker commands
+> described below were not present in either branch and are not runnable.
+
 Updated after Phase 8/9 wiring and integrated (non-mock) API defaults. Mock is only for tests via `pipelineMode: "mock"` or `SWARAJ_FORCE_MOCK=1`.
 
 ## Done

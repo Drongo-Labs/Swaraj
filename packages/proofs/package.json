@@ -1,0 +1,63 @@
+{
+  "name": "@swaraj/proofs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./proof-bundles": {
+      "types": "./dist/proof-bundles.d.ts",
+      "import": "./dist/proof-bundles.js"
+    },
+    "./public-values": {
+      "types": "./dist/public-values.d.ts",
+      "import": "./dist/public-values.js"
+    },
+    "./receipt-gate": {
+      "types": "./dist/receipt-gate.d.ts",
+      "import": "./dist/receipt-gate.js"
+    },
+    "./decision-receipt-gate": {
+      "types": "./dist/decision-receipt-gate.d.ts",
+      "import": "./dist/decision-receipt-gate.js"
+    },
+    "./proof-worker": {
+      "types": "./dist/proof-worker.d.ts",
+      "import": "./dist/proof-worker.js"
+    },
+    "./decision-proof-worker": {
+      "types": "./dist/decision-proof-worker.d.ts",
+      "import": "./dist/decision-proof-worker.js"
+    },
+    "./worker-adapter": {
+      "types": "./dist/worker-adapter.d.ts",
+      "import": "./dist/worker-adapter.js"
+    },
+    "./zkverify": {
+      "types": "./dist/zkverify.d.ts",
+      "import": "./dist/zkverify.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "pnpm --filter @swaraj/database... build && pnpm --filter @swaraj/smt... build && pnpm build && node --env-file-if-exists=../../.env --test --test-concurrency 1 scripts/*.test.ts",
+    "check:rust": "cargo test --manifest-path engine/Cargo.toml",
+    "check:sp1-host": "cargo check --manifest-path host/Cargo.toml",
+    "build:sp1": "cd guest && cargo prove build --docker --tag v5.2.4 --workspace-directory .. --output-directory ../artifacts --elf-name swaraj-gate-guest",
+    "execute:sp1": "cargo run --release --manifest-path host/Cargo.toml -- artifacts/swaraj-gate-guest",
+    "prove:sp1": "cargo run --release --manifest-path host/Cargo.toml -- artifacts/swaraj-gate-guest --prove",
+    "worker:once": "pnpm build && node --env-file ../../.env scripts/run-worker-once.mjs"
+  },
+  "dependencies": {
+    "@swaraj/database": "workspace:*",
+    "@swaraj/smt": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.3"
+  }
+}
