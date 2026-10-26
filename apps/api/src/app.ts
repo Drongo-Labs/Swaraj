@@ -19,7 +19,7 @@ import {
 } from "@swaraj/schemas";
 import { evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
-import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, type ReceiptStore } from "@swaraj/receipts";
+import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
   createDatabase,
   createProofJobQueue,
@@ -205,6 +205,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           loadLiveState: () => liveState.snapshot(),
         }
       : {}),
+    ...(extra?.unifiedAction ? { unifiedAction: extra.unifiedAction } : {}),
     checkPolicy: (input) =>
       mandateGateway.check(input, extra?.unifiedAction, extra?.mandateDefinition),
     audit: (entry) => {
@@ -815,6 +816,39 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         .slice(-100)
         .reverse();
       return { items };
+    },
+  );
+
+  /**
+   * Task 3.2: verify a receipt against the unified action format. Checks the
+   * stored action against the strict schema, recomputes its canonical hash,
+   * verifies the issuer signature and the record↔signed-receipt binding.
+   */
+  app.get<{ Params: { applicationId: string; receiptId: string } }>(
+    "/v1/applications/:applicationId/receipts/:receiptId/verify",
+    async (request, reply) => {
+      if (
+        !Identifier.safeParse(request.params.applicationId).success ||
+        !Identifier.safeParse(request.params.receiptId).success
+      ) {
+        return reply.code(400).send({ error: "invalid_receipt_id" });
+      }
+      const record = await receipts.getReceipt(request.params.applicationId, request.params.receiptId);
+      if (!record) return reply.code(404).send({ error: "receipt_not_found" });
+      const verification = await verifyUnifiedActionReceipt(record, signer.address);
+      const intentJson = record.intentJson as { action?: { action?: unknown; agent?: unknown } } | undefined;
+      return {
+        receiptId: record.receiptId,
+        status: record.status,
+        valid: verification.valid,
+        format: verification.format,
+        checks: verification.checks,
+        intentHash: record.intentHash,
+        policyHash: record.policyHash,
+        ...(intentJson?.action?.action
+          ? { action: { type: intentJson.action.action, agent: intentJson.action.agent } }
+          : {}),
+      };
     },
   );
 

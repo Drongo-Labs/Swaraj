@@ -25,6 +25,8 @@ export type ReceiptRecord = {
   signedReceipt: SignedReceipt;
   createdAt: number;
   updatedAt: number;
+  /** Stored intent blob; unified-action receipts carry { format, action, actionHash }. */
+  intentJson?: Record<string, unknown>;
 };
 
 export type CreateReceiptInput = {

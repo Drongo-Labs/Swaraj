@@ -4,3 +4,7 @@ export { type ReceiptStore, recordFromCreate } from "./store.js";
 export { createMemoryReceiptStore } from "./memoryStore.js";
 export { createPostgresReceiptStore } from "./postgresStore.js";
 export { createReceiptEngine, type CreatePendingParams, type ReceiptEngine, type ProofMetadata } from "./engine.js";
+export {
+  verifyUnifiedActionReceipt,
+  type UnifiedActionReceiptVerification,
+} from "./verifyUnifiedAction.js";
