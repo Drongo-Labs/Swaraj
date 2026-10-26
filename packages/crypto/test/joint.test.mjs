@@ -7,7 +7,7 @@ import { hashObject } from "../dist/index.js";
 // Joint checks J.1-J.4 live in vectors/hash/signing tests; this file ties every schema fixture to the crypto package.
 const fixtureDir = new URL("../../schemas/fixtures/valid/", import.meta.url);
 const parsers = {
-  "action-intent": [S.ObjectType.ACTION_INTENT, S.parseActionIntent], "policy-profile": [S.ObjectType.POLICY_PROFILE, S.parsePolicyProfile],
+  "action-intent": [S.ObjectType.ACTION_INTENT, S.parseActionIntent], "policy-profile": [S.ObjectType.POLICY_PROFILE, S.parseMandatePolicy],
   "state-snapshot": [S.ObjectType.STATE_SNAPSHOT, S.parseStateSnapshot], "evidence-bundle": [S.ObjectType.EVIDENCE_BUNDLE, S.parseEvidenceBundle],
   "receipt-unsigned": [S.ObjectType.RECEIPT, S.parseReceiptUnsigned], "receipt-proved": [S.ObjectType.RECEIPT, S.parseReceiptUnsigned],
 };

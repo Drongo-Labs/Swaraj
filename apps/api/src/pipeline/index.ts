@@ -42,7 +42,7 @@ export {
 } from "./live-state.js";
 export {
   createMandatePolicyGate,
-  agentMandateFromPolicyProfile,
+  agentMandateFromMandatePolicy,
   unifiedActionFromIntent,
   DEMO_AGENT,
   type MandatePolicyGateway,

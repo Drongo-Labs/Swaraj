@@ -3,7 +3,7 @@ import test from "node:test";
 import { LocalKeySigner } from "@swaraj/crypto";
 import {
   createMandatePolicyGate,
-  agentMandateFromPolicyProfile,
+  agentMandateFromMandatePolicy,
   DEMO_POLICY,
   DEMO_STATE,
   DEMO_ALLOW_INTENT,
@@ -131,7 +131,7 @@ test("mandate BLOCK preserves the base gateway's decision hashes and id", async 
 });
 
 test("derived mandate mirrors the policy profile caps", () => {
-  const mandate = agentMandateFromPolicyProfile({ ...DEMO_POLICY });
+  const mandate = agentMandateFromMandatePolicy({ ...DEMO_POLICY });
   assert.equal(mandate.defaultEffect, "DENY");
   const ruleIds = mandate.rules.map((rule) => rule.ruleId);
   assert.deepEqual(ruleIds, [...ruleIds].sort(), "rule ids must be ascending");

@@ -51,7 +51,7 @@ test("hash layout is keccak256(tag || 0x00 || canonical bytes)", () => {
 
 test("bigint-typed parsed objects hash the same as their JSON form", () => {
   assert.equal(hashObject("ACTION_INTENT", S.parseActionIntent(load("action-intent"))), hashObject("ACTION_INTENT", load("action-intent")));
-  assert.equal(hashObject("POLICY_PROFILE", S.parsePolicyProfile(load("policy-profile"))), hashObject("POLICY_PROFILE", load("policy-profile")));
+  assert.equal(hashObject("POLICY_PROFILE", S.parseMandatePolicy(load("policy-profile"))), hashObject("POLICY_PROFILE", load("policy-profile")));
 });
 
 for (const [type, name] of Object.entries(fixtures)) {

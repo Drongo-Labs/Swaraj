@@ -4,7 +4,7 @@ How an agent action is authorized, executed, and receipted.
 
 ```mermaid
 flowchart TD
-  O["1 · Owner sets Policy Profile<br/>limits · venues · assets · finality"]
+  O["1 · Owner sets Agent Mandate<br/>limits · venues · assets · finality"]
   A["2 · Agent proposes Action Intent<br/>typed request — cannot bypass gate"]
   G["3 · SMT Gate<br/>check intent vs policy + state"]
 
@@ -27,7 +27,7 @@ flowchart TD
 
 | # | Who | What |
 |---|---|---|
-| 1 | Owner | Declares the Policy Profile (caps, venues, assets, finality). |
+| 1 | Owner | Declares the Agent Mandate (caps, venues, assets, finality). |
 | 2 | Agent | Submits a typed Action Intent. Never holds an unrestricted execution path. |
 | 3 | Swaraj | SMT gate: **ALLOW** or **BLOCK** before anything hits the chain. |
 | 4 | Swaraj | On ALLOW only — issues a short-lived, single-use capability. |

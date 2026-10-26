@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { Address, AtomicAmount, Bps, FinalityRule, HexHash, SafeUint, UnixSeconds, Venue, compareStrings, requireStrictlyAscending, parseWith } from "./primitives.js";
 
-export const PolicyProfileSchema = z
+/**
+ * Mandate policy (formerly "Policy Profile"): the typed trade limits an Agent
+ * Mandate is derived from and the SMT gateway evaluates. The hash domain
+ * stays `ObjectType.POLICY_PROFILE` — it is pinned by the guest ELF and the
+ * committed golden vectors, and it is also the hash domain used for Agent
+ * Mandate commitments.
+ */
+
+export const MandatePolicySchema = z
   .strictObject({
     policyVersion: SafeUint,
     /** Set: sorted ascending, no duplicates. */
@@ -26,12 +34,12 @@ export const PolicyProfileSchema = z
     requireStrictlyAscending(policy.allowedAssets, ctx, ["allowedAssets"], "allowedAssets");
   });
 
-export type PolicyProfile = z.infer<typeof PolicyProfileSchema>;
-export type PolicyProfileJson = z.input<typeof PolicyProfileSchema>;
-export const parsePolicyProfile = (input: unknown): PolicyProfile => parseWith(PolicyProfileSchema, input, "PolicyProfile");
+export type MandatePolicy = z.infer<typeof MandatePolicySchema>;
+export type MandatePolicyJson = z.input<typeof MandatePolicySchema>;
+export const parseMandatePolicy = (input: unknown): MandatePolicy => parseWith(MandatePolicySchema, input, "MandatePolicy");
 
 /** Sorts and de-duplicates the set fields of a raw policy so it canonicalizes uniquely. Run before parsing. */
-export function normalizePolicyProfile<T extends { allowedVenues: string[]; allowedAssets: string[] }>(raw: T): T {
+export function normalizeMandatePolicy<T extends { allowedVenues: string[]; allowedAssets: string[] }>(raw: T): T {
   const set = (values: string[]) => [...new Set(values)].sort(compareStrings);
   return { ...raw, allowedVenues: set(raw.allowedVenues), allowedAssets: set(raw.allowedAssets) };
 }

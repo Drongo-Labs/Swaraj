@@ -27,7 +27,7 @@ Updated: 2026-10-08
 ## Phase 1 — Schemas, canonical serialization and signatures
 
 - [x] 1.1 Action Intent Zod schema
-- [x] 1.2 Policy Profile Zod schema
+- [x] 1.2 Agent Mandate Zod schema
 - [x] 1.3 State Snapshot Zod schema
 - [x] 1.4 Evidence Bundle Zod schema and source classes
 - [x] 1.5 Receipt schema
