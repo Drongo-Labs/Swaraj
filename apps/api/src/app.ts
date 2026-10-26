@@ -24,6 +24,7 @@ import { proofJobFields } from "./kurier.js";
 import {
   assertLiveRuntimeEnv,
   createPipelineStack,
+  createMandatePolicyGate,
   DEMO_POLICY,
   demoPolicyForEnv,
   resolvePipelineMode,
@@ -117,6 +118,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     throw new Error("SWARAJ_SIGNER_PRIVATE_KEY is required for live Base pipeline");
   }
   const signer = options.signer ?? new LocalKeySigner(signerKey ?? DEV_SIGNER_KEY);
+  // Task 2.2: the permit/forbid mandate engine (default deny) gates every
+  // action on top of the SMT policy gateway.
+  const mandateGateway = createMandatePolicyGate({ base: policyGateway, signer });
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
   const { evidence, capabilities, execution, labels } = stack;
@@ -185,7 +189,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           loadLiveState: () => liveState.snapshot(),
         }
       : {}),
-    checkPolicy: (input) => policyGateway.check(input),
+    checkPolicy: (input) => mandateGateway.check(input),
     audit: (entry) => {
       auditLog.push(entry);
       if (entry.kind === "DECISION") {
