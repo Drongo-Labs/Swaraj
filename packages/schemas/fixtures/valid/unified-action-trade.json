@@ -1,0 +1,19 @@
+{
+  "intentId": "intent_trade_001",
+  "agent": "agent:treasury",
+  "action": "SPOT_TRADE",
+  "resource": {
+    "venue": "UNISWAP_V3_BASE"
+  },
+  "context": {
+    "amount": "10000000",
+    "assetIn": "USDC",
+    "assetOut": "WETH",
+    "slippageBps": 50
+  },
+  "policyHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+  "timestamp": 1790000000000,
+  "expiry": 1790000300000,
+  "idempotencyKey": "trade_001",
+  "signature": "0x1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+}

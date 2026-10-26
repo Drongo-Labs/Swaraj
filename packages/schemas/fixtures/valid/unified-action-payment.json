@@ -1,0 +1,18 @@
+{
+  "intentId": "intent_payment_001",
+  "agent": "agent:treasury",
+  "action": "PAYMENT",
+  "resource": {
+    "service": "vendor-api"
+  },
+  "context": {
+    "amount": "2500000",
+    "currency": "USD",
+    "recipient": "vendor@example.com"
+  },
+  "policyHash": "0x3333333333333333333333333333333333333333333333333333333333333333",
+  "timestamp": 1790000000000,
+  "expiry": 1790000300000,
+  "idempotencyKey": "payment_001",
+  "signature": "0x2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222"
+}

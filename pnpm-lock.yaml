@@ -190,6 +190,16 @@ importers:
         specifier: ^8.15.0
         version: 8.23.1
 
+  packages/rules:
+    dependencies:
+      '@swaraj/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/schemas:
     dependencies:
       zod:
