@@ -178,7 +178,18 @@ function mandateViolations(decision: MandateDecision): PolicyViolation[] {
 }
 
 export type MandatePolicyGateway = {
-  check(input: PolicyGatewayInput): Promise<PolicyDecision>;
+  /**
+   * @param input SMT gateway input (policy/state/intent)
+   * @param unifiedAction when the request was a unified action, evaluate it
+   *   directly instead of converting the legacy intent (task 2.1 path)
+   * @param mandateDefinition when the application has a registered Agent
+   *   Mandate, evaluate against it instead of deriving one from the policy
+   */
+  check(
+    input: PolicyGatewayInput,
+    unifiedAction?: UnifiedAction,
+    mandateDefinition?: unknown,
+  ): Promise<PolicyDecision>;
 };
 
 export type MandatePolicyGateOptions = {
@@ -197,20 +208,27 @@ export type MandatePolicyGateOptions = {
  */
 export function createMandatePolicyGate(options: MandatePolicyGateOptions): MandatePolicyGateway {
   return {
-    async check(input: PolicyGatewayInput): Promise<PolicyDecision> {
+    async check(
+      input: PolicyGatewayInput,
+      unifiedAction?: UnifiedAction,
+      mandateDefinition?: unknown,
+    ): Promise<PolicyDecision> {
       const baseDecision = await options.base.check(input);
       const policy = asObject(input.policy);
       const intent = asObject(input.intent);
       const action =
-        intent !== undefined
+        unifiedAction ??
+        (intent !== undefined
           ? await unifiedActionFromIntent(intent, {
               policyHash: baseDecision.policyHash,
               signer: options.signer,
             })
-          : undefined;
-      // Parse the derived mandate once; evaluateParsedMandate takes the typed
-      // action (schema output, amounts as bigint) without re-parsing it.
-      const mandate = AgentMandateSchema.safeParse(agentMandateFromPolicyProfile(policy ?? {}));
+          : undefined);
+      // Parse the mandate once; evaluateParsedMandate takes the typed action
+      // (schema output, amounts as bigint) without re-parsing it.
+      const mandate = AgentMandateSchema.safeParse(
+        mandateDefinition ?? agentMandateFromPolicyProfile(policy ?? {}),
+      );
       const evaluated: MandateDecision = (() => {
         if (action === undefined) {
           return {
