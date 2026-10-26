@@ -10,6 +10,8 @@ const parsers = {
   "action-intent": [S.ObjectType.ACTION_INTENT, S.parseActionIntent], "policy-profile": [S.ObjectType.POLICY_PROFILE, S.parseMandatePolicy],
   "state-snapshot": [S.ObjectType.STATE_SNAPSHOT, S.parseStateSnapshot], "evidence-bundle": [S.ObjectType.EVIDENCE_BUNDLE, S.parseEvidenceBundle],
   "receipt-unsigned": [S.ObjectType.RECEIPT, S.parseReceiptUnsigned], "receipt-proved": [S.ObjectType.RECEIPT, S.parseReceiptUnsigned],
+  "agent-mandate": [S.ObjectType.POLICY_PROFILE, S.parseAgentMandate], "unified-action-trade": [S.ObjectType.ACTION_INTENT, S.parseUnifiedAction],
+  "unified-action-payment": [S.ObjectType.ACTION_INTENT, S.parseUnifiedAction],
 };
 
 test("every valid schema fixture parses, hashes stably (typed and raw), and is covered by a vector", () => {

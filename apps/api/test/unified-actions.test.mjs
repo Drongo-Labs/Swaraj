@@ -262,3 +262,58 @@ test("payment outside the mandate permit list is default-denied", async () => {
   assert.equal(body.mandate.reason, "DEFAULT_DENY");
   await instance.close();
 });
+
+test("unified-action receipt is verifiable end to end (format, hash, signature, binding)", async () => {
+  const instance = await app();
+  const traded = await postAction(instance, spotTradeAction({ idempotencyKey: "unified-verify-1" }));
+  const { receiptId } = traded.json();
+  const verified = await instance.inject({
+    method: "GET",
+    url: `/v1/applications/app_demo/receipts/${receiptId}/verify`,
+    headers,
+  });
+  const body = verified.json();
+  assert.equal(verified.statusCode, 200);
+  assert.equal(body.format, "unified-action");
+  assert.equal(body.valid, true, JSON.stringify(body.checks));
+  assert.equal(body.checks.actionSchema, true);
+  assert.equal(body.checks.actionHash, true);
+  assert.equal(body.checks.signature, true);
+  assert.equal(body.checks.binding, true);
+  assert.equal(body.action.type, "SPOT_TRADE");
+  await instance.close();
+});
+
+test("legacy receipts still verify (signature + binding), action checks not applicable", async () => {
+  const instance = await app();
+  const traded = await instance.inject({
+    method: "POST",
+    url: "/v1/applications/app_demo/actions",
+    headers,
+    payload: { action: "trade.spot", input: {}, idempotencyKey: "legacy-verify-1" },
+  });
+  const { receiptId } = traded.json();
+  const verified = await instance.inject({
+    method: "GET",
+    url: `/v1/applications/app_demo/receipts/${receiptId}/verify`,
+    headers,
+  });
+  const body = verified.json();
+  assert.equal(verified.statusCode, 200);
+  assert.equal(body.format, "legacy");
+  assert.equal(body.valid, true);
+  assert.equal(body.checks.signature, true);
+  assert.equal(body.checks.actionSchema, null);
+  await instance.close();
+});
+
+test("verify endpoint: unknown receipt is 404", async () => {
+  const instance = await app();
+  const response = await instance.inject({
+    method: "GET",
+    url: "/v1/applications/app_demo/receipts/receipt_missing/verify",
+    headers,
+  });
+  assert.equal(response.statusCode, 404);
+  await instance.close();
+});

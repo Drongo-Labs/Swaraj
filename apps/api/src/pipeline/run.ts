@@ -28,12 +28,14 @@ import {
   type ReceiptRecord,
 } from "@swaraj/receipts";
 import type { PolicyDecision, PolicyGatewayInput } from "@swaraj/smt";
+import { serializeUnifiedAction, type UnifiedAction } from "@swaraj/schemas";
 import {
   DEMO_POLICY,
   DEMO_STATE,
   demoAllowIntentForEnv,
   demoBlockIntentForEnv,
 } from "./demo.js";
+import { unifiedActionHash } from "./unified.js";
 
 export type PipelineMode = "mock" | "base";
 
@@ -67,6 +69,12 @@ export type PipelineDeps = {
   loadLiveState?: () => Promise<Record<string, unknown>>;
   /** When true (base mode), refuse client fixture state. */
   requireLiveState?: boolean;
+  /**
+   * The agent-submitted unified action this request originated from
+   * (task 2.1). Receipts bind its canonical wire form so they can be
+   * verified against the unified action format.
+   */
+  unifiedAction?: UnifiedAction;
   audit?: (entry: AuditEntry) => void;
 };
 
@@ -504,7 +512,18 @@ export async function runPipeline(
     createdAt: evidence.collectedAt,
     signer: deps.signer,
     idempotencyKey: request.idempotencyKey,
-    intentJson: { action: request.action, input: request.input },
+    // Unified-action requests bind the receipt to the canonical wire form of
+    // the agent's action (format + action + its hash) so verification can
+    // revalidate the format and the stored blob end to end.
+    ...(deps.unifiedAction
+      ? {
+          intentJson: {
+            format: "unified-action" as const,
+            action: JSON.parse(serializeUnifiedAction(deps.unifiedAction)) as Record<string, unknown>,
+            actionHash: unifiedActionHash(deps.unifiedAction),
+          },
+        }
+      : { intentJson: { action: request.action, input: request.input } }),
     accountRef,
   });
 
