@@ -9,7 +9,7 @@ const load = (path) => JSON.parse(readFileSync(new URL(path, dir), "utf8"));
 // name -> [schema, parse helper, optional top-level keys]
 const objects = {
   "action-intent": [S.ActionIntentSchema, S.parseActionIntent, ["intentHash"]],
-  "policy-profile": [S.PolicyProfileSchema, S.parsePolicyProfile, ["policyHash"]],
+  "policy-profile": [S.MandatePolicySchema, S.parseMandatePolicy, ["policyHash"]],
   "state-snapshot": [S.StateSnapshotSchema, S.parseStateSnapshot, ["lastActionTime", "stateHash"]],
   "evidence-bundle": [S.EvidenceBundleSchema, S.parseEvidenceBundle, ["finalityResult"]],
   "receipt-unsigned": [S.ReceiptUnsignedSchema, S.parseReceiptUnsigned, ["proof"]],
@@ -41,7 +41,7 @@ for (const [name, [schema, parse, optional]] of Object.entries(objects)) {
 
 test("invalid fixtures are all rejected, with errors that do not echo values", () => {
   const parsers = {
-    "action-intent": S.parseActionIntent, "policy-profile": S.parsePolicyProfile, "state-snapshot": S.parseStateSnapshot,
+    "action-intent": S.parseActionIntent, "policy-profile": S.parseMandatePolicy, "state-snapshot": S.parseStateSnapshot,
     "evidence-bundle": S.parseEvidenceBundle, receipt: S.parseReceiptUnsigned,
   };
   for (const file of readdirSync(new URL("invalid/", dir))) {
@@ -71,14 +71,14 @@ test("addresses and hashes must be lowercase hex of exact length", () => {
 
 test("policy: bps bounds, sets sorted and unique, normalizer fixes raw input", () => {
   const valid = load("valid/policy-profile.json");
-  for (const bps of [0, 10000]) assert.ok(S.PolicyProfileSchema.safeParse({ ...valid, maxSlippageBps: bps }).success);
-  for (const bps of [-1, 10001]) assert.equal(S.PolicyProfileSchema.safeParse({ ...valid, maxSlippageBps: bps }).success, false);
+  for (const bps of [0, 10000]) assert.ok(S.MandatePolicySchema.safeParse({ ...valid, maxSlippageBps: bps }).success);
+  for (const bps of [-1, 10001]) assert.equal(S.MandatePolicySchema.safeParse({ ...valid, maxSlippageBps: bps }).success, false);
   const [a, b] = valid.allowedAssets;
-  assert.equal(S.PolicyProfileSchema.safeParse({ ...valid, allowedAssets: [a, a] }).success, false);
-  assert.equal(S.PolicyProfileSchema.safeParse({ ...valid, allowedAssets: [] }).success, false);
-  const messy = S.normalizePolicyProfile({ ...valid, allowedAssets: [b, a, b], allowedVenues: ["UNISWAP_V3_BASE", "UNISWAP_V3_BASE"] });
+  assert.equal(S.MandatePolicySchema.safeParse({ ...valid, allowedAssets: [a, a] }).success, false);
+  assert.equal(S.MandatePolicySchema.safeParse({ ...valid, allowedAssets: [] }).success, false);
+  const messy = S.normalizeMandatePolicy({ ...valid, allowedAssets: [b, a, b], allowedVenues: ["UNISWAP_V3_BASE", "UNISWAP_V3_BASE"] });
   assert.deepEqual(messy.allowedAssets, [a, b]);
-  assert.ok(S.PolicyProfileSchema.safeParse(messy).success);
+  assert.ok(S.MandatePolicySchema.safeParse(messy).success);
 });
 
 test("rule IDs are unique positive integers", () => {

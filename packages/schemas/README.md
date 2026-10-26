@@ -9,7 +9,7 @@ Fields excluded from the object's own hash: `intentHash`, `policyHash`, `stateHa
 ## Action Intent
 `intentId`; `actionType` (`SPOT_TRADE`); `venue`; `accountRef` (opaque 32-byte commitment, never a raw account id); `assetIn`/`assetOut` (must differ); `amount` (atomic `assetIn`); `maxSlippageBps` (0–10000); `limitPrice` (atomic `assetOut` per 1e18 atomic `assetIn`); `expiry`; `idempotencyKey`; `policyVersion`; `intentHash?`.
 
-## Policy Profile
+## Agent Mandate (mandate policy)
 `policyVersion`; `allowedVenues`, `allowedAssets` (sets); `maxAmountPerAction`, `positionCap`, `dailyTurnoverCap`, `reserveRequirement` (atomic); `maxSlippageBps`; `quoteFreshnessSeconds`; `cooldownSeconds`; `finalityRule`; `policyExpiry`; `paused`; `policyHash?`. Stable numeric rule IDs for each constraint are in `RuleId`; never renumber.
 
 ## State Snapshot

@@ -16,7 +16,7 @@ Swaraj sits between an AI agent and execution: it enforces an owner-approved pol
 
 | Persona | Role |
 |---|---|
-| **Owner** | Sets the Policy Profile (limits, venues, assets, slippage, cooldown). |
+| **Owner** | Sets the Agent Mandate (limits, venues, assets, slippage, cooldown). |
 | **Trading agent** | Proposes typed `SPOT_TRADE` intents. Cannot bypass the gateway. Holds no open execution keys. |
 | **Auditor / viewer** | Reads ALLOW/BLOCK outcomes, receipts, hashes, assumptions, proof status + Kurier links. |
 
@@ -70,7 +70,7 @@ The Lean suite (`packages/lean`) is the **source of truth for the predicates we 
 | Layer | Role |
 |---|---|
 | **Lean** (`packages/lean`) | Proves properties of the supported policy language / arithmetic model (e.g. `AmountPolicy.lean`: not paused, `0 < amount`, `amount ≤ cap`, `used + reserved + amount ≤ budget`; Phase 10 compiler/lifecycle theorems) |
-| **Policy Profile** (Zod / registry) | Concrete numbers + enums the owner sets in View 1 |
+| **Agent Mandate** (Zod / registry) | Concrete numbers + enums the owner sets in View 1 |
 | **SMT gateway** (Phase 4) | Evaluates those fields with stable `RuleId`s (1–14) |
 
 Rules for the demo:
@@ -78,14 +78,14 @@ Rules for the demo:
 1. Every limit shown/edited in the Owner UI must map to a real gateway rule (and Lean-covered predicate where applicable).
 2. Do **not** invent UI-only constraints that Lean/SMT do not enforce.
 3. BLOCK “why” text must cite the same rule ids the solver returns (`RuleId` in `packages/schemas`).
-4. If Lean models a **specific** subset (amount/cap/budget/paused), the demo narrative should emphasize those predicates first; broader SMT rules (venue, slippage, cooldown, …) stay consistent with the Policy Profile schema.
+4. If Lean models a **specific** subset (amount/cap/budget/paused), the demo narrative should emphasize those predicates first; broader SMT rules (venue, slippage, cooldown, …) stay consistent with the Agent Mandate schema.
 
 ---
 
 ## End-to-end user flow
 
 ```
-Owner defines Policy Profile (ACTIVE)
+Owner defines Agent Mandate (ACTIVE)
         │
         ▼
 Agent submits Action Intent  ──►  Schema / freshness checks
@@ -293,7 +293,7 @@ pnpm agent -- --scene=allow
 - [x] **Agent view:** accepted/rejected + why (rule id + reason)
 - [x] **Agent view:** receipt / decision-receipt linkage
 - [x] **Kurier:** surface `proof.kurierUrl` on receipts / decision receipts (tx / aggregation / job id)
-- [x] **Lean alignment:** Owner-editable fields match AmountPolicy + Policy Profile (cap, budget, paused, …)
+- [x] **Lean alignment:** Owner-editable fields match AmountPolicy + Agent Mandate (cap, budget, paused, …)
 - [x] Scripted demo agent (`pnpm agent -- --scene=all|block|allow|replay`) + Agent view “Run demo sequence”
 
 ---

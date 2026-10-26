@@ -12,9 +12,9 @@ import {
   AgentMandateSchema,
   normalizeAgentMandate,
   ObjectType,
-  PolicyProfileSchema,
+  MandatePolicySchema,
   UnifiedActionSchema,
-  normalizePolicyProfile,
+  normalizeMandatePolicy,
   type UnifiedAction,
 } from "@swaraj/schemas";
 import { evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
@@ -35,7 +35,7 @@ import {
   assertLiveRuntimeEnv,
   createPipelineStack,
   createMandatePolicyGate,
-  agentMandateFromPolicyProfile,
+  agentMandateFromMandatePolicy,
   DEMO_POLICY,
   demoPolicyForEnv,
   MANDATE_POLICY_ID,
@@ -338,7 +338,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         policyExpiry: number;
         paused: boolean;
       };
-      const normalized = normalizePolicyProfile({
+      const normalized = normalizeMandatePolicy({
         policyVersion: pick("policyVersion", defaults.policyVersion),
         allowedVenues: pick("allowedVenues", [...defaults.allowedVenues]),
         allowedAssets: pick("allowedAssets", [...defaults.allowedAssets]),
@@ -384,12 +384,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         ...normalized,
         policyVersion: typeof normalized.policyVersion === "number" ? normalized.policyVersion : version,
       };
-      const parsed = PolicyProfileSchema.safeParse(definition);
+      const parsed = MandatePolicySchema.safeParse(definition);
       if (!parsed.success) {
         return reply.code(400).send({ error: "invalid_policy_definition", issues: parsed.error.issues });
       }
 
-      // AtomicAmount transforms to bigint; persist/hash as decimal strings (Policy Profile wire form).
+      // AtomicAmount transforms to bigint; persist/hash as decimal strings (mandate policy wire form).
       const storedDefinition: Record<string, unknown> = {
         policyVersion: parsed.data.policyVersion,
         allowedVenues: parsed.data.allowedVenues,
@@ -670,10 +670,10 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       const applicationId = request.params.applicationId;
 
       // Resolve the ACTIVE mandate: a registered mandate wins; otherwise one
-      // is derived from the ACTIVE policy profile (fail closed if neither).
+      // is derived from the ACTIVE mandate policy (fail closed if neither).
       const registered = await loadActivePolicy(applicationId, MANDATE_POLICY_ID);
       const policyDefinition = await loadActivePolicy(applicationId, "policy_demo");
-      const mandateDefinition = registered ?? agentMandateFromPolicyProfile(policyDefinition ?? {});
+      const mandateDefinition = registered ?? agentMandateFromMandatePolicy(policyDefinition ?? {});
       if (!registered && !policyDefinition) {
         return reply.code(404).send({ error: "mandate_not_found", message: "no active mandate or policy" });
       }

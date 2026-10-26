@@ -77,7 +77,7 @@ function sanitizeId(raw: string, fallback: string): string {
  * and slippage caps, deny everything else. Fail closed on a malformed policy:
  * a mandate with no permit rule default-denies every action.
  */
-export function agentMandateFromPolicyProfile(policy: Record<string, unknown>): Record<string, unknown> {
+export function agentMandateFromMandatePolicy(policy: Record<string, unknown>): Record<string, unknown> {
   const version = safeInt(policy.policyVersion) ?? 1;
   const rules: Array<Record<string, unknown>> = [];
   const maxAmount = decimalString(policy.maxAmountPerAction);
@@ -227,7 +227,7 @@ export function createMandatePolicyGate(options: MandatePolicyGateOptions): Mand
       // Parse the mandate once; evaluateParsedMandate takes the typed action
       // (schema output, amounts as bigint) without re-parsing it.
       const mandate = AgentMandateSchema.safeParse(
-        mandateDefinition ?? agentMandateFromPolicyProfile(policy ?? {}),
+        mandateDefinition ?? agentMandateFromMandatePolicy(policy ?? {}),
       );
       const evaluated: MandateDecision = (() => {
         if (action === undefined) {
