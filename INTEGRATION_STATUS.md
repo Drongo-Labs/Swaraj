@@ -37,7 +37,7 @@ Updated after Phase 8/9 wiring and integrated (non-mock) API defaults. Mock is o
 
 ## Still open (leave for later / Phase 11+)
 
-1. **Live Volta run:** rebuild guest ELF (`pnpm build:sp1`), re-pin `SWARAJ_SP1_VKEYS`, real prove + submit (needs `cargo prove` + Volta creds).
+1. **Live zkVerify run:** rebuild guest ELF (`pnpm build:sp1`), re-pin `SWARAJ_SP1_VKEYS`, real prove + submit (needs `cargo prove` + zkVerify credentials).
 2. Guest still does not cryptographically verify Base Merkle/receipt proofs (metadata + blockHash binding only).
 3. SP1 host needs rustc ≥ 1.94.1 (pinned `sp1-sdk` dependency tree).
 4. Auto-run prover/worker: wired via `scheduleAutoProve` when `SWARAJ_SP1_*` is set (disable with `SWARAJ_AUTO_PROVE=0`).
