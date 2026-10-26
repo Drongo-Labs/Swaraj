@@ -8,7 +8,7 @@ const h = (c) => `0x${c.repeat(64)}`;
 const unsigned = {
   id: "00000000-0000-4000-8000-000000000001", status: "PROVED", decision: "BLOCK", violatedRuleIds: [3, 6],
   intentHash: h("a"), policyHash: h("b"), stateHash: h("c"), decisionLogEntryHash: h("e"), referenceTime: 1790000000,
-  verifierVersion: "0.1.0", proof: { proofSystem: "SP1", proofHash: h("1") }, zkVerify: { network: "zkVerify-Volta", txHash: h("2"), finalized: true },
+  verifierVersion: "0.1.0", proof: { proofSystem: "SP1", proofHash: h("1") }, zkVerify: { network: "zkVerify", txHash: h("2"), finalized: true },
   signedAt: 1790000500,
 };
 
