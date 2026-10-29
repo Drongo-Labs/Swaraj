@@ -3,16 +3,14 @@
 The NEAR hackathon plan lives in swaraj-new's local `docs/`
 (`ZUNNO_NEAR_ARCHITECTURE.md`, gitignored). Everything else outstanding:
 
-## Decisions pending
+## Done
 
-- [ ] **swaraj-new remote history** — `origin/main` still points at the
-      pre-rewrite commits that accidentally included the planning docs.
-      Local `main` is clean (docs removed + gitignored). Purging them from
-      the remote needs a force-push to a protected branch:
-      `git push --force-with-lease origin main` — awaiting explicit approval.
-- [ ] **Push the repos** — none of this session's work is on a remote:
-      swaraj-new `main` (rewritten, unpushed) and swaraj-zunno (no remote at
-      all). The hackathon judges need a public repo.
+- [x] **swaraj-new remote history** — rewritten `main` on the remote; zero
+      planning docs in remote history (verified by fetch + history grep).
+- [x] **Push the repos** — swaraj-zunno is public at
+      https://github.com/ayush4345/swaraj-zunno (Lean build output cleaned
+      from tracking before the push); swaraj-new is at
+      https://github.com/Drongo-Labs/Swaraj with the clean history.
 
 ## Engineering
 
