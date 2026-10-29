@@ -163,7 +163,7 @@ lease, so finality and Kurier polling continue without API traffic and resume af
 Submission is fixed per job before anything is paid for:
 
 - `KURIER_API_KEY` set → Kurier. Exactly one POST per job; its job ID is stored on the job row and later
-  attempts poll `GET /job-status`. Verification opens a **read-only** Volta session — no seed phrase.
+  attempts poll `GET /job-status`. Verification opens a **read-only** zkVerify session — no seed phrase.
 - otherwise → direct zkVerify with `ZKVERIFY_SEED_PHRASE`.
 
 A Kurier status never promotes a receipt: once Kurier reports the zkVerify transaction, the worker reads it
@@ -228,5 +228,5 @@ and is independent of `KURIER_CHAIN_ID`.
 | SP1 guest-bundle + proof inputs | Recorded | Recorded when finality allows |
 | zkVerify / `PROVED` | `prover:once` + recurring `worker:service` | Same workers; often with fixture FINAL in tests |
 
-See [INTEGRATION_STATUS.md](./INTEGRATION_STATUS.md) for open items (auto-prove, Merkle verify, live Volta).
+See [INTEGRATION_STATUS.md](./INTEGRATION_STATUS.md) for open items (auto-prove, Merkle verify, live zkVerify).
 cl

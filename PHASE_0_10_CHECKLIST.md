@@ -27,7 +27,7 @@ Updated: 2026-10-08
 ## Phase 1 — Schemas, canonical serialization and signatures
 
 - [x] 1.1 Action Intent Zod schema
-- [x] 1.2 Policy Profile Zod schema
+- [x] 1.2 Agent Mandate Zod schema
 - [x] 1.3 State Snapshot Zod schema
 - [x] 1.4 Evidence Bundle Zod schema and source classes
 - [x] 1.5 Receipt schema
@@ -147,7 +147,7 @@ Updated: 2026-10-08
 - [x] 8.8 Proof failure/timeout → NON_PROVABLE
 - [x] 8.9 Proof-status/zkVerify-reference representation
 - [x] 8.10 Altered-input/key/replay/invalid-proof negative tests
-- [~] Real zkVerify Volta submission and finalized `ProofVerified` observation
+- [~] Real zkVerify submission and finalized `ProofVerified` observation
 - [~] Real `TRADE_RECEIPT_V1` proof promotion from a live Base trade
 
 **Exit: offline proof-bound receipt implementation COMPLETE; live remote verification remains.**
@@ -203,7 +203,7 @@ These require external execution/infrastructure and therefore remain intentional
 2. Live Base transaction evidence and reorg observation.
 3. Target-environment SP1 proving/verification run.
 4. Cryptographic Base proof/finality verification inside the SP1 guest.
-5. Live zkVerify Volta submission and finalized `ProofVerified` event.
+5. Live zkVerify submission and finalized `ProofVerified` event.
 6. Production `TRADE_RECEIPT_V1` proof promotion.
 7. Production batch proving/aggregation execution.
 8. Proofs that the TypeScript/Rust/Postgres implementations refine the Phase 10 Lean models.

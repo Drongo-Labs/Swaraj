@@ -123,8 +123,8 @@ export function proofStackStatus(env: NodeJS.ProcessEnv = process.env): {
   return {
     autoProve: autoProveEnabled(env),
     sp1: sp1Ready ? "configured" : "missing_env",
-    // Kurier pays for submissions, so verification needs only a read-only Volta session.
-    zkVerify: seed ? "volta" : kurierReady ? "volta_read_only" : "missing_env",
+    // Kurier pays for submissions, so verification needs only a read-only zkVerify session.
+    zkVerify: seed ? "zkverify" : kurierReady ? "zkverify_read_only" : "missing_env",
     kurier: kurierReady ? "configured" : "missing_env",
     submission: kurierReady ? "kurier" : seed ? "zkverify_direct" : "missing_env",
     destination: kurierReady && chainId === "84532" ? "base-sepolia" : kurierReady && chainId ? `unsupported:${chainId}` : "none",

@@ -20,6 +20,9 @@ function rowToRecord(row: Record<string, unknown>): ReceiptRecord {
   };
   if (row.reason_code != null) record.reasonCode = String(row.reason_code) as ReasonCode;
   if (row.proof_reference != null) record.proofReference = String(row.proof_reference);
+  if (row.intent_json != null && typeof row.intent_json === "object") {
+    record.intentJson = row.intent_json as Record<string, unknown>;
+  }
   return record;
 }
 
@@ -115,10 +118,16 @@ export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
     },
 
     async get(applicationId, receiptId) {
-      const result = await pool.query(`SELECT * FROM runtime_receipts WHERE application_id = $1 AND id = $2`, [
-        applicationId,
-        receiptId,
-      ]);
+      const result = await pool.query(
+        `SELECT r.*, a.intent AS intent_json
+         FROM runtime_receipts r
+         LEFT JOIN runtime_actions a ON a.application_id = r.application_id AND a.id = r.action_id
+         WHERE r.application_id = $1 AND r.id = $2`,
+        [
+          applicationId,
+          receiptId,
+        ],
+      );
       const row = result.rows[0] as Record<string, unknown> | undefined;
       return row ? rowToRecord(row) : undefined;
     },

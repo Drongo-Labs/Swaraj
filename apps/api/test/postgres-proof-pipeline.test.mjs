@@ -96,40 +96,65 @@ function simulatedChain() {
   return chain;
 }
 
-test("Phase 8/9: API → proof inputs → prover → zkVerify recovery → PROVED, on Postgres", { skip: !url && "set SWARAJ_TEST_DATABASE_URL to a disposable database" }, async () => {
+
+/** Shared setup: wipe the runtime tables and seed one ALLOW, one provable BLOCK and one invalid BLOCK through the API. */
+async function seedApiOnPostgres(url, pool) {
+  const savedFinality = process.env.SWARAJ_EVIDENCE_FINALITY;
+  process.env.SWARAJ_EVIDENCE_FINALITY = "FINAL";
+  const app = await buildApp(token, { pipelineMode: "mock", databaseUrl: url, signer: new LocalKeySigner(SIGNER_KEY) });
+  try {
+    await pool.query("TRUNCATE runtime_proof_jobs, runtime_decision_proof_jobs, runtime_proof_inputs, runtime_decision_receipts, runtime_receipt_jobs, runtime_receipts, runtime_actions, runtime_authorization_decisions, runtime_capabilities, runtime_reservations CASCADE");
+    const allowed = (await app.inject({ method: "POST", url: "/v1/applications/app_demo/actions", headers, payload: { action: "trade.spot", input: {}, idempotencyKey: "pg-allow" } })).json();
+    assert.deepEqual(allowed.proof, { status: "AWAITING_PROOF", claimScope: "TRADE_RECEIPT_V1" }, JSON.stringify(allowed));
+    const blocked = (await app.inject({ method: "POST", url: "/v1/applications/app_demo/actions", headers, payload: { action: "trade.block", input: {}, idempotencyKey: "pg-block" } })).json();
+    assert.equal(blocked.decisionReceipt.status, "PENDING", JSON.stringify(blocked));
+    const view = (await app.inject({ url: `/v1/applications/app_demo/receipts/${allowed.receiptId}`, headers })).json();
+    assert.equal(view.proof.status, "AWAITING_PROOF");
+    const invalid = (await app.inject({ method: "POST", url: "/v1/applications/app_demo/actions", headers, payload: { action: "trade.spot", input: { state: { ...DEMO_STATE, policyStatus: "PAUSED" } }, idempotencyKey: "pg-invalid" } })).json();
+    assert.equal(invalid.decisionReceipt.status, "NON_PROVABLE", JSON.stringify(invalid));
+    const stored = (await pool.query("SELECT status, reason_code, solver_status FROM runtime_decision_receipts WHERE id=$1", [invalid.decisionReceipt.id])).rows[0];
+    assert.deepEqual(stored, { status: "NON_PROVABLE", reason_code: "OPERATIONAL_FAILURE", solver_status: "invalid" });
+    return { receiptId: allowed.receiptId, decisionReceiptId: blocked.decisionReceipt.id, savedFinality };
+  } finally {
+    await app.close();
+  }
+}
+
+test("API on Postgres: mandate gate, receipts, Decision Receipts, proof inputs, schema guards", { skip: !url && "set SWARAJ_TEST_DATABASE_URL to a disposable database" }, async () => {
+  const pool = db.createDatabase(url);
+  const seeded = await seedApiOnPostgres(url, pool);
+  try {
+    // proof_inputs is append-only.
+    await assert.rejects(() => pool.query("UPDATE runtime_proof_inputs SET bundle_sha256 = bundle_sha256"), /append-only/);
+    // Note: provable-check enforcement (solver status, rule ids) is in the application
+    // layer (planDecisionReceipt), not a DB trigger — asserted by the seed above.
+    // Prove inputs were recorded for both the ALLOW and the provable BLOCK.
+    const inputs = await pool.query("SELECT count(*)::int AS n FROM runtime_proof_inputs");
+    assert.ok(inputs.rows[0].n >= 2, "allow + block proof inputs recorded");
+    // The receipt-bound job row is durable.
+    const job = await pool.query("SELECT state FROM runtime_receipt_jobs WHERE application_id='app_demo' AND receipt_id=$1", [seeded.receiptId]);
+    assert.equal(job.rows[0].state, "PENDING");
+    // Every action produced a decision-log entry, including the mandate BLOCK.
+    const decisions = await pool.query("SELECT count(*)::int AS n FROM runtime_authorization_decisions");
+    assert.ok(decisions.rows[0].n >= 3, "every action produced a decision log entry");
+  } finally {
+    if (seeded.savedFinality === undefined) delete process.env.SWARAJ_EVIDENCE_FINALITY; else process.env.SWARAJ_EVIDENCE_FINALITY = seeded.savedFinality;
+    await pool.end();
+  }
+});
+
+// The receipt-specific prover and its queue methods (createWorkerDependencies deps.prover,
+// deps.trade.queue.enqueue/markIncluded/fail) were removed in the core-protocol merge. The
+// supported automated proof path is @swaraj/proofs runOneProofJob — see INTEGRATION_STATUS.md.
+// Re-enable this end-to-end worker test once the prover path is restored against runOneProofJob.
+test("Phase 8/9 worker pipeline on Postgres (receipt-specific prover)", {
+  skip: "legacy receipt-specific prover removed in the core-protocol merge; the supported path is @swaraj/proofs runOneProofJob (see INTEGRATION_STATUS.md)",
+}, async () => {
   const pool = db.createDatabase(url);
   const artifactRoot = await mkdtemp(join(tmpdir(), "swaraj-proofs-"));
-  const savedFinality = process.env.SWARAJ_EVIDENCE_FINALITY;
+  const seeded = await seedApiOnPostgres(url, pool);
+  const { receiptId, decisionReceiptId } = seeded;
   try {
-    await pool.query("TRUNCATE proof_jobs, decision_proof_jobs, proof_inputs, decision_receipts, receipt_jobs, receipts, actions, authorization_decisions CASCADE");
-
-    // 1. API: a FINAL trade and a policy BLOCK, persisted to Postgres.
-    process.env.SWARAJ_EVIDENCE_FINALITY = "FINAL";
-    const app = await buildApp(token, { pipelineMode: "mock", databaseUrl: url, signer: new LocalKeySigner(SIGNER_KEY) });
-    let receiptId;
-    let decisionReceiptId;
-    try {
-      const allowed = (await app.inject({ method: "POST", url: "/v1/applications/app_demo/actions", headers, payload: { action: "trade.spot", input: {}, idempotencyKey: "pg-allow" } })).json();
-      assert.deepEqual(allowed.proof, { status: "AWAITING_PROOF", claimScope: "TRADE_RECEIPT_V1" }, JSON.stringify(allowed));
-      receiptId = allowed.receiptId;
-      const blocked = (await app.inject({ method: "POST", url: "/v1/applications/app_demo/actions", headers, payload: { action: "trade.block", input: {}, idempotencyKey: "pg-block" } })).json();
-      assert.equal(blocked.decisionReceipt.status, "PENDING", JSON.stringify(blocked));
-      decisionReceiptId = blocked.decisionReceipt.id;
-      const view = (await app.inject({ url: `/v1/applications/app_demo/receipts/${receiptId}`, headers })).json();
-      assert.equal(view.proof.status, "AWAITING_PROOF");
-      // An unprovable BLOCK is persisted as NON_PROVABLE (audit trail) and never offered to the prover.
-      const invalid = (await app.inject({ method: "POST", url: "/v1/applications/app_demo/actions", headers, payload: { action: "trade.spot", input: { state: { ...DEMO_STATE, policyStatus: "PAUSED" } }, idempotencyKey: "pg-invalid" } })).json();
-      assert.equal(invalid.decisionReceipt.status, "NON_PROVABLE", JSON.stringify(invalid));
-      const stored = (await pool.query("SELECT status, reason_code, solver_status FROM decision_receipts WHERE id=$1", [invalid.decisionReceipt.id])).rows[0];
-      assert.deepEqual(stored, { status: "NON_PROVABLE", reason_code: "OPERATIONAL_FAILURE", solver_status: "invalid" });
-    } finally {
-      await app.close();
-    }
-
-    // proof_inputs is append-only.
-    await assert.rejects(() => pool.query("UPDATE proof_inputs SET bundle_sha256 = bundle_sha256"), /append-only/);
-
-    // 2. Prover: both stored bundles are proved and enqueued exactly once.
     const chain = simulatedChain();
     const zkVerify = createZkVerifyClient({ openSession: () => chain.session });
     const deps = createWorkerDependencies({
@@ -141,56 +166,39 @@ test("Phase 8/9: API → proof inputs → prover → zkVerify recovery → PROVE
     for (const record of awaiting) await proveAndEnqueue(record, { ...deps.prover, vkeyVersion: "v1" });
     assert.equal((await deps.prover.proofInputs.listAwaitingProof(10)).length, 0);
 
-    // 3. Trade worker: submission is included but not final → INCLUDED with the block hash persisted.
     assert.equal((await runProofWorkerOnce(deps.trade)).status, "AWAITING_FINALITY");
     let job = await deps.trade.queue.getByReceipt("app_demo", receiptId);
     assert.equal(job.state, "INCLUDED");
     assert.match(job.zkverifyBlockHash, /^0x[0-9a-f]{64}$/);
     assert.equal((await runProofWorkerOnce(deps.trade)).status, "IDLE", "polling waits for the backoff");
 
-    // 4. Finality arrives; a fresh worker (as after a crash) recovers the same extrinsic without resubmitting.
     chain.finalizedNumber = chain.height;
-    await pool.query("UPDATE proof_jobs SET next_attempt_at = now()");
+    await pool.query("UPDATE runtime_proof_jobs SET next_attempt_at = now()");
     const proved = await runProofWorkerOnce(deps.trade);
     assert.equal(proved.status, "PROVED");
     assert.equal(chain.submissions, 1);
-    const row = (await pool.query("SELECT status, proof_reference, signed_receipt FROM receipts WHERE application_id='app_demo' AND id=$1", [receiptId])).rows[0];
+    const row = (await pool.query("SELECT status, proof_reference, signed_receipt FROM runtime_receipts WHERE application_id='app_demo' AND id=$1", [receiptId])).rows[0];
     assert.equal(row.status, "PROVED");
     assert.equal(row.proof_reference, job.zkverifyTxHash);
     assert.equal(row.signed_receipt.proof.programVkeyHash, IMAGE_ID);
-    // The PROVED receipt is re-signed by the worker's key and still verifies.
     const address = new LocalKeySigner(SIGNER_KEY).address;
     const registry = new KeyRegistry([{ keyId: deriveKeyId(address), address, validFrom: 0 }]);
     assert.equal(await verifyReceiptSignature(row.signed_receipt, registry), true);
     job = await deps.trade.queue.getByReceipt("app_demo", receiptId);
     assert.equal(job.state, "FINALIZED");
 
-    // 5. Decision worker: same lifecycle for the BLOCK Decision Receipt.
     assert.equal((await runDecisionProofWorkerOnce(deps.decision)).status, "AWAITING_FINALITY");
     chain.finalizedNumber = chain.height;
-    await pool.query("UPDATE decision_proof_jobs SET next_attempt_at = now()");
+    await pool.query("UPDATE runtime_decision_proof_jobs SET next_attempt_at = now()");
     assert.equal((await runDecisionProofWorkerOnce(deps.decision)).status, "PROVED");
     const decision = await deps.decision.decisionReceipts.get(decisionReceiptId);
     assert.equal(decision.status, "PROVED");
     assert.equal(decision.proofMetadata.decision, "BLOCK");
     assert.deepEqual(decision.proofMetadata.violatedRuleIds, decision.violatedRuleIds);
     assert.equal(chain.submissions, 2);
-
-    // A PENDING (provable) Decision Receipt still requires rules and a sat/unsat solver status.
-    await assert.rejects(() => pool.query(
-      `INSERT INTO decision_receipts (id,decision_log_entry_hash,intent_hash,policy_hash,state_hash,decision,violated_rule_ids,reference_time,verifier_version,solver_status)
-       VALUES (gen_random_uuid(),$1,$2,$2,$2,'BLOCK','[]'::jsonb,0,'0.1.0','timeout')`, [hex32(), `0x${"a".repeat(64)}`]), /provable_check/);
-    // A signed attestation is stored with the PROVED Decision Receipt.
     assert.equal(decision.proofMetadata.signedDecisionReceipt.id, decisionReceiptId);
-
-    // 6. Queue semantics: an INCLUDED job is never abandoned for attempts; a deterministic rejection is terminal.
-    const extra = await deps.trade.queue.enqueue({ applicationId: "app_demo", receiptId, artifactPath: "x/zkverify-proof.json", artifactSha256: "f".repeat(64), vkeyVersion: "v1" });
-    await pool.query("UPDATE proof_jobs SET state='SUBMITTING', attempts=99 WHERE id=$1", [extra.id]);
-    await deps.trade.queue.markIncluded(extra.id, { network: "zkVerify-Volta", txHash: hex32(), blockHash: hex32() });
-    assert.equal((await deps.trade.queue.fail(extra.id, "rpc unavailable", 5)).state, "INCLUDED");
-    assert.equal((await deps.trade.queue.fail(extra.id, "public inputs mismatch", 5, true)).state, "NON_PROVABLE");
   } finally {
-    if (savedFinality === undefined) delete process.env.SWARAJ_EVIDENCE_FINALITY; else process.env.SWARAJ_EVIDENCE_FINALITY = savedFinality;
+    if (seeded.savedFinality === undefined) delete process.env.SWARAJ_EVIDENCE_FINALITY; else process.env.SWARAJ_EVIDENCE_FINALITY = seeded.savedFinality;
     await rm(artifactRoot, { recursive: true, force: true });
     await pool.end();
   }

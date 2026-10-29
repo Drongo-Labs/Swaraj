@@ -38,6 +38,9 @@ importers:
       '@swaraj/receipts':
         specifier: workspace:*
         version: link:../../packages/receipts
+      '@swaraj/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@swaraj/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

@@ -1,15 +1,25 @@
 import { timingSafeEqual } from "node:crypto";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply } from "fastify";
 import {
   ActionRequestSchema,
   AmountCheckSchema,
   Identifier,
   PolicyRecordSchema,
+  type ActionRequest,
 } from "@swaraj/contracts";
 import { LocalKeySigner, hashObject, type Signer } from "@swaraj/crypto";
-import { ObjectType, PolicyProfileSchema, normalizePolicyProfile } from "@swaraj/schemas";
+import {
+  AgentMandateSchema,
+  normalizeAgentMandate,
+  ObjectType,
+  MandatePolicySchema,
+  UnifiedActionSchema,
+  normalizeMandatePolicy,
+  type UnifiedAction,
+} from "@swaraj/schemas";
+import { evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
-import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, type ReceiptStore } from "@swaraj/receipts";
+import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
   createDatabase,
   createProofJobQueue,
@@ -24,10 +34,15 @@ import { proofJobFields } from "./kurier.js";
 import {
   assertLiveRuntimeEnv,
   createPipelineStack,
+  createMandatePolicyGate,
+  agentMandateFromMandatePolicy,
   DEMO_POLICY,
   demoPolicyForEnv,
+  MANDATE_POLICY_ID,
   resolvePipelineMode,
   runPipeline,
+  unifiedActionHash,
+  unifiedActionToActionRequest,
   type AuditEntry,
   type PipelineDeps,
   type PipelineMode,
@@ -117,6 +132,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     throw new Error("SWARAJ_SIGNER_PRIVATE_KEY is required for live Base pipeline");
   }
   const signer = options.signer ?? new LocalKeySigner(signerKey ?? DEV_SIGNER_KEY);
+  // Task 2.2: the permit/forbid mandate engine (default deny) gates every
+  // action on top of the SMT policy gateway.
+  const mandateGateway = createMandatePolicyGate({ base: policyGateway, signer });
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
   const { evidence, capabilities, execution, labels } = stack;
@@ -172,7 +190,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return match?.definition;
   };
 
-  const pipelineDeps = (): PipelineDeps => ({
+  const pipelineDeps = (
+    extra?: { unifiedAction?: UnifiedAction; mandateDefinition?: unknown },
+  ): PipelineDeps => ({
     evidence,
     receipts,
     signer,
@@ -185,7 +205,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           loadLiveState: () => liveState.snapshot(),
         }
       : {}),
-    checkPolicy: (input) => policyGateway.check(input),
+    ...(extra?.unifiedAction ? { unifiedAction: extra.unifiedAction } : {}),
+    checkPolicy: (input) =>
+      mandateGateway.check(input, extra?.unifiedAction, extra?.mandateDefinition),
     audit: (entry) => {
       auditLog.push(entry);
       if (entry.kind === "DECISION") {
@@ -231,6 +253,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         receipts: true,
         smt: true,
         lean: "Phase10",
+        unifiedActions: "v1",
+        mandateRules: "PERMIT_FORBID_DEFAULT_DENY",
         base: labels.base,
         execution: labels.execution,
         capabilityStore: labels.capabilityStore,
@@ -315,7 +339,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         policyExpiry: number;
         paused: boolean;
       };
-      const normalized = normalizePolicyProfile({
+      const normalized = normalizeMandatePolicy({
         policyVersion: pick("policyVersion", defaults.policyVersion),
         allowedVenues: pick("allowedVenues", [...defaults.allowedVenues]),
         allowedAssets: pick("allowedAssets", [...defaults.allowedAssets]),
@@ -361,12 +385,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         ...normalized,
         policyVersion: typeof normalized.policyVersion === "number" ? normalized.policyVersion : version,
       };
-      const parsed = PolicyProfileSchema.safeParse(definition);
+      const parsed = MandatePolicySchema.safeParse(definition);
       if (!parsed.success) {
         return reply.code(400).send({ error: "invalid_policy_definition", issues: parsed.error.issues });
       }
 
-      // AtomicAmount transforms to bigint; persist/hash as decimal strings (Policy Profile wire form).
+      // AtomicAmount transforms to bigint; persist/hash as decimal strings (mandate policy wire form).
       const storedDefinition: Record<string, unknown> = {
         policyVersion: parsed.data.policyVersion,
         allowedVenues: parsed.data.allowedVenues,
@@ -445,27 +469,33 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  app.post<{ Params: { applicationId: string } }>("/v1/applications/:applicationId/actions", async (request, reply) => {
-    if (!Identifier.safeParse(request.params.applicationId).success || !ActionRequestSchema.safeParse(request.body).success) {
-      return reply.code(400).send({ error: "invalid_action" });
-    }
-    const body = ActionRequestSchema.parse(request.body);
+  /**
+   * Shared action handling: run the pipeline (SMT + mandate gates) and
+   * respond with the Phase 8/9 receipt/decision-receipt bookkeeping.
+   * Used by the legacy actions route and the unified-actions route (task 2.1).
+   */
+  const runActionRoute = async (
+    applicationId: string,
+    actionRequest: ActionRequest,
+    log: { error: (message: unknown) => void },
+    reply: FastifyReply,
+    extra?: { unifiedAction?: UnifiedAction; mandateDefinition?: unknown },
+  ) => {
     try {
-      const applicationId = request.params.applicationId;
-      const result = await runPipeline(applicationId, body, pipelineDeps());
+      const result = await runPipeline(applicationId, actionRequest, pipelineDeps(extra));
       const at = Math.floor(Date.now() / 1000);
       if (result.decision === "BLOCK") {
         // Phase 9: a provable BLOCK becomes a PENDING Decision Receipt for the rejection-proof worker.
         const decisionReceipt = await proofs.recordBlockDecision(applicationId, result).catch((error: unknown) => {
-          request.log.error(error);
+          log.error(error);
           return { status: "NON_PROVABLE" as const, reasonCode: "NOT_RECORDED" };
         });
         const activity: ActivityItem = {
-          id: `activity_${body.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+          id: `activity_${actionRequest.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
           at,
           applicationId,
-          action: body.action,
-          idempotencyKey: body.idempotencyKey,
+          action: actionRequest.action,
+          idempotencyKey: actionRequest.idempotencyKey,
           decision: "BLOCK",
           violations: result.violations,
           ...(result.intentHash ? { intentHash: result.intentHash } : {}),
@@ -489,15 +519,15 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       proveContexts.set(`${applicationId}:${result.receiptId}`, result.proveContext);
       // Phase 8: store the receipt-bound guest bundle for the prover when the guest would prove it.
       const proof = await proofs.recordTradeReceipt(applicationId, result.record, result.proveContext).catch((error: unknown) => {
-        request.log.error(error);
+        log.error(error);
         return { status: "NOT_PROVABLE" as const, reason: "proof inputs could not be recorded" };
       });
       const activity: ActivityItem = {
-        id: `activity_${body.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+        id: `activity_${actionRequest.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
         at,
         applicationId,
-        action: body.action,
-        idempotencyKey: body.idempotencyKey,
+        action: actionRequest.action,
+        idempotencyKey: actionRequest.idempotencyKey,
         decision: "ALLOW",
         receiptId: result.receiptId,
         capabilityId: result.capabilityId,
@@ -527,10 +557,226 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       if (message.startsWith("active_policy_not_found:")) {
         return reply.code(404).send({ error: "policy_not_found", message });
       }
-      request.log.error(error);
+      log.error(error);
       return reply.code(500).send({ error: "pipeline_failed", message });
     }
+  };
+
+  app.post<{ Params: { applicationId: string } }>("/v1/applications/:applicationId/actions", async (request, reply) => {
+    if (!Identifier.safeParse(request.params.applicationId).success || !ActionRequestSchema.safeParse(request.body).success) {
+      return reply.code(400).send({ error: "invalid_action" });
+    }
+    const body = ActionRequestSchema.parse(request.body);
+    return runActionRoute(request.params.applicationId, body, request.log, reply);
   });
+
+  /** Task 2.1 (Agent Mandate): register the application's ACTIVE mandate. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/mandates",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application" });
+      }
+      const parsed = AgentMandateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        // Never echo rejected values back.
+        const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
+          path: issue.path.join(".") || "(root)",
+          message: issue.message,
+        }));
+        return reply.code(400).send({ error: "invalid_mandate", issues });
+      }
+      const applicationId = request.params.applicationId;
+      const definition = normalizeAgentMandate(
+        request.body as { rules: Array<{ ruleId: string }> },
+      ) as Record<string, unknown>;
+      const mandateHash = hashObject(ObjectType.POLICY_PROFILE, definition);
+      const version =
+        typeof (definition as { version?: unknown }).version === "number"
+          ? ((definition as { version: number }).version)
+          : 1;
+      if (pool) {
+        await ensureApplication(pool, applicationId, applicationId);
+        await upsertActivePolicy(pool, {
+          applicationId,
+          policyId: MANDATE_POLICY_ID,
+          version,
+          definition,
+          policyHash: mandateHash,
+        });
+      } else {
+        for (const [key, existing] of policiesMemory) {
+          if (
+            existing.applicationId === applicationId &&
+            existing.policyId === MANDATE_POLICY_ID &&
+            existing.status === "ACTIVE"
+          ) {
+            policiesMemory.set(key, { ...existing, status: "RETIRED" });
+          }
+        }
+        policiesMemory.set(`${applicationId}:${MANDATE_POLICY_ID}:${version}`, {
+          applicationId,
+          policyId: MANDATE_POLICY_ID,
+          version,
+          status: "ACTIVE",
+          definition,
+          policyHash: mandateHash,
+        });
+      }
+      return reply.code(201).send({
+        mandateId: String(definition.mandateId),
+        version,
+        policyHash: mandateHash,
+        ruleCount: Array.isArray(definition.rules) ? definition.rules.length : 0,
+      });
+    },
+  );
+
+  app.get<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/mandates",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application" });
+      }
+      const definition = await loadActivePolicy(request.params.applicationId, MANDATE_POLICY_ID);
+      if (!definition) return reply.code(404).send({ error: "mandate_not_found" });
+      const { policyHash, ...rest } = definition as { policyHash?: string };
+      return { mandate: rest, policyHash };
+    },
+  );
+
+  /**
+   * Task 2.1: gateway input for the unified action format. The action is
+   * strictly validated, evaluated against the application's ACTIVE Agent
+   * Mandate (registered mandate, else derived from the active policy), and
+   * SPOT_TRADE allows feed the existing execution/receipt pipeline.
+   */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/unified-actions",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application" });
+      }
+      const body = request.body as { action?: unknown } | undefined;
+      const parsed = UnifiedActionSchema.safeParse(body?.action);
+      if (!parsed.success) {
+        // Field paths and messages only; rejected values are never echoed.
+        const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
+          path: issue.path.join(".") || "(root)",
+          message: issue.message,
+        }));
+        return reply.code(400).send({ error: "invalid_unified_action", issues });
+      }
+      const action = parsed.data;
+      const applicationId = request.params.applicationId;
+
+      // Resolve the ACTIVE mandate: a registered mandate wins; otherwise one
+      // is derived from the ACTIVE mandate policy (fail closed if neither).
+      const registered = await loadActivePolicy(applicationId, MANDATE_POLICY_ID);
+      const policyDefinition = await loadActivePolicy(applicationId, "policy_demo");
+      const mandateDefinition = registered ?? agentMandateFromMandatePolicy(policyDefinition ?? {});
+      if (!registered && !policyDefinition) {
+        return reply.code(404).send({ error: "mandate_not_found", message: "no active mandate or policy" });
+      }
+      const mandateParsed = AgentMandateSchema.safeParse(mandateDefinition);
+      const evaluated: MandateDecision = mandateParsed.success
+        ? evaluateParsedMandate(mandateParsed.data, action)
+        : {
+            decision: "BLOCK",
+            reason: "INVALID_MANDATE",
+            matchedRuleIds: [],
+            matchedPermitRuleIds: [],
+            matchedForbidRuleIds: [],
+          };
+
+      // SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,
+      // capability, execution, receipts) with the original unified action.
+      if (evaluated.decision === "ALLOW" && action.action === "SPOT_TRADE") {
+        const policyVersion =
+          typeof (policyDefinition as { policyVersion?: unknown } | undefined)?.policyVersion === "number"
+            ? (policyDefinition as { policyVersion: number }).policyVersion
+            : 1;
+        const actionRequest = unifiedActionToActionRequest(action, policyVersion);
+        if (actionRequest) {
+          return runActionRoute(applicationId, actionRequest, request.log, reply, {
+            unifiedAction: action,
+            mandateDefinition,
+          });
+        }
+      }
+
+      const at = Math.floor(Date.now() / 1000);
+      const intentHash = unifiedActionHash(action);
+      const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+
+      if (evaluated.decision === "BLOCK") {
+        const matched = [...evaluated.matchedForbidRuleIds, ...evaluated.matchedPermitRuleIds];
+        const detail = matched.length > 0 ? ` (${matched.join(", ")})` : "";
+        const violations = [{ ruleId: "MANDATE", reason: `MANDATE:${evaluated.reason}${detail}` }];
+        const block = {
+          decision: "BLOCK" as const,
+          violations,
+          intentHash,
+          policyHash,
+          solverStatus: "invalid" as const,
+          violatedRuleIds: [],
+          proveContext: {
+            intent: JSON.parse(JSON.stringify(action, (_k, v) => (typeof v === "bigint" ? v.toString() : v))) as Record<string, unknown>,
+            policy: mandateDefinition as Record<string, unknown>,
+            state: {},
+          },
+        };
+        const decisionReceipt = await proofs.recordBlockDecision(applicationId, block).catch((error: unknown) => {
+          request.log.error(error);
+          return { status: "NON_PROVABLE" as const, reasonCode: "NOT_RECORDED" };
+        });
+        const activity: ActivityItem = {
+          id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+          at,
+          applicationId,
+          action: action.action,
+          idempotencyKey: action.idempotencyKey,
+          decision: "BLOCK",
+          violations,
+          intentHash,
+          policyHash,
+          decisionReceipt: decisionReceipt as Record<string, unknown>,
+        };
+        activityLog.push(activity);
+        return reply.code(200).send({
+          decision: "BLOCK",
+          mandate: { reason: evaluated.reason, matchedRuleIds: evaluated.matchedRuleIds },
+          violations,
+          intentHash,
+          policyHash,
+          decisionReceipt,
+          activityId: activity.id,
+        });
+      }
+
+      // Permitted non-trade action: no execution adapter exists for it yet.
+      const activity: ActivityItem = {
+        id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+        at,
+        applicationId,
+        action: action.action,
+        idempotencyKey: action.idempotencyKey,
+        decision: "ALLOW",
+        status: "NOT_EXECUTABLE",
+        intentHash,
+        policyHash,
+      };
+      activityLog.push(activity);
+      return reply.code(200).send({
+        decision: "ALLOW",
+        mandate: { reason: evaluated.reason, matchedPermitRuleIds: evaluated.matchedPermitRuleIds },
+        status: "NOT_EXECUTABLE",
+        intentHash,
+        policyHash,
+        activityId: activity.id,
+      });
+    },
+  );
 
   app.get<{ Params: { applicationId: string; decisionId: string } }>(
     "/v1/applications/:applicationId/decisions/:decisionId",
@@ -570,6 +816,39 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         .slice(-100)
         .reverse();
       return { items };
+    },
+  );
+
+  /**
+   * Task 3.2: verify a receipt against the unified action format. Checks the
+   * stored action against the strict schema, recomputes its canonical hash,
+   * verifies the issuer signature and the record↔signed-receipt binding.
+   */
+  app.get<{ Params: { applicationId: string; receiptId: string } }>(
+    "/v1/applications/:applicationId/receipts/:receiptId/verify",
+    async (request, reply) => {
+      if (
+        !Identifier.safeParse(request.params.applicationId).success ||
+        !Identifier.safeParse(request.params.receiptId).success
+      ) {
+        return reply.code(400).send({ error: "invalid_receipt_id" });
+      }
+      const record = await receipts.getReceipt(request.params.applicationId, request.params.receiptId);
+      if (!record) return reply.code(404).send({ error: "receipt_not_found" });
+      const verification = await verifyUnifiedActionReceipt(record, signer.address);
+      const intentJson = record.intentJson as { action?: { action?: unknown; agent?: unknown } } | undefined;
+      return {
+        receiptId: record.receiptId,
+        status: record.status,
+        valid: verification.valid,
+        format: verification.format,
+        checks: verification.checks,
+        intentHash: record.intentHash,
+        policyHash: record.policyHash,
+        ...(intentJson?.action?.action
+          ? { action: { type: intentJson.action.action, agent: intentJson.action.agent } }
+          : {}),
+      };
     },
   );
 

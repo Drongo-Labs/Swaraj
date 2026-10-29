@@ -40,3 +40,16 @@ export {
   type LiveStateOracle,
   type LiveStateOracleOptions,
 } from "./live-state.js";
+export {
+  createMandatePolicyGate,
+  agentMandateFromMandatePolicy,
+  unifiedActionFromIntent,
+  DEMO_AGENT,
+  type MandatePolicyGateway,
+  type MandatePolicyGateOptions,
+} from "./mandate.js";
+export {
+  MANDATE_POLICY_ID,
+  unifiedActionHash,
+  unifiedActionToActionRequest,
+} from "./unified.js";

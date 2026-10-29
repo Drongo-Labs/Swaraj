@@ -29,5 +29,6 @@ export function recordFromCreate(input: CreateReceiptInput, now = Math.floor(Dat
     updatedAt: now,
   };
   if (input.reasonCode !== undefined) record.reasonCode = input.reasonCode;
+  if (input.intentJson !== undefined) record.intentJson = input.intentJson;
   return record;
 }

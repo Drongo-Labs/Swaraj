@@ -25,15 +25,14 @@ const DESTINATIONS: Record<number, { name: string; explorer: string }> = {
   84532: { name: "base-sepolia", explorer: "https://sepolia.basescan.org" },
 };
 
-/** Workers always run on Volta; jobs without a recorded network predate that field and were Volta too. */
+/** Workers run on the zkVerify network; SWARAJ_ZKVERIFY_EXPLORER_BASE overrides the explorer link. */
 const ZKVERIFY_EXPLORERS: Record<string, string> = {
-  "zkVerify-Volta": "https://zkverify-testnet.subscan.io/extrinsic",
   zkVerify: "https://zkverify.subscan.io/extrinsic",
 };
 
 export function zkVerifyExplorerUrl(network: string | undefined, txHash: string | undefined): string | undefined {
   if (!txHash) return undefined;
-  const base = (process.env.SWARAJ_ZKVERIFY_EXPLORER_BASE ?? ZKVERIFY_EXPLORERS[network ?? "zkVerify-Volta"])?.replace(/\/$/, "");
+  const base = (process.env.SWARAJ_ZKVERIFY_EXPLORER_BASE ?? ZKVERIFY_EXPLORERS[network ?? "zkVerify"])?.replace(/\/$/, "");
   if (!base) return undefined;
   if (base.includes("subscan.io") || base.endsWith("/extrinsic")) return `${base}/${encodeURIComponent(txHash)}`;
   return `${base}${base.includes("?") ? "&" : "?"}tx=${encodeURIComponent(txHash)}`;
@@ -65,7 +64,7 @@ export function proofJobFields(job: ProofJobView | undefined): Record<string, un
   const lastError = sanitizeProofError(job.lastError);
   return {
     attempts: job.attempts,
-    network: job.zkverifyNetwork ?? "zkVerify-Volta",
+    network: job.zkverifyNetwork ?? "zkVerify",
     ...(job.zkverifyTxHash ? { transactionHash: job.zkverifyTxHash } : {}),
     ...(job.aggregationId ? { aggregationId: job.aggregationId } : {}),
     ...(job.zkverifyStatement ? { statement: job.zkverifyStatement } : {}),
