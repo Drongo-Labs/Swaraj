@@ -10,6 +10,7 @@
     "e2e": "tsx src/e2e/gatedStake.ts"
   },
   "dependencies": {
+    "@inco/lightning-js": "^1.1.0",
     "viem": "^2.57.13",
     "zod": "^3.24.0"
   },

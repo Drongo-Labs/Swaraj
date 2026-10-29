@@ -39,11 +39,14 @@ Agent ── typed intent ──► Swaraj gateway (Z3, default deny)
       (swaraj-new `feature/app-action`): `resource {app:"zunno", target}`,
       `context {name, params}` — no per-game schema change needed, and any
       future app reuses the same type.
-- [ ] Wire `MoveExecutor` to zunno-inco's `gameBot` viem calls
-      (`playCard`/`drawCard`/stake path).
-- [ ] Register the mandate fixture against a live Swaraj API (with the
-      `feature/app-action` build) and run one gated stake + one gated
-      play end-to-end (receipts recorded).
+- [x] Wire `MoveExecutor` to zunno-inco's `gameBot` viem calls
+      (`ViemMoveExecutor`: stake→joinGame, playCard, drawCard; dry-run default).
+- [x] Live-gateway e2e (`pnpm e2e`): mandate registered, gated stake ALLOW,
+      over-cap stake BLOCK by `forbid_stake_over_cap`, APP_ACTION play/draw
+      ALLOW, unknown action default-deny. All checks passed.
+- [x] Inco attestation provider (`IncoAttestationProvider`): port of
+      `incoHand.js` — voucher session + `attestedDecryptWithVoucher`; a card
+      the agent does not hold never attests (fail closed).
 - [ ] Bind the bot's Base tx hash to the Swaraj receipt (evidence adapters)
       and batch-prove a finished match.
 

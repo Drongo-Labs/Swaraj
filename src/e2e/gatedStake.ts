@@ -6,6 +6,7 @@ import { SwarajClient } from "../swaraj/client.js";
 import { AgentMandateWireSchema } from "../swaraj/mandateSchema.js";
 import { ZunnoAgent, type TurnResult } from "../agent/bridge.js";
 import { ViemMoveExecutor } from "../executor/viemExecutor.js";
+import { IncoAttestationProvider } from "../executor/incoAttestationProvider.js";
 import { buildIntent, toWire } from "../actions/intents.js";
 
 /**
@@ -54,12 +55,22 @@ async function main(): Promise<number> {
   console.log(`mandate registered: ${registered.mandateId} v${registered.version} ` +
     `(${registered.ruleCount} rules) policyHash=${registered.policyHash}`);
 
+  const botKey = process.env.ZUNNO_BOT_PRIVATE_KEY as `0x${string}` | undefined;
+  const attestationProvider = botKey
+    ? new IncoAttestationProvider({
+        privateKey: botKey,
+        contractAddress: config.gameAddress as `0x${string}`,
+        gameId,
+        ...(process.env.ZUNNO_RPC_URL ? { rpcUrl: process.env.ZUNNO_RPC_URL } : {}),
+      })
+    : undefined;
   const executor = new ViemMoveExecutor({
     contractAddress: config.gameAddress as `0x${string}`,
     gameId,
-    ...(process.env.ZUNNO_BOT_PRIVATE_KEY ? { privateKey: process.env.ZUNNO_BOT_PRIVATE_KEY as `0x${string}` } : {}),
+    ...(botKey ? { privateKey: botKey } : {}),
     ...(process.env.ZUNNO_RPC_URL ? { rpcUrl: process.env.ZUNNO_RPC_URL } : {}),
     dryRun: !live,
+    ...(live && attestationProvider ? { attestationProvider } : {}),
   });
   const agent = new ZunnoAgent({ config, client, executor }, registered.policyHash);
 
