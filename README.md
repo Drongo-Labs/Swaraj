@@ -118,6 +118,53 @@ The human is never mandate-checked — formal constraints govern the agent.
 fallback to the next compliant move, else draw (still gated) → applied to the
 engine, block written to the visible log.
 
+## What a move looks like on the wire
+
+The agent's proposal is plain and app-side; what crosses into the mandate
+engine is the typed intent — Swaraj's generic `APP_ACTION` with atomic decimal
+params. This is real output from `buildIntent` → `toWire` → the embedded
+gateway (signature abbreviated — it is a 130-hex-char `0x…` string):
+
+**Proposal:** `{ kind: "PLAY_CARD", handIndex: 0, cardValue: 11 }` *(red 5)*
+
+```json
+{
+  "intentId": "zunnoce3c7aee408448699add3af6",
+  "agent": "zunno-agent",
+  "policyHash": "0x0000…0000",
+  "timestamp": 1790000000000,
+  "expiry": 1790000060000,
+  "idempotencyKey": "zunnoce3c7aee408448699add3af6",
+  "signature": "0x0000…0000",
+  "action": "APP_ACTION",
+  "resource": { "app": "zunno", "target": "0x82b2cce9a52c7e56838a5c46833067f9eb006911" },
+  "context": {
+    "name": "play_card",
+    "params": { "handIndex": "0", "cardValue": "11", "chosenColor": "4" }
+  }
+}
+```
+
+Gateway: `{"outcome":"ALLOW","matchedPermitRuleIds":["a_permit_game_actions"]}`
+
+**The demo beat — a forbidden Wild+4** (`cardValue: 105`, mandate forbids
+`cardValue > 104`): identical intent shape, `cardValue: "105"`,
+`chosenColor: "1"` →
+
+```json
+{ "outcome": "BLOCK", "violatedRuleIds": ["a_forbid_wild_draw_four"] }
+```
+
+…which is what the game log shows in red ("Agent tried play_card — BLOCKED
+by a_forbid_wild_draw_four") before the agent falls back to a compliant move.
+
+Notes on the shape: `params` values are **atomic decimal strings** (the
+schema parses them to big integers — no floats ever); keys are sorted for
+canonical hashing regardless of construction order; `chosenColor` 0–3 is a
+wild's color pick, 4 means "keep the active color" for non-wilds; the same
+envelope carries `draw_card` with empty `params`, and stakes as the typed
+`PAYMENT` action (see `pnpm e2e`).
+
 ## Remote gateway (optional)
 
 The same bridge runs against a live Swaraj API (`SWARAJ_API_URL` +
