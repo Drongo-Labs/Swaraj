@@ -1,5 +1,4 @@
 import type { AgentMandateWire } from "./mandateSchema.js";
-import type { UnifiedIntent } from "../actions/intents.js";
 
 export interface GatewayDecision {
   outcome: "ALLOW" | "BLOCK";
@@ -60,11 +59,12 @@ export class SwarajClient {
     };
   }
 
-  async evaluateUnifiedAction(intent: UnifiedIntent): Promise<GatewayDecision> {
+  /** The gateway boundary speaks the unified-action wire form. */
+  async evaluateUnifiedAction(wireAction: unknown): Promise<GatewayDecision> {
     let status: number;
     let json: Record<string, unknown>;
     try {
-      ({ status, json } = await this.post("/unified-actions", { action: wireOf(intent) }));
+      ({ status, json } = await this.post("/unified-actions", { action: wireAction }));
     } catch (error) {
       // Fail closed: an unreachable gateway is a BLOCK, never a silent pass.
       throw new GatewayUnavailableError(error instanceof Error ? error.message : "gateway unreachable");
@@ -93,19 +93,5 @@ export class SwarajClient {
   }
 }
 
-function wireOf(intent: UnifiedIntent): Record<string, unknown> {
-  return {
-    intentId: intent.common.intentId,
-    agent: intent.common.agent,
-    policyHash: intent.common.policyHash,
-    timestamp: intent.common.timestamp,
-    expiry: intent.common.expiry,
-    idempotencyKey: intent.common.idempotencyKey,
-    signature: intent.common.signature,
-    action: intent.action,
-    resource: intent.resource,
-    context: intent.context,
-  };
-}
 
 export class GatewayUnavailableError extends Error {}

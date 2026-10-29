@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { AgentMandateSchema, UnifiedActionSchema, type AgentMandate } from "../vendor/schemas/index.js";
 import { evaluateParsedMandate } from "../vendor/rules/index.js";
 import type { GatewayDecision } from "./client.js";
-import { toWire, type UnifiedIntent } from "../actions/intents.js";
 
 /**
  * Embedded Swaraj gateway: the vendored mandate engine runs in-process against
@@ -29,10 +28,11 @@ export function loadEmbeddedMandate(): AgentMandate {
 export class EmbeddedGateway {
   constructor(private readonly mandate: AgentMandate = loadEmbeddedMandate()) {}
 
-  async evaluateUnifiedAction(intent: UnifiedIntent): Promise<GatewayDecision> {
+  /** The gateway boundary speaks the unified-action wire form. */
+  async evaluateUnifiedAction(wireAction: unknown): Promise<GatewayDecision> {
     let decision;
     try {
-      const action = UnifiedActionSchema.parse(toWire(intent));
+      const action = UnifiedActionSchema.parse(wireAction);
       decision = evaluateParsedMandate(this.mandate, action);
     } catch {
       return { outcome: "BLOCK", violatedRuleIds: ["invalid.action"] };

@@ -1,17 +1,24 @@
+/-
+VENDORED from swaraj-new `packages/lean/Gate/Bridge.lean` — the governed-turn
+bridge model and its security theorems are framework core (@swaraj/agent /
+Gate.exec_needs_allow), not application code. Re-sync from swaraj-new when
+core changes.
+-/
 /-!
 # The governed-turn bridge — no execution without ALLOW
 
-This file models `src/agent/bridge.ts`: the agent proposes a move, the
-Swaraj mandate gateway answers ALLOW or BLOCK, and only ALLOW executes.
-The trace semantics below cover both bridge paths:
+This is the framework-level model mirrored by `@swaraj/agent`
+(GovernedAgent) and every application bridge built on it:
 
-- `moveRun`  — a game move: BLOCK falls back to the next compliant move
-  (still gated), and a run that never sees ALLOW forfeits the turn.
-- `stakeStep` — a money action: BLOCK abstains. Never retried, never executed.
+- `moveRun`   — RETRY policy: each BLOCK falls back to the next gated
+  attempt; a run that never sees ALLOW forfeits the turn.
+- `stakeStep` — ABSTAIN policy: a blocked action abstains. Never
+  retried, never executed.
 
-The theorems are the security property of the whole demo, kernel-checked.
+The theorems are the security property of every Swaraj-governed agent,
+kernel-checked: nothing executes without an ALLOW.
 -/
-namespace Zunno
+namespace Gate
 
 inductive Gate : Type where
   | allow
@@ -71,4 +78,4 @@ theorem blocked_stake_abstains :
   refine ⟨rfl, ?_⟩
   simp [stakeStep]
 
-end Zunno
+end Gate

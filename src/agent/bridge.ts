@@ -1,13 +1,18 @@
+import { GovernedAgent, type ActResult, type GovernedActionSpec } from "../vendor/agent/index.js";
+import type { GatewayDecision } from "../vendor/agent/index.js";
+import { buildIntent, toWire, type ZunnoProposal } from "../actions/intents.js";
 import { firstLegalCard, isPlayable } from "../zunno/cards.js";
-import { buildIntent, type UnifiedIntent, type ZunnoProposal } from "../actions/intents.js";
-import type { GatewayDecision, SwarajClient } from "../swaraj/client.js";
 import type { ZunnoAgentConfig } from "../config.js";
 
 /**
- * The Swaraj-governed Zunno agent bridge: no move executes without an ALLOW
- * from the gateway. BLOCK never mutates game state — the agent retries with a
- * compliant move, and a blocked stake simply abstains. Fail-closed (gateway
- * down, malformed intent, unknown action type) behaves exactly like BLOCK.
+ * Zunno's adapter over the core GovernedAgent (@swaraj/agent, vendored from
+ * swaraj-new): the generic propose → gate → ALLOW-executes / BLOCK-fallback
+ * loop and its kernel-checked proof (Gate.exec_needs_allow) live in core.
+ * What stays here is exactly the app-specific residue:
+ *
+ * - the proposal vocabulary (STAKE / PLAY_CARD / DRAW_CARD) + intent building
+ * - the policy per action class: moves RETRY, stakes ABSTAIN
+ * - the UNO fallback picker (first legal card in hand, else draw)
  */
 
 export interface MoveExecutor {
@@ -18,7 +23,7 @@ export interface MoveExecutor {
 
 export type TurnResult =
   | { status: "EXECUTED"; kind: ZunnoProposal["kind"]; txHash: string; decision: GatewayDecision }
-  | { status: "ABSTAINED"; reason: "BLOCKED"; violatedRuleIds: string[] }
+  | { status: "ABSTAINED"; reason: "BLOCKED" | "GATEWAY_UNAVAILABLE"; violatedRuleIds: string[] }
   | { status: "FORFEITED"; reason: "BLOCKED" | "GATEWAY_UNAVAILABLE"; violatedRuleIds: string[] };
 
 export interface TurnInput {
@@ -30,95 +35,73 @@ export interface TurnInput {
 
 export interface AgentDeps {
   config: ZunnoAgentConfig;
-  client: Pick<SwarajClient, "evaluateUnifiedAction">;
+  client: { evaluateUnifiedAction(wireAction: unknown): Promise<GatewayDecision> };
   executor: MoveExecutor;
   /** Compliant-move retries before forfeiting the turn. */
   maxFallbacks?: number;
 }
 
 export class ZunnoAgent {
-  private readonly policyHash: string;
+  private readonly agent: GovernedAgent<ZunnoProposal>;
 
-  constructor(private readonly deps: AgentDeps, policyHash: string) {
-    this.policyHash = policyHash;
+  constructor(private readonly deps: AgentDeps, private readonly policyHash: string) {
+    this.agent = new GovernedAgent<ZunnoProposal>({
+      client: deps.client,
+      executor: {
+        execute: (proposal) => this.execute(proposal),
+      },
+      // Per-action specs are chosen in takeTurn; this default is never reached.
+      spec: { policy: "ABSTAIN", toWireAction: () => { throw new Error("no spec"); } },
+      ...(deps.maxFallbacks !== undefined ? { maxFallbacks: deps.maxFallbacks } : {}),
+    });
   }
 
   async takeTurn(input: TurnInput): Promise<TurnResult> {
-    return this.attempt(input.proposal, input);
-  }
-
-  private async attempt(proposal: ZunnoProposal, input: TurnInput): Promise<TurnResult> {
-    let decision: GatewayDecision;
-    try {
-      decision = await this.deps.client.evaluateUnifiedAction(
-        buildIntent(proposal, this.deps.config, this.policyHash),
-      );
-    } catch {
-      // Fail closed: gateway unreachable ⇒ BLOCK semantics.
-      return this.onBlock(input, { outcome: "BLOCK", violatedRuleIds: ["gateway.unreachable"] });
-    }
-
-    if (decision.outcome === "ALLOW") {
-      const tx = await this.execute(proposal);
-      return { status: "EXECUTED", kind: proposal.kind, txHash: tx.txHash, decision };
-    }
-    return this.onBlock(input, decision);
-  }
-
-  private async execute(proposal: ZunnoProposal): Promise<{ txHash: string }> {
-    const { executor, config } = this.deps;
-    switch (proposal.kind) {
-      case "STAKE":
-        return executor.stake(proposal.amountWei, config.gameAddress);
-      case "PLAY_CARD":
-        return executor.playCard(
-          proposal.handIndex,
-          proposal.cardValue,
-          proposal.chosenColor ?? 4,
-        );
-      case "DRAW_CARD":
-        return executor.drawCard();
-    }
-  }
-
-  /**
-   * BLOCK handling: a blocked stake abstains (money actions are never
-   * retried blind). A blocked play falls back to the next compliant move —
-   * first legal non-proposed card, else draw — each still gated. Exhausted
-   * retries forfeit the turn: the rules engine never sees an unchecked move.
-   */
-  private async onBlock(input: TurnInput, decision: GatewayDecision): Promise<TurnResult> {
-    if (input.proposal.kind === "STAKE") {
-      return { status: "ABSTAINED", reason: "BLOCKED", violatedRuleIds: decision.violatedRuleIds };
-    }
-    const remaining = (this.deps.maxFallbacks ?? 3) - 1;
-    if (remaining < 0) {
-      return { status: "FORFEITED", reason: "BLOCKED", violatedRuleIds: decision.violatedRuleIds };
-    }
-    const fallback = this.nextCompliantProposal(input);
-    if (!fallback) {
-      return { status: "FORFEITED", reason: "BLOCKED", violatedRuleIds: decision.violatedRuleIds };
-    }
-    const agent = new ZunnoAgent({ ...this.deps, maxFallbacks: remaining }, this.policyHash);
-    const result = await agent.attempt(fallback, { ...input, proposal: fallback });
-    if (result.status === "FORFEITED") {
-      return { ...result, violatedRuleIds: [...decision.violatedRuleIds, ...result.violatedRuleIds] };
+    const result: ActResult = await this.agent.act(input.proposal, this.specFor(input));
+    if (result.status === "EXECUTED") {
+      return { status: "EXECUTED", kind: input.proposal.kind, txHash: result.txHash, decision: result.decision };
     }
     return result;
   }
 
-  /** First legal card in hand order (excluding the blocked one), else draw. */
-  private nextCompliantProposal(input: TurnInput): ZunnoProposal | null {
-    const blocked = input.proposal.kind === "PLAY_CARD" ? input.proposal.cardValue : null;
-    for (const [index, value] of input.hand.entries()) {
-      if (value === blocked) continue;
-      if (isPlayable(value, input.topValue, input.activeColor)) {
-        return { kind: "PLAY_CARD", handIndex: index, cardValue: value, chosenColor: 4 };
-      }
+  private async execute(proposal: ZunnoProposal): Promise<{ txHash: string }> {
+    switch (proposal.kind) {
+      case "STAKE":
+        return this.deps.executor.stake(proposal.amountWei, this.deps.config.gameAddress);
+      case "PLAY_CARD":
+        return this.deps.executor.playCard(proposal.handIndex, proposal.cardValue, proposal.chosenColor ?? 4);
+      case "DRAW_CARD":
+        return this.deps.executor.drawCard();
     }
-    if (input.proposal.kind === "DRAW_CARD") return null; // draw itself was blocked
-    return { kind: "DRAW_CARD" };
   }
+
+  /** Stakes ABSTAIN on BLOCK; moves RETRY with the next compliant legal card, else draw. */
+  private specFor(input: TurnInput): GovernedActionSpec<ZunnoProposal> {
+    const toWireAction = (proposal: ZunnoProposal): unknown =>
+      toWire(buildIntent(proposal, this.deps.config, this.policyHash));
+    if (input.proposal.kind === "STAKE") {
+      return { policy: "ABSTAIN", toWireAction };
+    }
+    return {
+      policy: "RETRY",
+      toWireAction,
+      fallback: (blocked) => nextCompliantProposal(blocked, input),
+    };
+  }
+}
+
+/** First legal card in hand order (excluding the blocked one), else draw. */
+function nextCompliantProposal(blocked: ZunnoProposal, input: TurnInput): ZunnoProposal | null {
+  if (blocked.kind === "STAKE") return null; // unreachable: stakes use ABSTAIN
+  const blockedCard = blocked.kind === "PLAY_CARD" ? blocked.cardValue : null;
+  for (const [index, value] of input.hand.entries()) {
+    if (value === blockedCard) continue;
+    if (isPlayable(value, input.topValue, input.activeColor)) {
+      return { kind: "PLAY_CARD", handIndex: index, cardValue: value, chosenColor: 4 };
+    }
+  }
+  if (blocked.kind === "DRAW_CARD") return null; // draw itself was blocked
+  return { kind: "DRAW_CARD" };
 }
 
 /** Convenience for bootstrapping: first legal card or draw, per the existing bot strategy. */

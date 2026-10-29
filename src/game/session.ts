@@ -3,7 +3,6 @@ import { ZunnoAgent, openingProposal, type AgentDeps, type MoveExecutor } from "
 import { EmbeddedGateway } from "../swaraj/embeddedGateway.js";
 import { loadConfig, type ZunnoAgentConfig } from "../config.js";
 import type { GatewayDecision } from "../swaraj/client.js";
-import type { UnifiedIntent } from "../actions/intents.js";
 
 /**
  * One match: the human plays through normal legality; the agent's every move
@@ -74,10 +73,13 @@ export class GameSession {
   private createAgent(engine: UnoEngine): ZunnoAgent {
     const gateway = new EmbeddedGateway();
     const loggingGateway = {
-      evaluateUnifiedAction: async (intent: UnifiedIntent): Promise<GatewayDecision> => {
-        const decision = await gateway.evaluateUnifiedAction(intent);
+      evaluateUnifiedAction: async (wireAction: unknown): Promise<GatewayDecision> => {
+        const decision = await gateway.evaluateUnifiedAction(wireAction);
         if (decision.outcome === "BLOCK") {
-          const what = intent.action === "APP_ACTION" ? intent.context.name : intent.action.toLowerCase();
+          const wire = wireAction as { action?: string; context?: { name?: string } };
+          const what = wire.action === "APP_ACTION"
+            ? (wire.context?.name ?? "app_action")
+            : (wire.action ?? "action").toLowerCase();
           engine.log("agent", `Agent tried ${what} — BLOCKED by ${decision.violatedRuleIds.join(", ")}`, true);
         }
         return decision;
