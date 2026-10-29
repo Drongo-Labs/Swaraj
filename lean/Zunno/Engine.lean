@@ -139,6 +139,12 @@ def winnerCode (w : Option Bool) : Nat :=
 def summarize (s : GameState) : Nat × Bool × Nat :=
   (winnerCode s.winner, s.humanTurn, topOf s)
 
+/-- All mover options from a state, in hand order then draw — the exhaustive
+refinement evaluation helper (chosenColor 4 = keep active color). -/
+def playOutcomes (s : GameState) (human : Bool) : List (Option (Nat × Bool × Nat)) :=
+  (handOf s human).map (fun c => (playCard s human c 4).map summarize)
+  ++ [(drawCard s human).map summarize]
+
 /-!
 ## Invariants
 -/

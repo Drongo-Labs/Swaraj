@@ -29,11 +29,14 @@ The NEAR hackathon plan lives in swaraj-new's local `docs/`
       the predicate engine and Z3, fail closed on disagreement.
 - [ ] **zk proofs of move legality** — SP1 statement kind for game legality,
       batch-proven per match (core pipeline work in swaraj-new).
-- [ ] **Lean ⇔ TS refinement proof** — evidence now: kernel-checked shared
-      vectors (concrete cases) + the bounded-exhaustive harness (combinatorics
-      across the full bounded space) + Lean theorems (characterization for all
-      inputs, abstract matching). A machine-checked Lean ⇔ TS correspondence
-      remains the honest gap.
+- [x] ~~Lean ⇔ TS refinement~~ — done as a machine-checked BOUNDED
+      refinement: swaraj-new `Gate/Concrete.lean` (concrete predicate model;
+      `concrete_allow_iff` inherits the abstract characterization theorem) +
+      `Gate/Refinement.lean` (7,973 kernel-checked cases vs the real TS
+      engine) and this repo's `lean/Zunno/EngineRefinement.lean` (2,048
+      states / 5,888 kernel-checked outcomes vs the real TS engine).
+      Residual gap: correspondence outside the bounded domains (the
+      characterizations themselves hold for all inputs, abstractly).
 
 ## Housekeeping
 
