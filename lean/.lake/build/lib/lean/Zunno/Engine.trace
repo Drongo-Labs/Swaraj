@@ -1,5 +1,0 @@
-{"log":
- [{"message":
-   ".> LEAN_PATH=././.lake/build/lib/lean /Users/ayush/.elan/toolchains/leanprover--lean4---v4.19.0/bin/lean -DwarningAsError=true ././././Zunno/Engine.lean -R ./././. -o ././.lake/build/lib/lean/Zunno/Engine.olean -i ././.lake/build/lib/lean/Zunno/Engine.ilean -c ././.lake/build/ir/Zunno/Engine.c --json",
-   "level": "trace"}],
- "depHash": "14420908158887880994"}
