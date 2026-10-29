@@ -1,54 +1,15 @@
 # swaraj-zunno
 
-Swaraj-governed AI agent for **Zunno × Inco** (Base Sepolia): every agent move
-is checked against an Agent Mandate before it executes. Implements the plan in
-[`swaraj-new/ZUNNO_INCO_SWARAJ_PLAN.md`](../swaraj-new/ZUNNO_INCO_SWARAJ_PLAN.md).
+UNO against an AI agent governed by [Swaraj](https://github.com/Drongo-Labs/Swaraj):
+every agent move is a typed intent checked against a formally verified Agent
+Mandate before it executes — nothing moves without an ALLOW.
 
 ```
-Player ── ZunnoInco.sol (Inco, Base)     ← unchanged
-Agent ── typed intent ──► Swaraj gateway (Z3, default deny)
-                             ├─ ALLOW → execute via the bot wallet path
-                             └─ BLOCK → rule ids named → fallback compliant move / abstain
+Player ──► game engine (legality only)
+Agent  ──► typed intent ──► Swaraj gateway (default deny)
+                                 ├─ ALLOW → execute
+                                 └─ BLOCK → rule named → fallback / abstain
 ```
-
-## Layout
-
-| Path | Contents |
-|---|---|
-| `src/zunno/cards.ts` | TS port of the UnoCards.sol codec (`decodeCard`, `isPlayable`, `isWild`) from zunno-inco's bot |
-| `src/actions/intents.ts` | Typed-intent builders: STAKE→`PAYMENT`, PLAY_CARD/DRAW_CARD→generic `APP_ACTION` |
-| `src/actions/appAction.ts` | Zunno's use of Swaraj's generic `APP_ACTION` (app namespace + atomic decimal params) |
-| `src/swaraj/client.ts` | Swaraj API client: mandate registration + unified-action evaluation; fail-closed |
-| `src/swaraj/mandateSchema.ts` | Local mirror of the Agent Mandate wire format (incl. param predicates) for offline fixture validation |
-| `src/agent/bridge.ts` | The governed turn: gate → execute / fallback (bounded retries) / abstain / forfeit |
-| `mandate/zunno-mandate.json` | One mandate: stakes via PAYMENT rules, game moves via APP_ACTION rules (Wild Draw Four forbidden) |
-
-## Rules the agent lives by (blocked-move handling)
-
-- ALLOW executes; BLOCK never mutates state.
-- Blocked **stake** → abstain (money actions are never retried blind).
-- Blocked **play** → next compliant legal card (each still gated) → else draw (gated) → else forfeit.
-- Gateway unreachable or unknown action type ⇒ treated as BLOCK (fail-closed,
-  default deny). Nothing executes without an ALLOW.
-
-## Status / next steps
-
-- [x] Intent builders + mandate fixture + governed-turn bridge, unit-tested
-      against a fake gateway (`pnpm test`, no services needed).
-- [x] Game moves flow through Swaraj's generic `APP_ACTION`
-      (swaraj-new `feature/app-action`): `resource {app:"zunno", target}`,
-      `context {name, params}` — no per-game schema change needed, and any
-      future app reuses the same type.
-- [x] Wire `MoveExecutor` to zunno-inco's `gameBot` viem calls
-      (`ViemMoveExecutor`: stake→joinGame, playCard, drawCard; dry-run default).
-- [x] Live-gateway e2e (`pnpm e2e`): mandate registered, gated stake ALLOW,
-      over-cap stake BLOCK by `forbid_stake_over_cap`, APP_ACTION play/draw
-      ALLOW, unknown action default-deny. All checks passed.
-- [x] Inco attestation provider (`IncoAttestationProvider`): port of
-      `incoHand.js` — voucher session + `attestedDecryptWithVoucher`; a card
-      the agent does not hold never attests (fail closed).
-- [ ] Bind the bot's Base tx hash to the Swaraj receipt (evidence adapters)
-      and batch-prove a finished match.
 
 ## Play it
 
@@ -61,103 +22,86 @@ Fully standalone: the Swaraj mandate engine (`src/vendor/`, vendored from
 swaraj-new) evaluates every agent move **in-process** — default deny,
 forbid-wins, fail-closed. No other checkout, no database, no chain needed.
 
-- You play UNO against the agent; your moves are checked for game legality only.
-- The agent's every move is a typed intent (`APP_ACTION`) checked against its
-  mandate first. The mandate forbids Wild+4 (`cardValue > 104`), so when the
-  agent's only playable card is a Wild+4 it is **blocked and draws instead** —
-  visible in red in the game log.
-- Local mode is not TEE-private and not on-chain: hands live in process memory.
-  The on-chain (Inco/Base) and NEAR variants are the architecture docs' job.
+- You play UNO normally; your moves are checked for game legality only.
+- The agent's every move is checked against its mandate first. The mandate
+  forbids Wild+4 (`cardValue > 104`), so when the agent's only playable card
+  is a Wild+4 it is **blocked and draws instead** — visible in red in the
+  game log.
+- Local mode keeps hands in process memory (not TEE-private, not on-chain).
 
-## Flow diagram
+## How it works
 
 ```mermaid
 flowchart TD
-  subgraph UI["Browser — ui/index.html (:3002)"]
-    H["You — human player"]
+  subgraph UI["Browser (:3002)"]
+    H["You"]
     L["Game log<br/>blocked moves in red"]
   end
-
-  subgraph API["src/server/http.ts — JSON API"]
-    A["POST /api/play · /api/draw · /api/new<br/>GET /api/state (poll)"]
-  end
-
   subgraph GAME["src/game — the match"]
-    S["GameSession — turn loop"]
-    E["UnoEngine — authoritative state:<br/>both hands, draw pile, discard, winner"]
+    S["GameSession"]
+    E["UnoEngine — authoritative state"]
   end
-
-  subgraph AGENT["src/agent + src/actions — the governed agent"]
-    P["Move proposal<br/>first legal card in hand, else draw"]
-    I["Typed intent — APP_ACTION<br/>resource {app: zunno, target}<br/>context {name, params}"]
-    B["ZunnoAgent bridge<br/>ALLOW → execute · BLOCK → next compliant move<br/>→ else draw (gated) → exhausted → forfeit"]
+  subgraph AGENT["src/agent — the governed agent"]
+    P["Move proposal"]
+    I["Typed intent — APP_ACTION"]
+    B["Bridge over @swaraj/agent"]
   end
-
   subgraph SW["src/vendor — Swaraj mandate engine (in-process)"]
-    M["zunno-mandate.json<br/>permit play_card/draw_card on app zunno<br/>forbid Wild+4 · stake cap in ETH"]
-    G["evaluateParsedMandate<br/>default deny · forbid-wins · fail-closed"]
+    M["zunno-mandate.json"]
+    G["default deny · forbid-wins · fail-closed"]
   end
-
-  H -->|"play / draw"| A --> S
-  S -->|"human: legality check only"| E
-  S -->|"agent turn"| P --> I --> B
-  M -.->|"fixture"| G
-  B -->|"evaluate intent"| G
-  G -->|"ALLOW"| B
-  G -->|"BLOCK + violated rule ids"| B
-  B -->|"execute move"| E
-  E -->|"public view — own hand only"| A --> H
-  E -->|"log (blocks flagged)"| L
+  H -->|play / draw| S
+  S -->|"human: legality only"| E
+  S -->|agent turn| P --> I --> B
+  M -.-> G
+  B -->|evaluate| G
+  G -->|ALLOW / BLOCK + rule ids| B
+  B -->|execute| E
+  E -->|public view — own hand only| H
+  E -->|log| L
 ```
 
-**Human path (3 steps):** click → `POST /api/play` → engine legality → applied.
-The human is never mandate-checked — formal constraints govern the agent.
+**Human path:** click → legality check → applied. The human is never
+mandate-checked — formal constraints govern the agent.
 
-**Agent path (6 steps):** proposal → typed intent → mandate evaluation
-(in-process, vendored Swaraj) → ALLOW executes / BLOCK names the rule →
-fallback to the next compliant move, else draw (still gated) → applied to the
-engine, block written to the visible log.
+**Agent path:** proposal → typed intent → mandate evaluation → ALLOW executes /
+BLOCK names the rule → fallback to the next compliant legal card, else a gated
+draw, else forfeit the turn. Blocked money actions abstain instead. A blocked
+move never mutates state, and an unreachable gateway is treated as BLOCK
+(fail-closed) — nothing executes without an ALLOW.
+
+The mandate itself is `mandate/zunno-mandate.json`: permits `play_card` /
+`draw_card` on app `zunno`, forbids Wild+4, and caps stakes at 0.01 ETH.
 
 ## Formal verification (Lean 4, in this repo)
 
-`lean/` holds its own Lean suite (Lean 4.19, no Mathlib) — kernel-checked by
+`lean/` holds a Lean 4.19 suite (no Mathlib), kernel-checked by
 `pnpm check:lean`:
 
-- **`Zunno/Engine.lean`** — the UNO engine model, with proven invariants:
-  plays require the card in hand and legal (`play_none_if_not_in_hand`,
-  `play_none_if_illegal`); the card moves hand → discard
-  (`play_card_on_discard`); penalty cards conserve exactly
-  (`play_penalty_split`, take ++ drop is the identity); the winner is set
-  exactly by emptying the hand (`play_wins_on_last_card` /
-  `play_no_win_otherwise`); a draw adds exactly one card and passes the turn.
-- **`Zunno/Bridge.lean`** — the security property of the demo, proven:
-  `exec_needs_allow` (an execution in the agent's trace implies the decision
-  list ends in ALLOW — every path, all fallback retries),
-  `all_blocked_never_executes`, and `blocked_stake_abstains`.
-- **`Zunno/Vectors.lean`** — GENERATED (`pnpm vectors && pnpm lean:sync`)
-  from the REAL TypeScript engine; every example kernel-checks that the Lean
-  model reproduces the TS outcome (same ZunnoInco.sol codec, legality,
-  effects, winner). `test/vectors.test.ts` guards against drift between the
-  committed vectors and the engine.
+- **`Zunno/Engine.lean`** — the UNO engine model with proven invariants: plays
+  require a held, legal card; the card moves hand → discard; penalty cards
+  conserve exactly; the winner is set exactly by emptying the hand; a draw
+  adds one card and passes the turn.
+- **`Zunno/Bridge.lean`** — vendored from swaraj-new: `exec_needs_allow` (an
+  execution implies an ALLOW preceded it — every path, all fallback retries),
+  `all_blocked_never_executes`, `blocked_stake_abstains`.
+- **`Zunno/Vectors.lean` + `Zunno/EngineRefinement.lean`** — generated
+  (`pnpm vectors && pnpm lean:sync`) from the REAL TypeScript engine. The
+  refinement is machine-checked over the entire bounded space: 2,048 states /
+  5,888 outcomes where the Lean model must reproduce the TS engine exactly,
+  plus a drift-guard test. swaraj-new does the same for the mandate decision
+  (7,973 kernel-checked cases, with the concrete characterization theorem
+  inherited from the abstract proofs).
 
-Honest scope: the refinement between the Lean models and the running
-TypeScript is machine-checked over the entire bounded space —
-`lean/Zunno/EngineRefinement.lean` kernel-checks every mover option in
-2,048 bounded states (5,888 outcomes) against the real TS engine, and
-swaraj-new's `Gate/Concrete.lean` + `Gate/Refinement.lean` do the same for
-the mandate decision (7,973 cases, with the concrete characterization
-theorem inherited from the abstract proofs). The theorems hold for all
-inputs; the TS correspondence is bounded-exhaustive. Outside those bounds
-the correspondence is unproven — stated, not hidden.
+Honest scope: the theorems hold for all inputs; the TypeScript correspondence
+is bounded-exhaustive. Outside those bounds the correspondence is unproven —
+stated, not hidden.
 
 ## What a move looks like on the wire
 
-The agent's proposal is plain and app-side; what crosses into the mandate
-engine is the typed intent — Swaraj's generic `APP_ACTION` with atomic decimal
-params. This is real output from `buildIntent` → `toWire` → the embedded
-gateway (signature abbreviated — it is a 130-hex-char `0x…` string):
-
-**Proposal:** `{ kind: "PLAY_CARD", handIndex: 0, cardValue: 11 }` *(red 5)*
+The agent's proposal is plain (`{ kind: "PLAY_CARD", handIndex: 0, cardValue: 11 }`);
+what crosses into the mandate engine is the typed intent — real output from
+`buildIntent` → `toWire` → the gateway (signature abbreviated):
 
 ```json
 {
@@ -179,42 +123,26 @@ gateway (signature abbreviated — it is a 130-hex-char `0x…` string):
 
 Gateway: `{"outcome":"ALLOW","matchedPermitRuleIds":["a_permit_game_actions"]}`
 
-**The demo beat — a forbidden Wild+4** (`cardValue: 105`, mandate forbids
-`cardValue > 104`): identical intent shape, `cardValue: "105"`,
-`chosenColor: "1"` →
+The demo beat — a forbidden Wild+4 (`cardValue: "105"`):
 
 ```json
 { "outcome": "BLOCK", "violatedRuleIds": ["a_forbid_wild_draw_four"] }
 ```
 
-…which is what the game log shows in red ("Agent tried play_card — BLOCKED
-by a_forbid_wild_draw_four") before the agent falls back to a compliant move.
+…which the game log shows in red before the agent falls back to a compliant
+move. Params are atomic decimal strings (never floats); the same envelope
+carries `draw_card` (empty params) and stakes (typed `PAYMENT`).
 
-Notes on the shape: `params` values are **atomic decimal strings** (the
-schema parses them to big integers — no floats ever); keys are sorted for
-canonical hashing regardless of construction order; `chosenColor` 0–3 is a
-wild's color pick, 4 means "keep the active color" for non-wilds; the same
-envelope carries `draw_card` with empty `params`, and stakes as the typed
-`PAYMENT` action (see `pnpm e2e`).
+## Beyond local play
 
-## Remote gateway (optional)
-
-The same bridge runs against a live Swaraj API (`SWARAJ_API_URL` +
-`SWARAJ_DEV_TOKEN`, see `pnpm e2e`); the embedded gateway is the offline
-drop-in with identical semantics.
-
-## Setup
+The same bridge runs against a live Swaraj API for durable, proof-backed
+decisions (`SWARAJ_API_URL`, `SWARAJ_DEV_TOKEN`), and executes on-chain via
+viem (`ZUNNO_E2E_LIVE=1 pnpm e2e` — gated stakes broadcast, over-cap stakes
+blocked, receipts promoted to PROVED). On-chain game: the ZunnoInco contract
+on Base Sepolia. See the e2e source for the full live flow.
 
 ```sh
-pnpm install
-pnpm test         # node:test, no database or API needed
+pnpm test         # unit tests — no services needed
 pnpm typecheck
-```
-
-Against a live Swaraj API (swaraj-new, `apps/api`):
-
-```sh
-export SWARAJ_API_URL=http://localhost:3000
-export SWARAJ_APPLICATION_ID=zunno
-export ZUNNO_GAME_ADDRESS=0x82b2cce9a52c7e56838a5c46833067f9eb006911
+pnpm check:lean   # Lean suite (needs elan)
 ```
