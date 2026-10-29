@@ -25,10 +25,17 @@ The NEAR hackathon plan lives in swaraj-new's local `docs/`
 - [ ] **Live-mode agent on-chain** — code path done; needs a funded Base
       Sepolia bot wallet, then `ZUNNO_E2E_LIVE=1 pnpm e2e` broadcasts real
       joinGame/playCard/drawCard txs.
-- [ ] **Z3 dual-engine cross-check** — mandate decisions evaluated by both
-      the predicate engine and Z3, fail closed on disagreement.
-- [ ] **zk proofs of move legality** — SP1 statement kind for game legality,
-      batch-proven per match (core pipeline work in swaraj-new).
+- [x] ~~Z3 dual-engine cross-check~~ — done (swaraj-new ee68da6): mandate
+      decisions compile to the SMT term AST and Z3 confirms them; harness
+      agrees on 7,973 bounded cases; production route fail-closes
+      disagreements (SWARAJ_Z3_CROSSCHECK=1 → BLOCK/ENGINE_DISAGREEMENT).
+- [x] ~~zk proofs of game decisions~~ — done as the reused pipeline
+      (swaraj-new ee68da6): every mandate ALLOW is a durable decision
+      (decision log + PENDING receipt + proof job); the worker re-derives it
+      with the rules engine, builds swaraj/statement/mandate/v1, and
+      promotes the receipt PROVED. Verified end-to-end on Postgres
+      (stmt_3ef75a34…). SP1 zk proving of this statement kind is the
+      remaining upgrade (guest is gate-scoped).
 - [x] ~~Lean ⇔ TS refinement~~ — done as a machine-checked BOUNDED
       refinement: swaraj-new `Gate/Concrete.lean` (concrete predicate model;
       `concrete_allow_iff` inherits the abstract characterization theorem) +
