@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Zunno × Swaraj — play an AI that can't break its mandate</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #0b1220; color: #e7ecf5; }
+  header { padding: 18px 24px; border-bottom: 1px solid #1d2a45; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 6px 0 0; color: #8fa3c8; font-size: 13px; }
+  main { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px 24px; max-width: 1100px; margin: 0 auto; }
+  .panel { background: #101a2e; border: 1px solid #1d2a45; border-radius: 12px; padding: 16px; }
+  .opponent { display: flex; gap: 6px; align-items: center; min-height: 44px; }
+  .card-back { width: 30px; height: 42px; border-radius: 6px; background: repeating-linear-gradient(45deg, #24345c, #24345c 4px, #1a2645 4px, #1a2645 8px); border: 1px solid #2c3f6e; }
+  .table { margin: 14px 0; display: flex; align-items: center; gap: 14px; }
+  .top { width: 54px; height: 76px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #0b1220; }
+  .status { color: #8fa3c8; font-size: 13px; }
+  .hand { display: flex; flex-wrap: wrap; gap: 8px; }
+  .card { width: 58px; height: 82px; border-radius: 8px; border: 2px solid transparent; background: #16233d; color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; padding: 4px; }
+  .card.playable { border-color: #4f79ff; }
+  .card.playable:hover { transform: translateY(-4px); }
+  .card.dead { opacity: .45; cursor: default; }
+  .log { font-size: 12.5px; line-height: 1.55; max-height: 420px; overflow-y: auto; }
+  .log .entry { padding: 2px 0; color: #a9b8d4; }
+  .log .entry.blocked { color: #ff8080; font-weight: 600; }
+  .log .entry.game { color: #7fd1a8; }
+  button.action { background: #1c2a47; color: #dbe6ff; border: 1px solid #33477a; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  button.action:hover { background: #24365e; }
+  .colors { display: flex; gap: 8px; margin-top: 10px; }
+  .swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff2; cursor: pointer; }
+  .banner { margin: 0 24px; max-width: 1052px; padding: 8px 12px; border-radius: 8px; background: #2a1520; color: #ff9c9c; font-size: 13px; display: none; }
+  .turn-badge { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: #182742; border: 1px solid #2c3f6e; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Zunno × Swaraj</h1>
+  <p>UNO against an AI whose every move is checked against its Agent Mandate before it plays — blocks are marked in red in the log.</p>
+</header>
+<div id="error" class="banner"></div>
+<main>
+  <section class="panel">
+    <div class="opponent"><span id="oppCount" class="status"></span><div id="oppCards" style="display:flex;gap:6px"></div></div>
+    <div class="table">
+      <div id="top" class="top"></div>
+      <div id="status" class="status"></div>
+    </div>
+    <div id="hand" class="hand"></div>
+    <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+      <button class="action" onclick="draw()">Draw</button>
+      <button class="action" onclick="newGame()">New game</button>
+      <span id="turnBadge" class="turn-badge"></span>
+    </div>
+    <div id="colorPick" class="colors" style="display:none">
+      <div class="swatch" style="background:#e0454f" onclick="pickColor(0)"></div>
+      <div class="swatch" style="background:#2fa556" onclick="pickColor(1)"></div>
+      <div class="swatch" style="background:#3b82f6" onclick="pickColor(2)"></div>
+      <div class="swatch" style="background:#e8c53a" onclick="pickColor(3)"></div>
+    </div>
+  </section>
+  <aside class="panel">
+    <h3 style="margin:0 0 8px; font-size:14px;">Game log</h3>
+    <div id="log" class="log"></div>
+  </aside>
+</main>
+<script>
+const COLORS = ["Red", "Green", "Blue", "Yellow"];
+const CSS = ["#e0454f", "#2fa556", "#3b82f6", "#e8c53a", "#94a3b8"];
+let pendingWild = null;
+let lastLog = 0;
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+async function api(path, body) {
+  const response = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
+  const json = await response.json();
+  const banner = document.getElementById("error");
+  if (json && json.error) { banner.style.display = "block"; banner.textContent = json.error; }
+  else banner.style.display = "none";
+  if (json && json.state) render(json.state);
+  else if (path === "/api/state") render(json);
+}
+
+function render(state) {
+  document.getElementById("oppCount").textContent = `Agent — ${state.opponentCount} cards`;
+  document.getElementById("oppCards").innerHTML = Array.from({ length: Math.min(state.opponentCount, 10) })
+    .map(() => '<div class="card-back"></div>').join("");
+  const top = document.getElementById("top");
+  top.textContent = state.top.label;
+  top.style.background = cssFor(state.top.value, state.activeColor);
+  document.getElementById("status").textContent = `Active color: ${state.activeColor}`;
+  document.getElementById("turnBadge").textContent = state.winner ? (state.winner === "human" ? "You win 🎉" : "Agent wins") : (state.turn === "human" ? "Your turn" : "Agent thinking…");
+  document.getElementById("hand").innerHTML = state.yourHand.map((c) =>
+    `<div class="card ${c.playable ? "playable" : "dead"}" style="background:${cssFor(c.value, null)}" onclick="play(${c.index}, ${c.wild})">${esc(c.label)}</div>`
+  ).join("");
+  const log = document.getElementById("log");
+  if (state.log.length !== lastLog) {
+    lastLog = state.log.length;
+    log.innerHTML = state.log.slice(-80).map((e) =>
+      `<div class="entry ${e.blocked ? "blocked" : e.seat}">${esc(e.text)}</div>`).join("");
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+function cssFor(value, activeColorName) {
+  const card = decode(value);
+  if (card.color === 4) return activeColorName ? cssName(activeColorName) : "#94a3b8";
+  return CSS[card.color];
+}
+function cssName(name) { return CSS[COLORS.indexOf(name)] ?? "#94a3b8"; }
+function decode(value) {
+  const v = Number(value) - 1;
+  if (v >= 100) return { color: 4, kind: v < 104 ? 4 : 5 };
+  return { color: Math.floor(v / 25), kind: 0 };
+}
+
+function play(index, isWild) {
+  if (isWild) { pendingWild = index; document.getElementById("colorPick").style.display = "flex"; return; }
+  api("/api/play", { handIndex: index });
+}
+function pickColor(color) {
+  document.getElementById("colorPick").style.display = "none";
+  api("/api/play", { handIndex: pendingWild, chosenColor: color });
+  pendingWild = null;
+}
+function draw() { api("/api/draw", {}); }
+function newGame() { lastLog = 0; api("/api/new", {}); }
+
+api("/api/state");
+setInterval(() => api("/api/state"), 900);
+</script>
+</body>
+</html>

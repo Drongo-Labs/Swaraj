@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "e2e": "tsx src/e2e/gatedStake.ts"
+    "e2e": "tsx src/e2e/gatedStake.ts",
+    "play": "tsx src/play.ts"
   },
   "dependencies": {
     "@inco/lightning-js": "^1.1.0",

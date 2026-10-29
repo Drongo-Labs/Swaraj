@@ -50,6 +50,31 @@ Agent ── typed intent ──► Swaraj gateway (Z3, default deny)
 - [ ] Bind the bot's Base tx hash to the Swaraj receipt (evidence adapters)
       and batch-prove a finished match.
 
+## Play it
+
+```sh
+pnpm install
+pnpm play          # → http://127.0.0.1:3002
+```
+
+Fully standalone: the Swaraj mandate engine (`src/vendor/`, vendored from
+swaraj-new) evaluates every agent move **in-process** — default deny,
+forbid-wins, fail-closed. No other checkout, no database, no chain needed.
+
+- You play UNO against the agent; your moves are checked for game legality only.
+- The agent's every move is a typed intent (`APP_ACTION`) checked against its
+  mandate first. The mandate forbids Wild+4 (`cardValue > 104`), so when the
+  agent's only playable card is a Wild+4 it is **blocked and draws instead** —
+  visible in red in the game log.
+- Local mode is not TEE-private and not on-chain: hands live in process memory.
+  The on-chain (Inco/Base) and NEAR variants are the architecture docs' job.
+
+## Remote gateway (optional)
+
+The same bridge runs against a live Swaraj API (`SWARAJ_API_URL` +
+`SWARAJ_DEV_TOKEN`, see `pnpm e2e`); the embedded gateway is the offline
+drop-in with identical semantics.
+
 ## Setup
 
 ```sh
