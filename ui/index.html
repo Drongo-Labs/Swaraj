@@ -5,130 +5,296 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Zunno × Swaraj — play an AI that can't break its mandate</title>
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: #0b1220; color: #e7ecf5; }
-  header { padding: 18px 24px; border-bottom: 1px solid #1d2a45; }
-  header h1 { margin: 0; font-size: 20px; }
-  header p { margin: 6px 0 0; color: #8fa3c8; font-size: 13px; }
-  main { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px 24px; max-width: 1100px; margin: 0 auto; }
-  .panel { background: #101a2e; border: 1px solid #1d2a45; border-radius: 12px; padding: 16px; }
-  .opponent { display: flex; gap: 6px; align-items: center; min-height: 44px; }
-  .card-back { width: 30px; height: 42px; border-radius: 6px; background: repeating-linear-gradient(45deg, #24345c, #24345c 4px, #1a2645 4px, #1a2645 8px); border: 1px solid #2c3f6e; }
-  .table { margin: 14px 0; display: flex; align-items: center; gap: 14px; }
-  .top { width: 54px; height: 76px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: #0b1220; }
-  .status { color: #8fa3c8; font-size: 13px; }
-  .hand { display: flex; flex-wrap: wrap; gap: 8px; }
-  .card { width: 58px; height: 82px; border-radius: 8px; border: 2px solid transparent; background: #16233d; color: #fff; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; padding: 4px; }
-  .card.playable { border-color: #4f79ff; }
-  .card.playable:hover { transform: translateY(-4px); }
-  .card.dead { opacity: .45; cursor: default; }
-  .log { font-size: 12.5px; line-height: 1.55; max-height: 420px; overflow-y: auto; }
-  .log .entry { padding: 2px 0; color: #a9b8d4; }
-  .log .entry.blocked { color: #ff8080; font-weight: 600; }
-  .log .entry.game { color: #7fd1a8; }
-  button.action { background: #1c2a47; color: #dbe6ff; border: 1px solid #33477a; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-  button.action:hover { background: #24365e; }
-  .colors { display: flex; gap: 8px; margin-top: 10px; }
-  .swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff2; cursor: pointer; }
-  .banner { margin: 0 24px; max-width: 1052px; padding: 8px 12px; border-radius: 8px; background: #2a1520; color: #ff9c9c; font-size: 13px; display: none; }
-  .turn-badge { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: #182742; border: 1px solid #2c3f6e; }
+  * { box-sizing: border-box; margin: 0; user-select: none; }
+  html, body { height: 100%; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    background: #0c1220; color: #fff; overflow: hidden;
+    transition: background-image .6s ease;
+  }
+  #bg { position: fixed; inset: 0; background-size: cover; background-position: center; transition: opacity .5s; }
+  #vignette { position: fixed; inset: 0; background: radial-gradient(ellipse at center, transparent 30%, rgba(4,8,18,.72) 100%); pointer-events: none; }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px; background: rgba(8,12,24,.55); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand b { font-size: 19px; letter-spacing: .5px; }
+  .brand span { font-size: 12px; color: #9fb3d9; }
+  .turn-chip {
+    font-size: 13px; font-weight: 600; padding: 5px 14px; border-radius: 999px;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22);
+  }
+  .turn-chip.agent { background: rgba(255,196,66,.18); border-color: rgba(255,196,66,.45); color: #ffd970; }
+  .turn-chip.win { background: rgba(74,222,128,.18); border-color: rgba(74,222,128,.5); color: #86efac; }
+  header .actions { display: flex; gap: 10px; }
+  .hbtn {
+    background: rgba(255,255,255,.1); color: #e8eefc; border: 1px solid rgba(255,255,255,.2);
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  .hbtn:hover { background: rgba(255,255,255,.18); }
+
+  /* ---- opponent (agent) ---- */
+  #opponent { position: fixed; top: 64px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; z-index: 5; }
+  #opponent .name { font-size: 13px; color: #cdd9f2; margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  #opponent .bot { font-size: 11px; color: #ffd970; border: 1px solid rgba(255,196,66,.4); border-radius: 999px; padding: 1px 8px; }
+  #oppHand { display: flex; }
+  .opp-card { width: 40px; height: 63px; margin: 0 -12px; border-radius: 6px; }
+  .opp-card:nth-child(odd) { transform: rotate(-6deg); }
+  .opp-card:nth-child(even) { transform: rotate(5deg); }
+
+  /* ---- table center: draw pile + discard ---- */
+  #table {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -52%);
+    display: flex; align-items: center; gap: 46px; z-index: 10;
+  }
+  #drawPile { position: relative; cursor: pointer; }
+  #drawPile img { width: 74px; height: 116px; border-radius: 8px; }
+  #drawPile .stack { position: absolute; inset: 0; }
+  #drawPile .stack::before, #drawPile .stack::after {
+    content: ""; position: absolute; inset: 0; border-radius: 8px;
+    background: url("/assets/card-back.png") center/cover;
+    border: 1px solid rgba(255,255,255,.25);
+  }
+  #drawPile .stack::before { transform: translate(-4px, 4px) rotate(-4deg); opacity: .8; }
+  #drawPile .stack::after { transform: translate(4px, -4px) rotate(4deg); opacity: .9; }
+  #drawPile:hover img { transform: translateY(-6px); }
+  #drawPile img { transition: transform .18s ease; }
+  #drawPile .lbl { position: absolute; left: 50%; transform: translateX(-50%); bottom: -26px; font-size: 12px; color: #b9c6e4; }
+  #drawPile.blocked { filter: brightness(.55); cursor: not-allowed; }
+
+  #discard { position: relative; width: 74px; height: 116px; }
+  #discard img {
+    position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 8px;
+    box-shadow: 0 12px 34px rgba(0,0,0,.55);
+  }
+  #discard img:nth-child(2) { transform: rotate(-9deg) translateX(-3px); }
+  #discard img:nth-child(3) { transform: rotate(7deg) translateX(3px); }
+  .lbl { font-size: 12px; color: #b9c6e4; }
+
+  #colorBadge {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) translateY(96px);
+    font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: #e6ecfa;
+    padding: 3px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); z-index: 10;
+  }
+
+  /* ---- your hand ---- */
+  #hand {
+    position: fixed; bottom: -8px; left: 0; right: 0; min-height: 150px;
+    display: flex; justify-content: center; align-items: flex-end; z-index: 20;
+  }
+  .card {
+    position: relative; width: 84px; height: 132px; margin: 0 -17px;
+    transform-origin: bottom center; cursor: pointer; transition: transform .16s ease, filter .16s ease;
+  }
+  .card img { width: 100%; height: 100%; border-radius: 10px; pointer-events: none;
+    box-shadow: 0 10px 26px rgba(0,0,0,.5); }
+  .card.dead { cursor: default; filter: brightness(.55) saturate(.8); }
+  .card.playable:hover { transform: translateY(-26px) scale(1.13); z-index: 60 !important; }
+  .card.playable { filter: drop-shadow(0 0 14px rgba(120,190,255,.45)); }
+
+  /* ---- log drawer ---- */
+  #logBtn {
+    position: fixed; right: 16px; top: 64px; z-index: 30;
+    background: rgba(8,12,24,.7); color: #dbe6ff; border: 1px solid rgba(255,255,255,.18);
+    padding: 7px 13px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  #logPanel {
+    position: fixed; right: 16px; top: 104px; width: 330px; max-height: 60vh; overflow-y: auto;
+    background: rgba(8,12,24,.88); border: 1px solid rgba(255,255,255,.14); border-radius: 12px;
+    padding: 14px; z-index: 30; display: none; backdrop-filter: blur(10px);
+  }
+  #logPanel.open { display: block; }
+  #logPanel h3 { font-size: 13px; color: #9fb3d9; margin-bottom: 8px; font-weight: 600; }
+  .entry { font-size: 12.5px; line-height: 1.5; padding: 3px 0; color: #b8c6e6; }
+  .entry.blocked { color: #ff9c9c; font-weight: 700; }
+  .entry.game { color: #7fd1a8; }
+  .entry.human { color: #dbe6ff; }
+
+  /* ---- wild color dialog ---- */
+  #colorDialog {
+    position: fixed; inset: 0; z-index: 50; display: none;
+    align-items: center; justify-content: center; background: rgba(4,8,18,.66); backdrop-filter: blur(4px);
+  }
+  #colorDialog.open { display: flex; }
+  #colorDialog .box { text-align: center; }
+  #colorDialog h2 { font-size: 20px; margin-bottom: 20px; font-weight: 600; }
+  #colorDialog .row { display: flex; gap: 18px; justify-content: center; }
+  .swatch {
+    width: 66px; height: 66px; border-radius: 50%; cursor: pointer; border: 3px solid rgba(255,255,255,.85);
+    transition: transform .15s ease;
+  }
+  .swatch:hover { transform: scale(1.15); }
+
+  #toast {
+    position: fixed; left: 50%; top: 84px; transform: translateX(-50%); z-index: 40;
+    background: rgba(180,40,60,.92); color: #fff; font-size: 13.5px; font-weight: 600;
+    padding: 8px 18px; border-radius: 999px; display: none;
+  }
+  #thinking {
+    position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 25;
+    font-size: 13px; color: #ffd970; display: none; padding: 6px 16px;
+    background: rgba(8,12,24,.6); border-radius: 999px; border: 1px solid rgba(255,196,66,.35);
+  }
 </style>
 </head>
 <body>
+<div id="bg"></div>
+<div id="vignette"></div>
+
 <header>
-  <h1>Zunno × Swaraj</h1>
-  <p>UNO against an AI whose every move is checked against its Agent Mandate before it plays — blocks are marked in red in the log.</p>
+  <div class="brand"><b>Zunno × Swaraj</b><span>an AI that can't break its mandate</span></div>
+  <div class="turn-chip" id="turnChip">…</div>
+  <div class="actions">
+    <button class="hbtn" onclick="newGame()">New game</button>
+    <button class="hbtn" onclick="toggleLog()">Log</button>
+  </div>
 </header>
-<div id="error" class="banner"></div>
-<main>
-  <section class="panel">
-    <div class="opponent"><span id="oppCount" class="status"></span><div id="oppCards" style="display:flex;gap:6px"></div></div>
-    <div class="table">
-      <div id="top" class="top"></div>
-      <div id="status" class="status"></div>
-    </div>
-    <div id="hand" class="hand"></div>
-    <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
-      <button class="action" onclick="draw()">Draw</button>
-      <button class="action" onclick="newGame()">New game</button>
-      <span id="turnBadge" class="turn-badge"></span>
-    </div>
-    <div id="colorPick" class="colors" style="display:none">
+
+<div id="opponent">
+  <div class="name"><span id="oppName">Agent</span><span class="bot">SWARAJ-GOVERNED</span></div>
+  <div id="oppHand"></div>
+</div>
+
+<div id="table">
+  <div id="drawPile" title="Draw a card">
+    <div class="stack"></div>
+    <img src="/assets/card-back.png" alt="draw pile"/>
+    <div class="lbl" id="drawLbl">DRAW</div>
+  </div>
+  <div id="discard"><div class="lbl" id="discLbl">DISCARD</div></div>
+</div>
+<div id="colorBadge"></div>
+<div id="thinking">the agent is thinking…</div>
+<div id="toast"></div>
+
+<div id="hand"></div>
+
+<div id="logPanel"><h3>Game log — blocks in red</h3><div id="log"></div></div>
+
+<div id="colorDialog">
+  <div class="box">
+    <h2>Choose a color</h2>
+    <div class="row">
       <div class="swatch" style="background:#e0454f" onclick="pickColor(0)"></div>
       <div class="swatch" style="background:#2fa556" onclick="pickColor(1)"></div>
       <div class="swatch" style="background:#3b82f6" onclick="pickColor(2)"></div>
       <div class="swatch" style="background:#e8c53a" onclick="pickColor(3)"></div>
     </div>
-  </section>
-  <aside class="panel">
-    <h3 style="margin:0 0 8px; font-size:14px;">Game log</h3>
-    <div id="log" class="log"></div>
-  </aside>
-</main>
+  </div>
+</div>
+
 <script>
 const COLORS = ["Red", "Green", "Blue", "Yellow"];
-const CSS = ["#e0454f", "#2fa556", "#3b82f6", "#e8c53a", "#94a3b8"];
-let pendingWild = null;
-let lastLog = 0;
+const BG = { Red: "bgR", Green: "bgG", Blue: "bgB", Yellow: "bgY" };
+let pendingWild = null, lastLogCount = 0, prevAgentCount = 7;
 
+const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/** ZunnoInco codec value (1..108) → the Zunno sprite name. */
+function sprite(v) {
+  const n = v - 1;
+  if (v >= 105) return "D4W";
+  if (v >= 101) return "W";
+  const c = "RGBY"[Math.floor(n / 25)];
+  const w = n % 25;
+  if (w === 0) return "0" + c;
+  if (w <= 18) return String(Math.floor((w + 1) / 2)) + c;
+  if (w <= 20) return "skip" + c;
+  if (w <= 22) return "_" + c;
+  return "D2" + c;
+}
+const spriteSrc = (v) => `/assets/cards-front/${sprite(v)}.webp`;
+const sound = (name) => { try { new Audio(`/assets/sounds/${name}`).play().catch(() => {}); } catch {} };
 
 async function api(path, body) {
   const response = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : undefined);
   const json = await response.json();
-  const banner = document.getElementById("error");
-  if (json && json.error) { banner.style.display = "block"; banner.textContent = json.error; }
-  else banner.style.display = "none";
+  const toast = $("toast");
+  if (json && json.error) { toast.style.display = "block"; toast.textContent = json.error; setTimeout(() => toast.style.display = "none", 2200); }
+  else toast.style.display = "none";
   if (json && json.state) render(json.state);
   else if (path === "/api/state") render(json);
 }
 
 function render(state) {
-  document.getElementById("oppCount").textContent = `Agent — ${state.opponentCount} cards`;
-  document.getElementById("oppCards").innerHTML = Array.from({ length: Math.min(state.opponentCount, 10) })
-    .map(() => '<div class="card-back"></div>').join("");
-  const top = document.getElementById("top");
-  top.textContent = state.top.label;
-  top.style.background = cssFor(state.top.value, state.activeColor);
-  document.getElementById("status").textContent = `Active color: ${state.activeColor}`;
-  document.getElementById("turnBadge").textContent = state.winner ? (state.winner === "human" ? "You win 🎉" : "Agent wins") : (state.turn === "human" ? "Your turn" : "Agent thinking…");
-  document.getElementById("hand").innerHTML = state.yourHand.map((c) =>
-    `<div class="card ${c.playable ? "playable" : "dead"}" style="background:${cssFor(c.value, null)}" onclick="play(${c.index}, ${c.wild})">${esc(c.label)}</div>`
-  ).join("");
-  const log = document.getElementById("log");
-  if (state.log.length !== lastLog) {
-    lastLog = state.log.length;
-    log.innerHTML = state.log.slice(-80).map((e) =>
+  // background follows the active color, like the original
+  $("bg").style.backgroundImage = `url("/assets/backgrounds/${BG[state.activeColor] ?? "bgB"}.jpg")`;
+
+  // turn chip
+  const chip = $("turnChip");
+  if (state.winner) {
+    chip.className = "turn-chip win";
+    chip.textContent = state.winner === "human" ? "You win 🎉" : "The agent wins";
+  } else {
+    chip.className = "turn-chip" + (state.turn === "agent" ? " agent" : "");
+    chip.textContent = state.turn === "human" ? "Your turn" : "Agent's turn";
+  }
+  $("thinking").style.display = (!state.winner && state.turn === "agent") ? "block" : "none";
+
+  // opponent hand (card backs; count only — the agent's cards stay hidden)
+  const opp = $("oppHand");
+  if (prevAgentCount !== state.opponentCount) {
+    prevAgentCount = state.opponentCount;
+    opp.innerHTML = Array.from({ length: Math.min(state.opponentCount, 12) })
+      .map(() => `<img class="opp-card" src="/assets/card-back.png" alt="agent card"/>`).join("");
+  }
+  $("oppName").textContent = `Agent — ${state.opponentCount} cards`;
+
+  // discard pile: last three tops, newest on top
+  const disc = $("discard");
+  disc.innerHTML = `<div class="lbl">DISCARD</div>` +
+    [state.top.value].map((v) => `<img src="${spriteSrc(v)}" alt="${esc(state.top.label)}"/>`).join("");
+
+  // draw pile disabled when it's not your turn
+  const dp = $("drawPile");
+  dp.classList.toggle("blocked", state.winner !== null || state.turn !== "human");
+
+  // active color badge
+  $("colorBadge").textContent = state.activeColor;
+
+  // your hand — fanned like the original
+  const hand = $("hand");
+  hand.innerHTML = state.yourHand.map((c) => {
+    const fan = Math.min(40, state.yourHand.length * 5);
+    const i = c.index, total = state.yourHand.length;
+    const angle = total === 1 ? 0 : (fan / (total - 1)) * (i - (total - 1) / 2);
+    const cls = c.playable ? "playable" : "dead";
+    return `<div class="card ${cls}" style="transform: rotate(${angle}deg); z-index: ${i}" onclick="play(${c.index}, ${c.wild})">` +
+      `<img src="${spriteSrc(c.value)}" alt="${esc(c.label)}"/></div>`;
+  }).join("");
+
+  // log
+  if (state.log.length !== lastLogCount) {
+    lastLogCount = state.log.length;
+    $("log").innerHTML = state.log.slice(-70).map((e) =>
       `<div class="entry ${e.blocked ? "blocked" : e.seat}">${esc(e.text)}</div>`).join("");
-    log.scrollTop = log.scrollHeight;
+    const panel = $("logPanel");
+    panel.scrollTop = panel.scrollHeight;
+    const blocked = state.log.filter((e) => e.blocked).length;
+    $("logBtn") && ($("logBtn").textContent = `Log${blocked ? ` (${blocked} blocked)` : ""}`);
   }
 }
 
-function cssFor(value, activeColorName) {
-  const card = decode(value);
-  if (card.color === 4) return activeColorName ? cssName(activeColorName) : "#94a3b8";
-  return CSS[card.color];
-}
-function cssName(name) { return CSS[COLORS.indexOf(name)] ?? "#94a3b8"; }
-function decode(value) {
-  const v = Number(value) - 1;
-  if (v >= 100) return { color: 4, kind: v < 104 ? 4 : 5 };
-  return { color: Math.floor(v / 25), kind: 0 };
-}
-
 function play(index, isWild) {
-  if (isWild) { pendingWild = index; document.getElementById("colorPick").style.display = "flex"; return; }
+  if (isWild) { pendingWild = index; $("colorDialog").classList.add("open"); return; }
+  sound("card-played-sound.mp3");
   api("/api/play", { handIndex: index });
 }
 function pickColor(color) {
-  document.getElementById("colorPick").style.display = "none";
+  $("colorDialog").classList.remove("open");
+  sound("wild-sound.mp3");
   api("/api/play", { handIndex: pendingWild, chosenColor: color });
   pendingWild = null;
 }
-function draw() { api("/api/draw", {}); }
-function newGame() { lastLog = 0; api("/api/new", {}); }
+function toggleLog() { $("logPanel").classList.toggle("open"); }
+function newGame() { lastLogCount = 0; prevAgentCount = -1; api("/api/new", {}); }
 
+$("drawPile").addEventListener("click", () => api("/api/draw", {}));
 api("/api/state");
 setInterval(() => api("/api/state"), 900);
 </script>
