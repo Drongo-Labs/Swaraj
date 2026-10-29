@@ -4,19 +4,24 @@ import type { UnifiedIntent } from "../actions/intents.js";
 export interface GatewayDecision {
   outcome: "ALLOW" | "BLOCK";
   violatedRuleIds: string[];
+  matchedPermitRuleIds?: string[];
   decisionId?: string;
 }
 
 /**
  * Client for the Swaraj API surface the Zunno agent needs:
- * - `POST /v1/applications/:id/mandates`  (register the Agent Mandate)
+ * - `POST /v1/applications/:id/mandates`       (register the Agent Mandate)
  * - `POST /v1/applications/:id/unified-actions` (evaluate a typed intent)
- * - `GET  /v1/applications/:id/mandates/active` (fetch the active policyHash)
+ *
+ * Wire shape: the action travels under `{"action": {...}}`. The API requires
+ * a bearer token (SWARAJ_DEV_TOKEN). HTTP errors fail closed to BLOCK; only
+ * a network failure throws (the bridge maps that to BLOCK semantics too).
  */
 export class SwarajClient {
   constructor(
     private readonly baseUrl: string,
     private readonly applicationId: string,
+    private readonly token: string,
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
@@ -24,54 +29,67 @@ export class SwarajClient {
     return `${this.baseUrl.replace(/\/$/, "")}/v1/applications/${encodeURIComponent(this.applicationId)}${path}`;
   }
 
-  async registerMandate(mandate: AgentMandateWire): Promise<{ mandateId: string; version: number; policyHash: string; ruleCount: number }> {
-    const response = await this.fetchImpl(this.url("/mandates"), {
+  private async post(path: string, body: unknown): Promise<{ status: number; json: Record<string, unknown> }> {
+    const response = await this.fetchImpl(this.url(path), {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(mandate),
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.token}`,
+      },
+      body: JSON.stringify(body),
     });
-    if (!response.ok) {
-      throw new Error(`mandate registration failed: ${response.status} ${await safeText(response)}`);
+    let json: Record<string, unknown> = {};
+    try {
+      json = (await response.json()) as Record<string, unknown>;
+    } catch {
+      // Non-JSON error body: status alone decides.
     }
-    return (await response.json()) as { mandateId: string; version: number; policyHash: string; ruleCount: number };
+    return { status: response.status, json };
   }
 
-  async activeMandate(): Promise<{ policyHash: string }> {
-    const response = await this.fetchImpl(this.url("/mandates/active"), { method: "GET" });
-    if (!response.ok) {
-      throw new Error(`active mandate fetch failed: ${response.status} ${await safeText(response)}`);
+  async registerMandate(mandate: AgentMandateWire): Promise<{ mandateId: string; version: number; policyHash: string; ruleCount: number }> {
+    const { status, json } = await this.post("/mandates", mandate);
+    if (status !== 201) {
+      throw new Error(`mandate registration failed: ${status} ${JSON.stringify(json).slice(0, 300)}`);
     }
-    return (await response.json()) as { policyHash: string };
+    return {
+      mandateId: String(json.mandateId),
+      version: Number(json.version),
+      policyHash: String(json.policyHash),
+      ruleCount: Number(json.ruleCount),
+    };
   }
 
   async evaluateUnifiedAction(intent: UnifiedIntent): Promise<GatewayDecision> {
-    let response: Response;
+    let status: number;
+    let json: Record<string, unknown>;
     try {
-      response = await this.fetchImpl(this.url("/unified-actions"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(wireOf(intent)),
-      });
+      ({ status, json } = await this.post("/unified-actions", { action: wireOf(intent) }));
     } catch (error) {
       // Fail closed: an unreachable gateway is a BLOCK, never a silent pass.
       throw new GatewayUnavailableError(error instanceof Error ? error.message : "gateway unreachable");
     }
-    if (response.status === 400) {
+    if (status === 400) {
       // Unknown action type / malformed intent: default deny by schema.
       return { outcome: "BLOCK", violatedRuleIds: ["schema.invalid"] };
     }
-    if (!response.ok) {
-      throw new Error(`gateway error: ${response.status} ${await safeText(response)}`);
+    if (status === 404) {
+      return { outcome: "BLOCK", violatedRuleIds: ["mandate.not_found"] };
     }
-    const body = (await response.json()) as Partial<GatewayDecision> & { decision?: { outcome?: string; violatedRuleIds?: string[]; decisionId?: string } };
-    const outcome = (body.outcome ?? body.decision?.outcome) === "ALLOW" ? "ALLOW" : "BLOCK";
-    const decision: GatewayDecision = {
+    if (status !== 200) {
+      return { outcome: "BLOCK", violatedRuleIds: [`http.${status}`] };
+    }
+    const outcome = json.decision === "ALLOW" ? "ALLOW" : "BLOCK";
+    const mandate = (json.mandate ?? {}) as { reason?: string; matchedRuleIds?: string[]; matchedPermitRuleIds?: string[] };
+    const result: GatewayDecision = {
       outcome,
-      violatedRuleIds: body.violatedRuleIds ?? body.decision?.violatedRuleIds ?? [],
+      violatedRuleIds: outcome === "BLOCK" ? (mandate.matchedRuleIds ?? []) : [],
     };
-    const decisionId = body.decisionId ?? body.decision?.decisionId;
-    if (decisionId !== undefined) decision.decisionId = decisionId;
-    return decision;
+    if (outcome === "ALLOW" && mandate.matchedPermitRuleIds) {
+      result.matchedPermitRuleIds = mandate.matchedPermitRuleIds;
+    }
+    if (typeof json.activityId === "string") result.decisionId = json.activityId;
+    return result;
   }
 }
 
@@ -91,11 +109,3 @@ function wireOf(intent: UnifiedIntent): Record<string, unknown> {
 }
 
 export class GatewayUnavailableError extends Error {}
-
-async function safeText(response: Response): Promise<string> {
-  try {
-    return (await response.text()).slice(0, 200);
-  } catch {
-    return "";
-  }
-}
