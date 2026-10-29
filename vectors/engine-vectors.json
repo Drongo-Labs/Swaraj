@@ -1,0 +1,477 @@
+{
+  "domain": "zunno/engine-vectors/v1",
+  "playable": [
+    {
+      "card": 11,
+      "top": 5,
+      "activeColor": 0,
+      "expected": true
+    },
+    {
+      "card": 11,
+      "top": 36,
+      "activeColor": 1,
+      "expected": true
+    },
+    {
+      "card": 11,
+      "top": 26,
+      "activeColor": 1,
+      "expected": false
+    },
+    {
+      "card": 21,
+      "top": 5,
+      "activeColor": 0,
+      "expected": true
+    },
+    {
+      "card": 21,
+      "top": 71,
+      "activeColor": 2,
+      "expected": true
+    },
+    {
+      "card": 24,
+      "top": 24,
+      "activeColor": 3,
+      "expected": true
+    },
+    {
+      "card": 101,
+      "top": 5,
+      "activeColor": 0,
+      "expected": true
+    },
+    {
+      "card": 105,
+      "top": 26,
+      "activeColor": 1,
+      "expected": true
+    },
+    {
+      "card": 2,
+      "top": 76,
+      "activeColor": 2,
+      "expected": false
+    },
+    {
+      "card": 3,
+      "top": 27,
+      "activeColor": 1,
+      "expected": true
+    }
+  ],
+  "plays": [
+    {
+      "name": "red5_number_match",
+      "human": true,
+      "card": 11,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          11,
+          2
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": false,
+      "top": 11
+    },
+    {
+      "name": "skip_keeps_turn",
+      "human": true,
+      "card": 21,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          21,
+          2
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          11
+        ],
+        "activeColor": 0,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": true,
+      "top": 21
+    },
+    {
+      "name": "draw_two_penalizes",
+      "human": true,
+      "card": 24,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          24,
+          2
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          11
+        ],
+        "activeColor": 0,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": true,
+      "top": 24
+    },
+    {
+      "name": "wild_chooses_color",
+      "human": true,
+      "card": 101,
+      "chosenColor": 2,
+      "state": {
+        "human": [
+          101,
+          2
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          11
+        ],
+        "activeColor": 0,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": false,
+      "top": 101
+    },
+    {
+      "name": "wild4_penalizes_four",
+      "human": true,
+      "card": 105,
+      "chosenColor": 3,
+      "state": {
+        "human": [
+          105,
+          2
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          11
+        ],
+        "activeColor": 0,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": true,
+      "top": 105
+    },
+    {
+      "name": "last_card_wins",
+      "human": true,
+      "card": 11,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          11
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 1,
+      "humanTurn": true,
+      "top": 11
+    },
+    {
+      "name": "illegal_play_rejected",
+      "human": true,
+      "card": 11,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          11
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          26
+        ],
+        "activeColor": 1,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": false,
+      "winner": 0,
+      "humanTurn": true,
+      "top": 26
+    },
+    {
+      "name": "not_your_turn_rejected",
+      "human": true,
+      "card": 11,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          11
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": false,
+        "winner": 0
+      },
+      "applied": false,
+      "winner": 0,
+      "humanTurn": false,
+      "top": 36
+    },
+    {
+      "name": "agent_plays_number",
+      "human": false,
+      "card": 11,
+      "chosenColor": 4,
+      "state": {
+        "human": [
+          3
+        ],
+        "agent": [
+          11,
+          2
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": false,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": true,
+      "top": 11
+    }
+  ],
+  "draws": [
+    {
+      "name": "human_draws",
+      "human": true,
+      "state": {
+        "human": [
+          11
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": true,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": false,
+      "top": 36
+    },
+    {
+      "name": "agent_draws",
+      "human": false,
+      "state": {
+        "human": [
+          11
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": false,
+        "winner": 0
+      },
+      "applied": true,
+      "winner": 0,
+      "humanTurn": true,
+      "top": 36
+    },
+    {
+      "name": "draw_wrong_turn",
+      "human": true,
+      "state": {
+        "human": [
+          11
+        ],
+        "agent": [
+          3
+        ],
+        "drawPile": [
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57
+        ],
+        "discardReversed": [
+          36
+        ],
+        "activeColor": 1,
+        "humanTurn": false,
+        "winner": 0
+      },
+      "applied": false,
+      "winner": 0,
+      "humanTurn": false,
+      "top": 36
+    }
+  ]
+}

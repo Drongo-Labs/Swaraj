@@ -118,6 +118,32 @@ The human is never mandate-checked — formal constraints govern the agent.
 fallback to the next compliant move, else draw (still gated) → applied to the
 engine, block written to the visible log.
 
+## Formal verification (Lean 4, in this repo)
+
+`lean/` holds its own Lean suite (Lean 4.19, no Mathlib) — kernel-checked by
+`pnpm check:lean`:
+
+- **`Zunno/Engine.lean`** — the UNO engine model, with proven invariants:
+  plays require the card in hand and legal (`play_none_if_not_in_hand`,
+  `play_none_if_illegal`); the card moves hand → discard
+  (`play_card_on_discard`); penalty cards conserve exactly
+  (`play_penalty_split`, take ++ drop is the identity); the winner is set
+  exactly by emptying the hand (`play_wins_on_last_card` /
+  `play_no_win_otherwise`); a draw adds exactly one card and passes the turn.
+- **`Zunno/Bridge.lean`** — the security property of the demo, proven:
+  `exec_needs_allow` (an execution in the agent's trace implies the decision
+  list ends in ALLOW — every path, all fallback retries),
+  `all_blocked_never_executes`, and `blocked_stake_abstains`.
+- **`Zunno/Vectors.lean`** — GENERATED (`pnpm vectors && pnpm lean:sync`)
+  from the REAL TypeScript engine; every example kernel-checks that the Lean
+  model reproduces the TS outcome (same ZunnoInco.sol codec, legality,
+  effects, winner). `test/vectors.test.ts` guards against drift between the
+  committed vectors and the engine.
+
+Honest scope: the Lean files model the engine and bridge; the vectors
+contract-test TS↔Lean agreement on concrete cases, but a machine-checked
+refinement proof (Lean ⇔ the TS implementation) remains future work.
+
 ## What a move looks like on the wire
 
 The agent's proposal is plain and app-side; what crosses into the mandate
