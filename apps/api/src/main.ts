@@ -19,7 +19,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 try {
-  const address = await app.listen({ host: "127.0.0.1", port: 3000 });
+  const port = Number(process.env.PORT ?? 3000);
+  const address = await app.listen({ host: "127.0.0.1", port });
   console.log(`Swaraj API: ${address} (pipeline mode: ${mode} — live Base, no mock fallback)`);
 } catch (error) {
   await app.close();
