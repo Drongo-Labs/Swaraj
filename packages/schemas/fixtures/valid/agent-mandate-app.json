@@ -1,0 +1,28 @@
+{
+  "mandateId": "mandate_zunno_v1",
+  "version": 1,
+  "agent": "zunno-agent",
+  "defaultEffect": "DENY",
+  "validFrom": 1789990000000,
+  "validUntil": 1800000000000,
+  "rules": [
+    {
+      "ruleId": "forbid_wild_draw_four",
+      "effect": "FORBID",
+      "action": "APP_ACTION",
+      "predicates": [
+        { "field": "context.name", "operator": "EQ", "value": "play_card" },
+        { "field": "context.param", "operator": "GT", "name": "cardValue", "value": "104" }
+      ]
+    },
+    {
+      "ruleId": "permit_game_actions",
+      "effect": "PERMIT",
+      "action": "APP_ACTION",
+      "predicates": [
+        { "field": "resource.app", "operator": "EQ", "value": "zunno" },
+        { "field": "context.name", "operator": "IN", "values": ["draw_card", "play_card"] }
+      ]
+    }
+  ]
+}

@@ -10,13 +10,18 @@ import {
   parseWith,
 } from "./primitives.js";
 
-/** Stable action vocabulary. New variants must add a typed resource/context pair below. */
+/**
+ * Stable action vocabulary. New variants must add a typed resource/context
+ * pair below. APP_ACTION is the generic escape hatch: any application can
+ * namespace its own actions without a Swaraj core schema change.
+ */
 export const UnifiedActionType = z.enum([
   "SPOT_TRADE",
   "PAYMENT",
   "DEPLOY",
   "DELETE",
   "REFUND",
+  "APP_ACTION",
 ]);
 
 const AgentIdentifier = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/);
@@ -97,12 +102,43 @@ const RefundActionSchema = z.strictObject({
   }),
 });
 
+/**
+ * Generic application action: `resource.app` namespaces the application
+ * ("zunno", "payroll-ops", ...), `context.name` is the action within that
+ * app ("play_card"), and `params` carries up to 16 typed values. Integer
+ * values are atomic decimal strings (AtomicAmount, parsed to bigint) so the
+ * hashable, no-floats rule holds; canonical serialization sorts record keys,
+ * so params order never affects hashes.
+ */
+const AppActionName = z.string().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
+export const AppParamName = z.string().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
+export const AppParamValue = z.union([AtomicAmount, z.string().min(1).max(256), z.boolean()]);
+
+const AppActionSchema = z.strictObject({
+  ...common,
+  action: z.literal("APP_ACTION"),
+  resource: z.strictObject({
+    app: ResourceIdentifier,
+    target: ResourceIdentifier,
+  }),
+  context: z.strictObject({
+    name: AppActionName,
+    params: z.record(AppParamName, AppParamValue),
+  }).superRefine((context, ctx) => {
+    const entries = Object.entries(context.params);
+    if (entries.length > 16) {
+      ctx.addIssue({ code: "custom", path: ["params"], message: "at most 16 params" });
+    }
+  }),
+});
+
 export const UnifiedActionSchema = z.discriminatedUnion("action", [
   SpotTradeActionSchema,
   PaymentActionSchema,
   DeployActionSchema,
   DeleteActionSchema,
   RefundActionSchema,
+  AppActionSchema,
 ]).superRefine((action, ctx) => {
   if (action.expiry <= action.timestamp) {
     ctx.addIssue({ code: "custom", path: ["expiry"], message: "expiry must be after timestamp" });

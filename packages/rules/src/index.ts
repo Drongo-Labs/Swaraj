@@ -36,7 +36,8 @@ function blocked(reason: MandateDecisionReason): MandateDecision {
 
 type Comparable = string | number | bigint | boolean | undefined;
 
-function fieldValue(action: UnifiedAction, field: MandatePredicate["field"]): Comparable {
+function fieldValue(action: UnifiedAction, predicate: MandatePredicate): Comparable {
+  const field = predicate.field;
   switch (field) {
     case "agent": return action.agent;
     case "timestamp": return action.timestamp;
@@ -62,6 +63,22 @@ function fieldValue(action: UnifiedAction, field: MandatePredicate["field"]): Co
     case "context.hardDelete": return action.action === "DELETE" ? action.context.hardDelete : undefined;
     case "context.reason": return action.action === "DELETE" ? action.context.reason : undefined;
     case "context.originalPaymentId": return action.action === "REFUND" ? action.context.originalPaymentId : undefined;
+    case "resource.app": return action.action === "APP_ACTION" ? action.resource.app : undefined;
+    case "resource.target": return action.action === "APP_ACTION" ? action.resource.target : undefined;
+    case "context.name": return action.action === "APP_ACTION" ? action.context.name : undefined;
+    case "context.param":
+    case "context.paramString":
+    case "context.paramBool": {
+      if (action.action !== "APP_ACTION") return undefined;
+      const value = action.context.params[predicate.name];
+      if (value === undefined) return undefined;
+      // The predicate kind fixes the expected param type; a mismatched type
+      // fails closed (the predicate does not match) rather than comparing
+      // across types.
+      if (field === "context.param") return typeof value === "bigint" ? value : undefined;
+      if (field === "context.paramString") return typeof value === "string" ? value : undefined;
+      return typeof value === "boolean" ? value : undefined;
+    }
   }
 }
 
@@ -76,7 +93,7 @@ function compare(left: number | bigint, operator: "EQ" | "LT" | "LTE" | "GT" | "
 }
 
 export function predicateMatches(action: UnifiedAction, predicate: MandatePredicate): boolean {
-  const actual = fieldValue(action, predicate.field);
+  const actual = fieldValue(action, predicate);
   if (actual === undefined) return false;
   if (predicate.operator === "IN") {
     return typeof actual === "string" && predicate.values.includes(actual);

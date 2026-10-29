@@ -69,3 +69,57 @@ test("mandate normalizer sorts rules without mutating input", () => {
   assert.notDeepEqual(normalized.rules, reversed.rules);
   assert.ok(AgentMandateSchema.safeParse(normalized).success);
 });
+
+test("APP_ACTION parses typed params and canonicalizes regardless of param order", () => {
+  const parsed = parseUnifiedAction(fixture("unified-action-app"));
+  assert.equal(parsed.action, "APP_ACTION");
+  assert.equal(parsed.resource.app, "zunno");
+  assert.equal(parsed.context.name, "play_card");
+  assert.equal(parsed.context.params.cardValue, 11n);
+  assert.equal(parsed.context.params.chosenColor, 4n);
+  const reordered = parseUnifiedAction({
+    ...fixture("unified-action-app"),
+    context: {
+      name: "play_card",
+      params: { chosenColor: "4", cardValue: "11", handIndex: "0" },
+    },
+  });
+  assert.equal(serializeUnifiedAction(parsed), serializeUnifiedAction(reordered));
+  assert.equal(unifiedActionSigningPayload(parsed).includes("signature"), false);
+});
+
+test("APP_ACTION rejects unknown keys, oversized params, and non-atomic param values", () => {
+  const raw = fixture("unified-action-app");
+  assert.equal(UnifiedActionSchema.safeParse({ ...raw, extra: true }).success, false);
+  assert.equal(
+    UnifiedActionSchema.safeParse({
+      ...raw,
+      context: { name: "play_card", params: { ...raw.context.params, value: 1.5 } },
+    }).success,
+    false,
+  );
+  const seventeen = Object.fromEntries(
+    Array.from({ length: 17 }, (_, index) => [`p${index}`, index]),
+  );
+  assert.equal(
+    UnifiedActionSchema.safeParse({ ...raw, context: { name: "play_card", params: seventeen } }).success,
+    false,
+  );
+});
+
+test("mandate rules can address app params by name and are action-scoped", () => {
+  const raw = fixture("agent-mandate-app");
+  const mandate = parseAgentMandate(raw);
+  assert.equal(mandate.rules[0].predicates[1].value, 104n);
+  // Param fields are not valid for non-APP_ACTION rules.
+  const wrongField = structuredClone(raw);
+  wrongField.rules[1].predicates = [{ field: "context.name", operator: "EQ", value: "play_card" }];
+  wrongField.rules[1].action = "PAYMENT";
+  assert.equal(AgentMandateSchema.safeParse(wrongField).success, false);
+  // String params and boolean params parse.
+  const withStringParam = structuredClone(raw);
+  withStringParam.rules[1].predicates = [
+    { field: "context.paramString", operator: "EQ", name: "tableId", value: "table-42" },
+  ];
+  assert.ok(AgentMandateSchema.safeParse(withStringParam).success);
+});

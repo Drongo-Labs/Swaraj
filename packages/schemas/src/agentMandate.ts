@@ -28,6 +28,9 @@ export const MandateStringField = z.enum([
   "context.environment",
   "context.originalPaymentId",
   "context.reason",
+  "resource.app",
+  "resource.target",
+  "context.name",
 ]);
 
 export const MandateAtomicField = z.literal("context.amount");
@@ -63,12 +66,36 @@ const BooleanPredicate = z.strictObject({
   value: z.boolean(),
 });
 
+/** APP_ACTION param predicates: address one named param by its type. */
+const ParamName = z.string().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
+const ParamPredicate = z.strictObject({
+  field: z.literal("context.param"),
+  name: ParamName,
+  operator: z.enum(["EQ", "LT", "LTE", "GT", "GTE"]),
+  value: AtomicAmount,
+});
+const ParamStringPredicate = z.strictObject({
+  field: z.literal("context.paramString"),
+  name: ParamName,
+  operator: z.literal("EQ"),
+  value: PredicateString,
+});
+const ParamBoolPredicate = z.strictObject({
+  field: z.literal("context.paramBool"),
+  name: ParamName,
+  operator: z.literal("EQ"),
+  value: z.boolean(),
+});
+
 export const MandatePredicateSchema = z.union([
   StringEqualsPredicate,
   StringInPredicate,
   AtomicPredicate,
   IntegerPredicate,
   BooleanPredicate,
+  ParamPredicate,
+  ParamStringPredicate,
+  ParamBoolPredicate,
 ]);
 
 const commonFields = new Set(["agent", "timestamp", "expiry"]);
@@ -78,6 +105,7 @@ const fieldsByAction: Record<z.infer<typeof UnifiedActionType>, ReadonlySet<stri
   DEPLOY: new Set(["resource.repo", "context.branch", "context.commitHash", "context.environment"]),
   DELETE: new Set(["resource.service", "resource.objectType", "resource.objectId", "context.hardDelete", "context.reason"]),
   REFUND: new Set(["resource.service", "context.amount", "context.currency", "context.recipient", "context.originalPaymentId"]),
+  APP_ACTION: new Set(["resource.app", "resource.target", "context.name", "context.param", "context.paramString", "context.paramBool"]),
 };
 
 export const MandateRuleSchema = z.strictObject({
