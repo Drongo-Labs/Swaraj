@@ -25,3 +25,6 @@ artifacts/
 
 # Local SP1 proof outputs
 **/stmt_*.bin
+
+# Local planning docs — kept out of the repo
+docs/
