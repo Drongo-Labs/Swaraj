@@ -1,0 +1,48 @@
+{
+  "mandateId": "zunno-mandate",
+  "version": 2,
+  "rules": [
+    {
+      "ruleId": "permit-stake-eth-in-cap",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        { "field": "context.currency", "operator": "EQ", "value": "ETH" },
+        { "field": "context.recipient", "operator": "EQ", "value": "0x82b2cce9a52c7e56838a5c46833067f9eb006911" },
+        { "field": "context.amount", "operator": "LTE", "value": "10000000000000000" }
+      ]
+    },
+    {
+      "ruleId": "forbid-stake-over-cap",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        { "field": "context.amount", "operator": "GT", "value": "10000000000000000" }
+      ]
+    },
+    {
+      "ruleId": "permit-play-card",
+      "effect": "PERMIT",
+      "action": "PLAY_CARD",
+      "predicates": [
+        { "field": "agent", "operator": "EQ", "value": "zunno-agent" }
+      ]
+    },
+    {
+      "ruleId": "forbid-wild-draw-four",
+      "effect": "FORBID",
+      "action": "PLAY_CARD",
+      "predicates": [
+        { "field": "context.cardValue", "operator": "GT", "value": 104 }
+      ]
+    },
+    {
+      "ruleId": "permit-draw-card",
+      "effect": "PERMIT",
+      "action": "DRAW_CARD",
+      "predicates": [
+        { "field": "agent", "operator": "EQ", "value": "zunno-agent" }
+      ]
+    }
+  ]
+}

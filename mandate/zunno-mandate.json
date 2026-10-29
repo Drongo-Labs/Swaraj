@@ -1,0 +1,24 @@
+{
+  "mandateId": "zunno-mandate",
+  "version": 1,
+  "rules": [
+    {
+      "ruleId": "permit-stake-eth-in-cap",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        { "field": "context.currency", "operator": "EQ", "value": "ETH" },
+        { "field": "context.recipient", "operator": "EQ", "value": "0x82b2cce9a52c7e56838a5c46833067f9eb006911" },
+        { "field": "context.amount", "operator": "LTE", "value": "10000000000000000" }
+      ]
+    },
+    {
+      "ruleId": "forbid-stake-over-cap",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        { "field": "context.amount", "operator": "GT", "value": "10000000000000000" }
+      ]
+    }
+  ]
+}

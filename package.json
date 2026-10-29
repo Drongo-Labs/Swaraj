@@ -1,0 +1,19 @@
+{
+  "name": "swaraj-zunno",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Swaraj-governed AI agent for Zunno (Inco/Base): every agent move is checked against an Agent Mandate before it executes.",
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
