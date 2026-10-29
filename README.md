@@ -141,8 +141,11 @@ engine, block written to the visible log.
   committed vectors and the engine.
 
 Honest scope: the Lean files model the engine and bridge; the vectors
-contract-test TS↔Lean agreement on concrete cases, but a machine-checked
-refinement proof (Lean ⇔ the TS implementation) remains future work.
+kernel-check TS↔Lean agreement on concrete cases, and swaraj-new's
+bounded-exhaustive harness (`packages/rules/test/exhaustive.test.mjs`,
+24,990 cases) checks the TS mandate combinatorics against the Lean-proven
+characterization across the entire bounded input space. A machine-checked
+Lean ⇔ TS correspondence remains future work.
 
 ## What a move looks like on the wire
 

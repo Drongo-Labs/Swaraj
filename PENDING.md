@@ -18,10 +18,10 @@ The NEAR hackathon plan lives in swaraj-new's local `docs/`
       (the public Base Sepolia RPC's actual cap), bounded lookback
       (`BOT_RESUME_LOOKBACK_BLOCKS`, default 100k ≈ 2 days), per-chunk error
       tolerance. Verified live: restart completed with zero range errors.
-- [ ] **Bounded-exhaustive mandate harness** (swaraj-new `packages/rules`) —
-      the mandate decision space is finite and small (≤512 rules × ≤32
-      predicates × bounded values); exhaustive property tests give
-      "checked over the full bounded input space".
+- [x] ~~Bounded-exhaustive mandate harness~~ — done (swaraj-new
+      `packages/rules/test/exhaustive.test.mjs`, 4269be5): 24,990 cases over
+      the full bounded space, TS combinatorics asserted against the
+      Lean-proven characterization plus independent property checks.
 - [ ] **Live-mode agent on-chain** — code path done; needs a funded Base
       Sepolia bot wallet, then `ZUNNO_E2E_LIVE=1 pnpm e2e` broadcasts real
       joinGame/playCard/drawCard txs.
@@ -29,9 +29,11 @@ The NEAR hackathon plan lives in swaraj-new's local `docs/`
       the predicate engine and Z3, fail closed on disagreement.
 - [ ] **zk proofs of move legality** — SP1 statement kind for game legality,
       batch-proven per match (core pipeline work in swaraj-new).
-- [ ] **Lean ⇔ TS refinement proof** — today agreement is kernel-checked via
-      shared vectors only; a machine-checked refinement remains future work
-      (documented as the honest gap in both READMEs).
+- [ ] **Lean ⇔ TS refinement proof** — evidence now: kernel-checked shared
+      vectors (concrete cases) + the bounded-exhaustive harness (combinatorics
+      across the full bounded space) + Lean theorems (characterization for all
+      inputs, abstract matching). A machine-checked Lean ⇔ TS correspondence
+      remains the honest gap.
 
 ## Housekeeping
 
