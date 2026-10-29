@@ -35,30 +35,29 @@ test("common fields: fresh unique ids, 60s expiry, signature passthrough", () =>
   assert.equal(a.common.agent, "zunno-agent");
 });
 
-test("PLAY_CARD forces a chosen color on wilds, keeps 4 on plain cards", () => {
+test("PLAY_CARD builds a generic APP_ACTION with atomic decimal params", () => {
   const wild = buildIntent(
     { kind: "PLAY_CARD", handIndex: 0, cardValue: 101, chosenColor: 2 },
     config, policyHash, now,
   );
-  assert.equal(wild.action, "PLAY_CARD");
-  if (wild.action !== "PLAY_CARD") throw new Error("unreachable");
-  assert.equal(wild.context.chosenColor, 2);
-
-  const wildDefault = buildIntent({ kind: "PLAY_CARD", handIndex: 0, cardValue: 108 }, config, policyHash, now);
-  if (wildDefault.action !== "PLAY_CARD") throw new Error("unreachable");
-  assert.equal(wildDefault.context.chosenColor, 0); // default color choice
+  if (wild.action !== "APP_ACTION") throw new Error("unreachable");
+  assert.deepEqual(wild.resource, { app: "zunno", target: config.gameAddress });
+  assert.equal(wild.context.name, "play_card");
+  assert.deepEqual(wild.context.params, { handIndex: "0", cardValue: "101", chosenColor: "2" });
 
   const plain = buildIntent({ kind: "PLAY_CARD", handIndex: 0, cardValue: 11 }, config, policyHash, now);
-  if (plain.action !== "PLAY_CARD") throw new Error("unreachable");
-  assert.equal(plain.context.chosenColor, 4);
+  if (plain.action !== "APP_ACTION") throw new Error("unreachable");
+  assert.deepEqual(plain.context.params, { handIndex: "0", cardValue: "11", chosenColor: "4" });
 });
 
 test("DRAW_CARD and wire flattening", () => {
   const draw = buildIntent({ kind: "DRAW_CARD" } satisfies ZunnoProposal, config, policyHash, now);
-  assert.equal(draw.action, "DRAW_CARD");
+  if (draw.action !== "APP_ACTION") throw new Error("unreachable");
+  assert.equal(draw.context.name, "draw_card");
+  assert.deepEqual(draw.context.params, {});
   const wire = toWire(draw);
-  assert.equal(wire.action, "DRAW_CARD");
+  assert.equal(wire.action, "APP_ACTION");
   assert.equal(wire.intentId, draw.common.intentId);
   assert.equal(wire.policyHash, policyHash);
-  assert.deepEqual(wire.resource, { game: config.gameAddress });
+  assert.deepEqual(wire.resource, { app: "zunno", target: config.gameAddress });
 });

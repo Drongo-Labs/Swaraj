@@ -1,16 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { ZunnoAgentConfig } from "../config.js";
 import { isWild } from "../zunno/cards.js";
+import { playCardParams } from "./appAction.js";
 
 /**
  * Typed-intent builders. Every builder emits the exact shape Swaraj's
- * `POST /v1/applications/:id/unified-actions` consumes: common fields
- * (intentId, agent, policyHash, timestamp, expiry, idempotencyKey, signature)
- * plus the typed resource/context pair for the action.
+ * `POST /v1/applications/:id/unified-actions` consumes.
  *
- * - STAKE maps onto the existing PAYMENT action (amount/currency/recipient)
- *   and works against today's gateway.
- * - PLAY_CARD / DRAW_CARD are the proposed game extension (see extension.ts).
+ * - STAKE maps onto the typed PAYMENT action (amount/currency/recipient).
+ * - PLAY_CARD / DRAW_CARD use the generic APP_ACTION: resource {app:"zunno",
+ *   target: game}, context {name, params} — atomic decimal params.
  */
 
 export type ZunnoProposal =
@@ -26,12 +25,11 @@ export type UnifiedIntent =
       common: IntentCommon;
     }
   | {
-      action: "PLAY_CARD";
-      resource: { game: string };
-      context: { handIndex: number; cardValue: number; chosenColor: number };
+      action: "APP_ACTION";
+      resource: { app: string; target: string };
+      context: { name: "play_card" | "draw_card"; params: Record<string, string> };
       common: IntentCommon;
-    }
-  | { action: "DRAW_CARD"; resource: { game: string }; context: Record<string, never>; common: IntentCommon };
+    };
 
 export interface IntentCommon {
   intentId: string;
@@ -77,27 +75,26 @@ export function buildIntent(
         },
         common,
       };
-    case "PLAY_CARD": {
-      // Wilds must declare a chosen color (0–3); non-wilds keep the active color marker (4).
-      const chosenColor = isWild(proposal.cardValue)
-        ? (proposal.chosenColor ?? 0)
-        : (proposal.chosenColor ?? 4);
+    case "PLAY_CARD":
       return {
-        action: "PLAY_CARD",
-        resource: { game: config.gameAddress },
+        action: "APP_ACTION",
+        resource: { app: "zunno", target: config.gameAddress },
         context: {
-          handIndex: proposal.handIndex,
-          cardValue: proposal.cardValue,
-          chosenColor,
+          name: "play_card",
+          params: playCardParams({
+            handIndex: proposal.handIndex,
+            cardValue: proposal.cardValue,
+            // Wilds must declare a chosen color (0–3); non-wilds keep 4.
+            chosenColor: isWild(proposal.cardValue) ? (proposal.chosenColor ?? 0) : (proposal.chosenColor ?? 4),
+          }),
         },
         common,
       };
-    }
     case "DRAW_CARD":
       return {
-        action: "DRAW_CARD",
-        resource: { game: config.gameAddress },
-        context: {},
+        action: "APP_ACTION",
+        resource: { app: "zunno", target: config.gameAddress },
+        context: { name: "draw_card", params: {} },
         common,
       };
   }
