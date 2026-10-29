@@ -15,7 +15,8 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@swaraj/schemas": "workspace:*"
+    "@swaraj/schemas": "workspace:*",
+    "@swaraj/smt": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

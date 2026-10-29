@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyReply } from "fastify";
 import {
   ActionRequestSchema,
@@ -17,12 +17,15 @@ import {
   normalizeMandatePolicy,
   type UnifiedAction,
 } from "@swaraj/schemas";
-import { evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
+import { crossCheckMandateDecision, evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
 import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
   createDatabase,
   createProofJobQueue,
+  enqueueProofJob,
+  insertDecision,
+  insertReceipt,
   ensureApplication,
   getActivePolicy,
   upsertActivePolicy,
@@ -679,7 +682,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         return reply.code(404).send({ error: "mandate_not_found", message: "no active mandate or policy" });
       }
       const mandateParsed = AgentMandateSchema.safeParse(mandateDefinition);
-      const evaluated: MandateDecision = mandateParsed.success
+      let evaluated: MandateDecision = mandateParsed.success
         ? evaluateParsedMandate(mandateParsed.data, action)
         : {
             decision: "BLOCK",
@@ -688,6 +691,32 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             matchedPermitRuleIds: [],
             matchedForbidRuleIds: [],
           };
+
+      // Dual-engine cross-check (opt-in): Z3 must independently confirm the
+      // predicate engine's decision; disagreement or solver failure is a
+      // fail-closed BLOCK (ENGINE_DISAGREEMENT).
+      if (process.env.SWARAJ_Z3_CROSSCHECK === "1" && mandateParsed.success) {
+        try {
+          const { agree } = await crossCheckMandateDecision(mandateParsed.data, action);
+          if (!agree) {
+            evaluated = {
+              decision: "BLOCK",
+              reason: "ENGINE_DISAGREEMENT",
+              matchedRuleIds: [],
+              matchedPermitRuleIds: [],
+              matchedForbidRuleIds: [],
+            };
+          }
+        } catch {
+          evaluated = {
+            decision: "BLOCK",
+            reason: "ENGINE_DISAGREEMENT",
+            matchedRuleIds: [],
+            matchedPermitRuleIds: [],
+            matchedForbidRuleIds: [],
+          };
+        }
+      }
 
       // SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,
       // capability, execution, receipts) with the original unified action.
@@ -754,7 +783,62 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         });
       }
 
-      // Permitted non-trade action: no execution adapter exists for it yet.
+      // Permitted non-trade action: no execution adapter exists for it yet —
+      // but the decision is durable: a PENDING receipt is recorded and a
+      // mandate proof job enqueued, so the proof worker can re-derive the
+      // decision and promote the receipt to PROVED (pool mode only).
+      let proofReceipt: { id: string; state: string } | undefined;
+      if (pool) {
+        try {
+          const receiptId = randomUUID();
+          const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
+          // The receipts table references the applications registry — make
+          // sure the application row exists (idempotent).
+          await handle.raw.query(
+            "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
+            [applicationId],
+          );
+          // Log the decision (authz_decisions) — the receipt's decision_id
+          // references it.
+          const logged = await insertDecision(handle, {
+            appId: applicationId,
+            intentDigest: intentHash,
+            policyId: MANDATE_POLICY_ID,
+            policyRevision: mandateParsed.success ? mandateParsed.data.version : 1,
+            outcome: "ALLOW",
+            violatedRules: evaluated.matchedPermitRuleIds,
+            smtScript: "",
+          });
+          await insertReceipt(handle, {
+            receiptId,
+            appId: applicationId,
+            intentDigest: intentHash,
+            decisionId: Number(logged.decisionId),
+            claim: {
+              kind: "MANDATE_DECISION_V1",
+              action: (request.body as { action?: unknown })?.action,
+              decision: "ALLOW",
+              matchedRuleIds: evaluated.matchedPermitRuleIds,
+              intentHash,
+              mandateHash: policyHash,
+            },
+          });
+          await enqueueProofJob(handle, {
+            receiptId,
+            payload: {
+              kind: "MANDATE",
+              mandate: mandateDefinition,
+              action: (request.body as { action?: unknown })?.action,
+              expected: { decision: "ALLOW", matchedRuleIds: evaluated.matchedPermitRuleIds },
+              intentHash,
+              mandateHash: policyHash,
+            },
+          });
+          proofReceipt = { id: receiptId, state: "PENDING" };
+        } catch (error) {
+          request.log.error(error);
+        }
+      }
       const activity: ActivityItem = {
         id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
         at,
@@ -774,6 +858,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         intentHash,
         policyHash,
         activityId: activity.id,
+        ...(proofReceipt ? { receipt: proofReceipt } : {}),
       });
     },
   );

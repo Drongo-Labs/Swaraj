@@ -14,7 +14,10 @@ export type MandateDecisionReason =
   | "MANDATE_INACTIVE"
   | "SUBJECT_MISMATCH"
   | "INVALID_MANDATE"
-  | "INVALID_ACTION";
+  | "INVALID_ACTION"
+  /** Dual-engine cross-check failed: the predicate engine and Z3 disagree,
+   * or the solver could not settle. Fail closed. */
+  | "ENGINE_DISAGREEMENT";
 
 export interface MandateDecision {
   decision: "ALLOW" | "BLOCK";
@@ -160,3 +163,4 @@ export function evaluateMandate(mandateInput: unknown, actionInput: unknown): Ma
   if (!action.success) return blocked("INVALID_ACTION");
   return evaluateParsedMandate(mandate.data, action.data);
 }
+export * from "./crosscheck.js";

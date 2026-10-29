@@ -19,6 +19,8 @@ interface Z3Bool {}
 
 interface Z3Solver {
   add(formula: Z3Bool): void;
+  push(): void;
+  pop(): void;
   check(): Promise<string>;
   setParameters?(params: Record<string, unknown>): void;
 }
@@ -133,6 +135,15 @@ export class SatSession {
 
   assert(term: BoolTerm): void {
     this.solver.add(this.buildBool(term));
+  }
+
+  /** Incremental solving: assert a scoped block, check, then pop it. */
+  push(): void {
+    this.solver.push();
+  }
+
+  pop(): void {
+    this.solver.pop();
   }
 
   assertBinding(binding: FieldBinding): void {

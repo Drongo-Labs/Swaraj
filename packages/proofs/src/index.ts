@@ -38,3 +38,4 @@ export {
   type Sp1ProofOutcome,
   type Sp1ProverConfig,
 } from "./sp1-prover.js";
+export * from "./mandate-statement.js";

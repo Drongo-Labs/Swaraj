@@ -54,6 +54,8 @@
   },
   "dependencies": {
     "@swaraj/database": "workspace:*",
+    "@swaraj/rules": "workspace:*",
+    "@swaraj/schemas": "workspace:*",
     "@swaraj/smt": "workspace:*"
   },
   "devDependencies": {

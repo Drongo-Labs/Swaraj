@@ -7,11 +7,32 @@ import {
   type PoolHandle,
 } from "@swaraj/database";
 import type { PolicyDoc } from "@swaraj/smt";
+import { parseAgentMandate, parseUnifiedAction } from "@swaraj/schemas";
+import { evaluateParsedMandate } from "@swaraj/rules";
+import { buildMandateStatement, canonicalMandateStatementText, mandateStatementId } from "./mandate-statement.js";
 import { openArtifactStore, storeProofArtifact } from "./artifacts.js";
 import { buildStatement, canonicalStatementText, statementId } from "./statement.js";
 import { proveStatementViaSp1, type Sp1ProverConfig } from "./sp1-prover.js";
 import { reevaluateGround, fromWirePolicy, type GroundBinding, type GroundDecision } from "./verifier.js";
 import { selectProofSink, type ProofSink } from "./zkverify.js";
+
+/**
+/** Mandate-decision job: the worker re-derives the decision with the rules
+ * engine (@swaraj/rules, deterministic) and refuses to bundle on any
+ * disagreement with the recorded decision. SP1 zk proving of this statement
+ * kind is future work (the guest is gate-scoped); the bundle + sink +
+ * PENDING→PROVED lifecycle is the reused pipeline.
+ */
+export interface MandateJobPayload {
+  kind: "MANDATE";
+  /** Wire mandate document as registered (JSON-safe). */
+  mandate: unknown;
+  /** Wire unified action as submitted (JSON-safe). */
+  action: unknown;
+  expected: { decision: "ALLOW" | "BLOCK"; matchedRuleIds: string[] };
+  intentHash: string;
+  mandateHash: string;
+}
 
 /**
  * Proof job payload. `expected` is the decision the gateway recorded when
@@ -42,6 +63,63 @@ export interface WorkerOptions {
   sp1?: Sp1ProverConfig;
 }
 
+async function runMandateJob(
+  pool: PoolHandle,
+  options: WorkerOptions,
+  jobId: number,
+  receiptId: string,
+  payload: MandateJobPayload,
+  sink: ProofSink,
+): Promise<WorkerOutcome | undefined> {
+  try {
+    // Parity gate: re-derive the decision from the committed mandate + action.
+    const mandate = parseAgentMandate(payload.mandate);
+    const action = parseUnifiedAction(payload.action);
+    const decision = evaluateParsedMandate(mandate, action);
+    const expectedIds = payload.expected.matchedRuleIds.slice().sort().join(",");
+    const actualIds = [...decision.matchedPermitRuleIds, ...decision.matchedForbidRuleIds].sort().join(",");
+    const sameOutcome = decision.decision === payload.expected.decision && actualIds === expectedIds;
+    if (!sameOutcome) {
+      throw new Error(
+        `mandate parity failure: recorded ${payload.expected.decision} [${expectedIds}], recomputed ${decision.decision} [${actualIds}]`,
+      );
+    }
+
+    const statement = buildMandateStatement({
+      intentHash: payload.intentHash,
+      mandateHash: payload.mandateHash,
+      decision: decision.decision,
+      matchedRuleIds: [...decision.matchedPermitRuleIds, ...decision.matchedForbidRuleIds],
+    });
+    const id = mandateStatementId(statement);
+    const bundle = {
+      statementId: id,
+      canonicalText: canonicalMandateStatementText(statement),
+      createdAt: new Date().toISOString(),
+    };
+
+    const artifactPath = await openArtifactStore(options.artifactRoot).writeBundle(receiptId, bundle);
+    await insertProofArtifact(pool, { jobId, receiptId, kind: "VERIFICATION_BUNDLE", content: bundle });
+
+    const attestation = await sink.submit(bundle);
+    await insertProofArtifact(pool, {
+      jobId,
+      receiptId,
+      kind: "ZKVERIFY_ATTESTATION",
+      content: { ref: attestation.ref, sink: attestation.sink, statementId: id },
+    });
+    await advanceReceipt(pool, receiptId, "PROVED", {
+      proofRef: attestation.ref,
+      note: `mandate statement ${id} via ${attestation.sink} sink`,
+    });
+    await finishProofJob(pool, jobId);
+    return { jobId, receiptId, statementId: id, proofRef: attestation.ref, artifactPath };
+  } catch (error) {
+    await failProofJob(pool, jobId, error instanceof Error ? error.message : String(error));
+    return undefined;
+  }
+}
+
 /**
  * Lease and fully process one proof job. On success the receipt advances
  * PENDING -> PROVED with the sink's reference; on any failure the job is
@@ -54,27 +132,32 @@ export async function runOneProofJob(
   const job = await leaseNextProofJob(pool);
   if (!job) return undefined;
 
-  const payload = job.payload as GateJobPayload;
+  const payload = job.payload as GateJobPayload | MandateJobPayload;
   const receiptId = job.receiptId;
   const sink = options.sink ?? selectProofSink();
 
+  if ((payload as MandateJobPayload).kind === "MANDATE") {
+    return runMandateJob(pool, options, job.jobId, receiptId, payload as MandateJobPayload, sink);
+  }
+  const gatePayload = payload as GateJobPayload;
+
   try {
-    const policy = fromWirePolicy(payload.policy);
-    const decision = reevaluateGround(policy, payload.action);
-    const sameOutcome = decision.outcome === payload.expected.outcome
-      && decision.violatedRuleIds.slice().sort().join(",") === payload.expected.violatedRuleIds.slice().sort().join(",");
+    const policy = fromWirePolicy(gatePayload.policy);
+    const decision = reevaluateGround(policy, gatePayload.action);
+    const sameOutcome = decision.outcome === gatePayload.expected.outcome
+      && decision.violatedRuleIds.slice().sort().join(",") === gatePayload.expected.violatedRuleIds.slice().sort().join(",");
     if (!sameOutcome) {
       throw new Error(
-        `gate parity failure: recorded ${payload.expected.outcome} [${payload.expected.violatedRuleIds}], recomputed ${decision.outcome} [${decision.violatedRuleIds}]`,
+        `gate parity failure: recorded ${gatePayload.expected.outcome} [${gatePayload.expected.violatedRuleIds}], recomputed ${decision.outcome} [${decision.violatedRuleIds}]`,
       );
     }
 
-    const statement = buildStatement(policy, payload.action, decision);
+    const statement = buildStatement(policy, gatePayload.action, decision);
     const id = statementId(statement);
     const bundle = {
       statementId: id,
       canonicalText: canonicalStatementText(statement),
-      evidenceDigest: payload.evidence?.digest,
+      evidenceDigest: gatePayload.evidence?.digest,
       createdAt: new Date().toISOString(),
     };
 
@@ -88,8 +171,8 @@ export async function runOneProofJob(
 
     if (options.sp1) {
       const proof = await proveStatementViaSp1(options.sp1, {
-        policy: payload.policy,
-        action: payload.action,
+        policy: gatePayload.policy,
+        action: gatePayload.action,
         policyDocDigest: statement.policyDocDigest,
         expectedStatementId: id,
       });
