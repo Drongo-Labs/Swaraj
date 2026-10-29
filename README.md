@@ -69,6 +69,55 @@ forbid-wins, fail-closed. No other checkout, no database, no chain needed.
 - Local mode is not TEE-private and not on-chain: hands live in process memory.
   The on-chain (Inco/Base) and NEAR variants are the architecture docs' job.
 
+## Flow diagram
+
+```mermaid
+flowchart TD
+  subgraph UI["Browser — ui/index.html (:3002)"]
+    H["You — human player"]
+    L["Game log<br/>blocked moves in red"]
+  end
+
+  subgraph API["src/server/http.ts — JSON API"]
+    A["POST /api/play · /api/draw · /api/new<br/>GET /api/state (poll)"]
+  end
+
+  subgraph GAME["src/game — the match"]
+    S["GameSession — turn loop"]
+    E["UnoEngine — authoritative state:<br/>both hands, draw pile, discard, winner"]
+  end
+
+  subgraph AGENT["src/agent + src/actions — the governed agent"]
+    P["Move proposal<br/>first legal card in hand, else draw"]
+    I["Typed intent — APP_ACTION<br/>resource {app: zunno, target}<br/>context {name, params}"]
+    B["ZunnoAgent bridge<br/>ALLOW → execute · BLOCK → next compliant move<br/>→ else draw (gated) → exhausted → forfeit"]
+  end
+
+  subgraph SW["src/vendor — Swaraj mandate engine (in-process)"]
+    M["zunno-mandate.json<br/>permit play_card/draw_card on app zunno<br/>forbid Wild+4 · stake cap in ETH"]
+    G["evaluateParsedMandate<br/>default deny · forbid-wins · fail-closed"]
+  end
+
+  H -->|"play / draw"| A --> S
+  S -->|"human: legality check only"| E
+  S -->|"agent turn"| P --> I --> B
+  M -.->|"fixture"| G
+  B -->|"evaluate intent"| G
+  G -->|"ALLOW"| B
+  G -->|"BLOCK + violated rule ids"| B
+  B -->|"execute move"| E
+  E -->|"public view — own hand only"| A --> H
+  E -->|"log (blocks flagged)"| L
+```
+
+**Human path (3 steps):** click → `POST /api/play` → engine legality → applied.
+The human is never mandate-checked — formal constraints govern the agent.
+
+**Agent path (6 steps):** proposal → typed intent → mandate evaluation
+(in-process, vendored Swaraj) → ALLOW executes / BLOCK names the rule →
+fallback to the next compliant move, else draw (still gated) → applied to the
+engine, block written to the visible log.
+
 ## Remote gateway (optional)
 
 The same bridge runs against a live Swaraj API (`SWARAJ_API_URL` +
