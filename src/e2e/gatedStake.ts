@@ -80,17 +80,20 @@ async function main(): Promise<number> {
     if (!condition) failures.push(label);
   };
 
-  console.log("\n1. stake within cap (0.005 ETH)");
+  // Live-mode amounts are env-driven so a real broadcast fits the wallet.
+  const stakeWei = process.env.ZUNNO_LIVE_STAKE_WEI ?? (5n * ETH / 1000n).toString();
+  const overStakeWei = process.env.ZUNNO_LIVE_OVER_STAKE_WEI ?? (5n * ETH / 100n).toString();
+  console.log(`\n1. stake within cap (${Number(stakeWei) / 1e18} ETH)`);
   const inCap = await agent.takeTurn({
     hand: [], topValue: 0, activeColor: 0,
-    proposal: { kind: "STAKE", amountWei: (5n * ETH / 1000n).toString() },
+    proposal: { kind: "STAKE", amountWei: stakeWei },
   });
   expect("in-cap stake executes", inCap.status === "EXECUTED", describe(inCap));
 
-  console.log("\n2. stake over cap (0.05 ETH) — the demo beat");
+  console.log(`\n2. stake over cap (${Number(overStakeWei) / 1e18} ETH) — the demo beat`);
   const overCap = await agent.takeTurn({
     hand: [], topValue: 0, activeColor: 0,
-    proposal: { kind: "STAKE", amountWei: (5n * ETH / 100n).toString() },
+    proposal: { kind: "STAKE", amountWei: overStakeWei },
   });
   expect("over-cap stake abstains", overCap.status === "ABSTAINED", describe(overCap));
   if (overCap.status === "ABSTAINED") {
