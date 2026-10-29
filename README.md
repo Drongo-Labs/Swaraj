@@ -140,12 +140,15 @@ engine, block written to the visible log.
   effects, winner). `test/vectors.test.ts` guards against drift between the
   committed vectors and the engine.
 
-Honest scope: the Lean files model the engine and bridge; the vectors
-kernel-check TS↔Lean agreement on concrete cases, and swaraj-new's
-bounded-exhaustive harness (`packages/rules/test/exhaustive.test.mjs`,
-24,990 cases) checks the TS mandate combinatorics against the Lean-proven
-characterization across the entire bounded input space. A machine-checked
-Lean ⇔ TS correspondence remains future work.
+Honest scope: the refinement between the Lean models and the running
+TypeScript is machine-checked over the entire bounded space —
+`lean/Zunno/EngineRefinement.lean` kernel-checks every mover option in
+2,048 bounded states (5,888 outcomes) against the real TS engine, and
+swaraj-new's `Gate/Concrete.lean` + `Gate/Refinement.lean` do the same for
+the mandate decision (7,973 cases, with the concrete characterization
+theorem inherited from the abstract proofs). The theorems hold for all
+inputs; the TS correspondence is bounded-exhaustive. Outside those bounds
+the correspondence is unproven — stated, not hidden.
 
 ## What a move looks like on the wire
 

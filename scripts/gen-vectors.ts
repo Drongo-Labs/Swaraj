@@ -162,13 +162,80 @@ const draws: DrawCase[] = [
     true),
 ];
 
+/**
+ * Exhaustive refinement block: every (mover, hand, top, activeColor) state
+ * in the bounded domain — every card in the hand played (plus a draw),
+ * each outcome computed by the REAL engine. The Lean suite kernel-checks
+ * the model against every one of these.
+ */
+const CARD_POOL = [2, 11, 21, 24, 26, 36, 101, 105]; // numbers, skip, +2, two colors, wild, wild+4
+const COLOR_POOL = [0, 1];
+const DRAW_PILE_X = [50, 51, 52, 53, 54, 55, 56, 57];
+
+const hands: number[][] = [];
+for (const c of CARD_POOL) hands.push([c]);
+for (const a of CARD_POOL) for (const b of CARD_POOL) if (a !== b) hands.push([a, b]);
+
+interface ExhaustiveCase {
+  human: boolean;
+  hand: number[];
+  top: number;
+  activeColor: number;
+  /** one entry per card in hand, then the draw: [applied, winnerCode, humanTurn, top] or null */
+  expected: Array<[boolean, 0 | 1 | 2, boolean, number] | null>;
+}
+
+const exhaustive: ExhaustiveCase[] = [];
+for (const moverHuman of [true, false]) {
+  for (const hand of hands) {
+    for (const top of CARD_POOL) {
+      for (const activeColor of COLOR_POOL) {
+        const expected: ExhaustiveCase["expected"] = [];
+        for (const [handIndex, card] of hand.entries()) {
+          const state: Partial<EngineState> = {
+            hands: moverHuman ? { human: [...hand], agent: [3] } : { human: [3], agent: [...hand] },
+            drawPile: DRAW_PILE_X,
+            discard: [top],
+            activeColor,
+            turn: moverHuman ? "human" : "agent",
+            winner: null,
+            log: [],
+          };
+          const engine = rig(structuredClone(state));
+          const error = engine.play(moverHuman ? "human" : "agent", handIndex, 4);
+          expected.push(error === null
+            ? [true, winnerCode(engine.state), engine.state.turn === "human", engine.topValue]
+            : null);
+        }
+        // the draw
+        const state: Partial<EngineState> = {
+          hands: moverHuman ? { human: [...hand], agent: [3] } : { human: [3], agent: [...hand] },
+          drawPile: DRAW_PILE_X,
+          discard: [top],
+          activeColor,
+          turn: moverHuman ? "human" : "agent",
+          winner: null,
+          log: [],
+        };
+        const engine = rig(structuredClone(state));
+        const ok = engine.draw(moverHuman ? "human" : "agent");
+        expected.push(ok
+          ? [true, winnerCode(engine.state), engine.state.turn === "human", engine.topValue]
+          : null);
+        exhaustive.push({ human: moverHuman, hand, top, activeColor, expected });
+      }
+    }
+  }
+}
+
 const file = {
   domain: "zunno/engine-vectors/v1",
   playable: playableCases.map((c) => ({ ...c, expected: isPlayable(c.card, c.top, c.activeColor) })),
   plays,
   draws,
+  exhaustive,
 };
 
 mkdirSync(join(here, "..", "vectors"), { recursive: true });
 writeFileSync(join(here, "..", "vectors", "engine-vectors.json"), JSON.stringify(file, null, 2) + "\n");
-console.log(`vectors/engine-vectors.json: ${file.playable.length} playable, ${file.plays.length} plays, ${file.draws.length} draws`);
+console.log(`vectors/engine-vectors.json: ${file.playable.length} playable, ${file.plays.length} plays, ${file.draws.length} draws, ${file.exhaustive.length} exhaustive states (${file.exhaustive.reduce((n, e) => n + e.expected.length, 0)} outcomes)`);
