@@ -19,6 +19,30 @@ export function startServer(session: GameSession, port: number): Promise<URL> {
           response.end(html);
           return;
         }
+        // Static assets (Zunno card sprites, backgrounds, sounds) — ui/assets/.
+        if (request.method === "GET" && request.url?.startsWith("/assets/")) {
+          const safe = request.url.replace(/\.{2,}/g, "").replace(/^\/assets\//, "");
+          const assetPath = join(here, "..", "..", "ui", "assets", safe);
+          if (!assetPath.startsWith(join(here, "..", "..", "ui", "assets"))) {
+            response.writeHead(403).end();
+            return;
+          }
+          try {
+            const data = readFileSync(assetPath);
+            const ext = assetPath.split(".").pop() ?? "";
+            const types: Record<string, string> = {
+              webp: "image/webp", png: "image/png", jpg: "image/jpeg",
+              mp3: "audio/mpeg", svg: "image/svg+xml",
+            };
+            response.writeHead(200, { "content-type": types[ext] ?? "application/octet-stream", "cache-control": "public, max-age=86400" });
+            response.end(data);
+            return;
+          } catch {
+            response.writeHead(404, { "content-type": "application/json" });
+            response.end(JSON.stringify({ error: "not_found" }));
+            return;
+          }
+        }
         if (request.method === "GET" && request.url === "/api/state") {
           response.writeHead(200, { "content-type": "application/json" });
           response.end(JSON.stringify(session.state()));
