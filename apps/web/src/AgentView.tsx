@@ -71,6 +71,47 @@ function ProofProgress({ proof }: { proof: ProofJobFields & { status?: string } 
   );
 }
 
+
+export function ProductStatusBadge({
+  status,
+  decision,
+}: {
+  status?: string | null | undefined;
+  decision?: "ALLOW" | "BLOCK" | undefined;
+}) {
+  let resolved: "allowed" | "blocked" | "proved" | "cant_prove" = "allowed";
+
+  if (status === "proved" || status === "PROVED") {
+    resolved = "proved";
+  } else if (
+    status === "cant_prove" ||
+    status === "NON_PROVABLE" ||
+    status === "INVALIDATED" ||
+    status === "DEV_UNVERIFIED"
+  ) {
+    resolved = "cant_prove";
+  } else if (status === "blocked" || decision === "BLOCK") {
+    resolved = "blocked";
+  } else {
+    resolved = "allowed";
+  }
+
+  const label =
+    resolved === "proved"
+      ? "proved"
+      : resolved === "cant_prove"
+        ? "can’t prove"
+        : resolved === "blocked"
+          ? "blocked"
+          : "allowed";
+
+  return (
+    <span className={"product-badge status-" + resolved} title={"Phase 2 honest status: " + label}>
+      {label}
+    </span>
+  );
+}
+
 const TERMINAL = new Set(["PROVED", "NON_PROVABLE", "INVALIDATED"]);
 const PROOF_STOPPED = new Set(["NON_PROVABLE", "RECONCILE"]);
 
@@ -291,7 +332,10 @@ export function AgentView({ policy, apiOk }: Props) {
                 className={`activity-row ${selected?.id === item.id ? "selected" : ""} tone-${item.decision === "ALLOW" ? "ok" : "fail"}`}
                 onClick={() => setSelected(item)}
               >
-                <span className="activity-decision">{item.decision}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                  <span className="activity-decision">{item.decision}</span>
+                  <ProductStatusBadge status={item.productStatus ?? item.status} decision={item.decision} />
+                </div>
                 <span className="activity-meta">
                   <span className="mono small">{item.action}</span>
                   <span className="muted">
@@ -333,7 +377,10 @@ export function AgentView({ policy, apiOk }: Props) {
 
           {selected.decision === "BLOCK" && (
             <div className="verdict deny">
-              <div className="verdict-title">BLOCK</div>
+              <div className="verdict-title" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <span>BLOCK</span>
+                <ProductStatusBadge status={selected.productStatus} decision="BLOCK" />
+              </div>
               <ul>
                 {(selected.violations ?? []).map((v) => (
                   <li key={`${v.ruleId}-${v.reason}`}>
@@ -347,7 +394,10 @@ export function AgentView({ policy, apiOk }: Props) {
 
           {selected.decision === "ALLOW" && (
             <div className="verdict allow">
-              <div className="verdict-title">ALLOW</div>
+              <div className="verdict-title" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <span>ALLOW</span>
+                <ProductStatusBadge status={receipt?.productStatus ?? selected.productStatus ?? receipt?.status} decision="ALLOW" />
+              </div>
               <p>
                 Capability <Hash value={selected.capabilityId} label="Capability" /> · intent{" "}
                 <Hash value={selected.intentHash} label="Intent hash" />
@@ -359,8 +409,10 @@ export function AgentView({ policy, apiOk }: Props) {
             <dl className="ledger">
               <div>
                 <dt>Trade receipt</dt>
-                <dd>
-                  {receipt.receiptId} · {receipt.status}
+                <dd style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span>{receipt.receiptId}</span>
+                  <ProductStatusBadge status={receipt.productStatus ?? receipt.status} decision="ALLOW" />
+                  <span className="muted">({receipt.status})</span>
                   {!receiptSettled(receipt) && <span className="muted"> · polling…</span>}
                   {receiptError && <div className="err small">Status check failed: {receiptError}</div>}
                 </dd>
@@ -379,8 +431,10 @@ export function AgentView({ policy, apiOk }: Props) {
             <dl className="ledger">
               <div>
                 <dt>Decision receipt</dt>
-                <dd>
-                  {decisionReceipt.id} · {decisionReceipt.status}
+                <dd style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span>{decisionReceipt.id}</span>
+                  <ProductStatusBadge status={selected.productStatus} decision="BLOCK" />
+                  <span className="muted">({decisionReceipt.status})</span>
                   {!decisionSettled(decisionReceipt) && <span className="muted"> · polling…</span>}
                   {decisionError && <div className="err small">Status check failed: {decisionError}</div>}
                 </dd>
