@@ -6,11 +6,8 @@ import {
   ShieldCheck,
   CheckCircle,
   XCircle,
-  ArrowRight,
-  LockKey,
   FileText,
   SlidersHorizontal,
-  WarningCircle,
   Cpu,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
@@ -42,7 +39,7 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
 
             {/* Body */}
             <p className="mt-6 text-base sm:text-lg text-neutral-600 dark:text-neutral-300 leading-relaxed font-normal">
-              The owner sets a policy. The agent proposes what it wants to do. Swaraj allows or blocks that action before it executes — then records the decision.
+              The owner writes a mandate. The agent proposes what it wants to do. Swaraj allows or blocks that action <strong className="font-semibold text-[#161616] dark:text-white">before it executes</strong> — then records the decision.
             </p>
 
             {/* Soft limits become real enforcement banner */}
@@ -56,25 +53,28 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
                     Soft limits become real enforcement.
                   </h3>
                   <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                    Prompt instructions like <em>&ldquo;please do not spend more than $1,000&rdquo;</em> are soft guidelines prone to jailbreaks and hallucinations. Swaraj turns them into rigid, pre-execution gates.
+                    <em>&ldquo;Please don&apos;t spend more than $1,000&rdquo;</em> is a suggestion to a model — vulnerable to jailbreaks, drift, and hallucination. Swaraj turns it into a rigid pre-execution gate. And the gate isn&apos;t just tested — its core properties are <strong className="font-semibold text-[#161616] dark:text-white">proven</strong>, machine-checked in Lean 4.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Quick 3-point summary checklist */}
-            <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3.5 text-xs sm:text-sm">
-              <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300 font-medium">
-                <CheckCircle size={18} weight="fill" className="text-[#ff4900] shrink-0" />
-                <span>Owner-defined policy</span>
+            {/* Three pills */}
+            <div className="mt-6 flex flex-col gap-2.5">
+              <div className="p-3.5 rounded-2xl bg-[#f8f8f8] dark:bg-[#1e1e1e] border border-black/10 dark:border-[#303030] text-xs sm:text-sm leading-relaxed">
+                <span className="font-bold text-[#161616] dark:text-white">Owner-authored mandate</span>
+                <span className="text-neutral-400 dark:text-neutral-500 mx-1.5">—</span>
+                <span className="text-neutral-600 dark:text-neutral-300">versioned, revisable by the owner, untouchable by the agent</span>
               </div>
-              <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300 font-medium">
-                <CheckCircle size={18} weight="fill" className="text-[#ff4900] shrink-0" />
-                <span>Pre-execution gate</span>
+              <div className="p-3.5 rounded-2xl bg-[#f8f8f8] dark:bg-[#1e1e1e] border border-black/10 dark:border-[#303030] text-xs sm:text-sm leading-relaxed">
+                <span className="font-bold text-[#161616] dark:text-white">Pre-execution gate</span>
+                <span className="text-neutral-400 dark:text-neutral-500 mx-1.5">—</span>
+                <span className="text-neutral-600 dark:text-neutral-300">Z3 decision engine over a Lean-proven core; default-deny, fail-closed</span>
               </div>
-              <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300 font-medium">
-                <CheckCircle size={18} weight="fill" className="text-[#ff4900] shrink-0" />
-                <span>Verifiable audit receipts</span>
+              <div className="p-3.5 rounded-2xl bg-[#f8f8f8] dark:bg-[#1e1e1e] border border-black/10 dark:border-[#303030] text-xs sm:text-sm leading-relaxed">
+                <span className="font-bold text-[#161616] dark:text-white">Proof-carrying receipts</span>
+                <span className="text-neutral-400 dark:text-neutral-500 mx-1.5">—</span>
+                <span className="text-neutral-600 dark:text-neutral-300">a signed record of every decision, promoted from PENDING to PROVED by an attached zkVM proof</span>
               </div>
             </div>
           </div>
@@ -116,23 +116,23 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
                 </div>
               </div>
 
-              {/* Step 1: Owner Policy */}
+              {/* Step 1: Owner Mandate */}
               <div className="mt-5 p-3.5 rounded-xl bg-white dark:bg-[#202020] border border-black/10 dark:border-[#303030]/80">
                 <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 mb-1.5 font-mono">
                   <span className="flex items-center gap-1.5">
                     <SlidersHorizontal size={14} className="text-[#ff4900]" />
-                    1. OWNER SETS POLICY
+                    1. OWNER SETS MANDATE — ACTIVE RULES
                   </span>
-                  <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">ACTIVE RULES</span>
                 </div>
-                <div className="text-xs sm:text-sm font-mono text-neutral-800 dark:text-neutral-200">
-                  <span className="text-[#ff4900]">rule:</span> max_spend &le; $1,000 &bull; allowed_destinations = [&quot;Uniswap-V3&quot;, &quot;Stripe-Billing&quot;]
+                <div className="text-xs sm:text-sm font-mono text-neutral-800 dark:text-neutral-200 space-y-1">
+                  <div>mandate v2: per-purchase cap &le; 100_000_000_000</div>
+                  <div>venues = [&quot;Uniswap-V3&quot;, &quot;Stripe-Billing&quot;]</div>
                 </div>
               </div>
 
               {/* Flow arrow down */}
               <div className="flex justify-center my-2 text-neutral-400 dark:text-neutral-600">
-                <span className="text-xs font-mono">&darr; Agent proposes intent</span>
+                <span className="text-xs font-mono">&darr; agent proposes intent</span>
               </div>
 
               {/* Step 2: Agent Proposal */}
@@ -148,27 +148,30 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
                   <div className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400 mb-1.5 font-mono">
                     <span className="flex items-center gap-1.5">
                       <Cpu size={14} className="text-[#ff4900]" />
-                      2. AGENT PROPOSES ACTION
+                      2. AGENT PROPOSES ACTION — UNEXECUTED
                     </span>
-                    <span className="text-[11px] text-neutral-400">Unexecuted</span>
                   </div>
                   {activeScenario === "allowed" ? (
-                    <div className="text-xs sm:text-sm font-mono text-neutral-800 dark:text-neutral-200">
-                      <div><span className="text-neutral-400">action:</span> &quot;Swap USDC to ETH&quot;</div>
-                      <div><span className="text-neutral-400">amount:</span> <span className="font-semibold text-emerald-600 dark:text-emerald-400">$450 USDC</span> &bull; <span className="text-neutral-400">venue:</span> &quot;Uniswap-V3&quot;</div>
+                    <div className="text-xs sm:text-sm font-mono text-neutral-800 dark:text-neutral-200 space-y-1">
+                      <div>action: SPOT_TRADE &nbsp;&middot;&nbsp; resource: Uniswap-V3</div>
+                      <div>amount: 450_000_000 (atomic units = $450.00)</div>
+                      <div className="text-neutral-500 dark:text-neutral-400">agent: portfolio-bot-7 &nbsp;&middot;&nbsp; idempotencyKey: 0x9f…</div>
                     </div>
                   ) : (
-                    <div className="text-xs sm:text-sm font-mono text-neutral-800 dark:text-neutral-200">
-                      <div><span className="text-neutral-400">action:</span> &quot;Emergency Liquidity Drain&quot;</div>
-                      <div><span className="text-neutral-400">amount:</span> <span className="font-semibold text-rose-500">$25,000 USDC</span> &bull; <span className="text-neutral-400">venue:</span> &quot;Unknown-Bridge&quot;</div>
+                    <div className="text-xs sm:text-sm font-mono text-neutral-800 dark:text-neutral-200 space-y-1">
+                      <div>action: SPOT_TRADE &nbsp;&middot;&nbsp; resource: Unknown-Bridge</div>
+                      <div>amount: 250_000_000_000 (atomic units = $250,000.00)</div>
+                      <div className="text-neutral-500 dark:text-neutral-400">agent: portfolio-bot-7 &nbsp;&middot;&nbsp; idempotencyKey: 0x3a…</div>
                     </div>
                   )}
                 </motion.div>
               </AnimatePresence>
 
               {/* Flow arrow down */}
-              <div className="flex justify-center my-2 text-neutral-400 dark:text-neutral-600">
-                <span className="text-xs font-mono font-bold text-[#ff4900]">&darr; Swaraj Pre-Execution Check &darr;</span>
+              <div className="flex justify-center my-2 text-center text-neutral-400 dark:text-neutral-500 px-2">
+                <span className="text-[11px] sm:text-xs font-mono text-[#ff4900] leading-snug">
+                  &darr; Swaraj pre-execution check — Z3 evaluates, forbid rules win, no matching permit = blocked &darr;
+                </span>
               </div>
 
               {/* Step 3: Swaraj Decision & Record */}
@@ -191,7 +194,7 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
                       {activeScenario === "allowed" ? (
                         <>
                           <CheckCircle size={16} weight="fill" className="text-emerald-600 dark:text-emerald-400" />
-                          3. SWARAJ: ACTION ALLOWED
+                          3. SWARAJ: ACTION ALLOWED — PERMIT ISSUED
                         </>
                       ) : (
                         <>
@@ -200,28 +203,30 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
                         </>
                       )}
                     </span>
-                    <span className="text-[11px] font-semibold">
-                      {activeScenario === "allowed" ? "Permit Issued" : "Execution Prevented"}
-                    </span>
                   </div>
 
-                  <p className="text-xs sm:text-sm font-sans mb-2.5">
+                  <p className="text-xs sm:text-sm font-sans mb-3 text-neutral-800 dark:text-neutral-200 leading-relaxed">
                     {activeScenario === "allowed"
-                      ? "Intent satisfies all owner constraints. A single-use, short-lived execution permit is released."
-                      : "Blocked before execution. Violates owner policy: spend $25,000 exceeds $1,000 limit and venue is unapproved."}
+                      ? "Intent satisfies every rule. A single-use capability token is released (60-second TTL, consumed on execution)."
+                      : "Intent violates mandate v2 (per-purchase cap exceeded and unpermitted venue). Blocked with the exact rule named, and nothing executes."}
                   </p>
 
-                  <div className="pt-2 border-t border-current/15 flex items-center justify-between text-[11px] font-mono">
-                    <span className="flex items-center gap-1">
+                  <div className="pt-2.5 border-t border-current/15 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] font-mono">
+                    <span className="flex items-center gap-1 font-semibold">
                       <FileText size={13} />
-                      Receipt #rcpt_{activeScenario === "allowed" ? "0847f2" : "blocked_091a"}
+                      Receipt #rcpt_{activeScenario === "allowed" ? "0847f2" : "blocked_091a"} — DECISION RECORDED
                     </span>
-                    <span className="font-semibold uppercase tracking-wider">
-                      DECISION RECORDED
+                    <span className="text-neutral-600 dark:text-neutral-300">
+                      status: PENDING &rarr; <strong className="font-bold text-[#ff4900] dark:text-[#ff6b2c]">PROVED</strong> once zkVM proof is attached
                     </span>
                   </div>
                 </motion.div>
               </AnimatePresence>
+
+              {/* Explanatory note */}
+              <div className="mt-3.5 text-center text-xs text-neutral-500 dark:text-neutral-400 italic">
+                Over the line? Same flow, opposite ending — blocked with the exact rule named, and nothing executes.
+              </div>
             </div>
           </div>
         </div>

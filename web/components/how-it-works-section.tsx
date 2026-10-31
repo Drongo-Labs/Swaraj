@@ -28,7 +28,7 @@ export function HowItWorksSection({ onContactClick }: HowItWorksSectionProps) {
         {/* Header */}
         <div className="max-w-3xl mx-auto text-center mb-14 sm:mb-20">
           <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] text-[#161616] dark:text-white">
-            How it works?
+            How it works
           </h2>
         </div>
 
@@ -58,32 +58,36 @@ export function HowItWorksSection({ onContactClick }: HowItWorksSectionProps) {
 
                 {/* Title & Copy */}
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2.5">
-                  1. Propose
+                  Step 01 — Propose
                 </h3>
                 <p className="text-sm sm:text-base text-neutral-300 leading-relaxed">
-                  Agent submits a clear, structured action (what, how much, where).
+                  The agent submits a structured intent. No free text reaches the gate.
                 </p>
               </div>
 
               {/* Visual Artifact: Structured Action Card */}
               <div className="mt-6 pt-5 border-t border-[#27282d]">
-                <div className="p-3.5 rounded-2xl font-mono text-xs space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-neutral-400 uppercase tracking-wider">
-                    <span>Structured Intent</span>
-                    <span className="text-[#ff4900]">Payload</span>
+                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 font-mono text-xs space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-neutral-400 uppercase tracking-wider font-semibold border-b border-white/10 pb-1.5">
+                    <span>Field</span>
+                    <span className="text-[#ff4900]">Example</span>
                   </div>
-                  <div className="space-y-1.5 pt-1 text-neutral-300">
+                  <div className="space-y-2 pt-1 text-neutral-300">
                     <div className="flex items-center justify-between">
-                      <span className="text-neutral-400">what</span>
-                      <span className="font-semibold text-white">&ldquo;Transfer USDC&rdquo;</span>
+                      <span className="text-neutral-400 font-bold">who</span>
+                      <span className="font-semibold text-white">portfolio-bot-7</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-neutral-400">how much</span>
-                      <span className="font-semibold text-[#ff4900]">$450.00</span>
+                      <span className="text-neutral-400 font-bold">what</span>
+                      <span className="font-semibold text-white">SPOT_TRADE</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-neutral-400">where</span>
-                      <span className="font-semibold text-white">base.uniswap.v3</span>
+                      <span className="text-neutral-400 font-bold">on what</span>
+                      <span className="font-semibold text-white">uniswap-v3</span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-0.5 pt-1 border-t border-white/5">
+                      <span className="text-neutral-400 font-bold">conditions</span>
+                      <span className="font-semibold text-[#ff4900] text-[11px]">amount: 450_000_000 (atomic units)</span>
                     </div>
                   </div>
                 </div>
@@ -115,19 +119,19 @@ export function HowItWorksSection({ onContactClick }: HowItWorksSectionProps) {
 
                 {/* Title & Copy */}
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2.5">
-                  2. Authorize
+                  Step 02 — Authorize
                 </h3>
                 <p className="text-sm sm:text-base text-neutral-300 leading-relaxed">
-                  Swaraj checks it against the owner’s policy. Over the line &rarr; blocked, with a reason. Within policy &rarr; allowed.
+                  Swaraj checks the intent against the owner&apos;s mandate: permit and forbid rules, default deny, fail-closed. Within policy &rarr; allowed. Over the line &rarr; blocked, with the rule that fired.
                 </p>
               </div>
 
               {/* Visual Artifact: Policy Check Box */}
-              <div className="mt-6 pt-5 border-t border-[#27282d]">
-                <div className="p-3.5 rounded-2xl space-y-2 text-xs font-mono">
+              <div className="mt-6 pt-5 border-t border-[#27282d] flex flex-col gap-2.5">
+                <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2 text-xs font-mono">
                   {/* Within Policy */}
-                  <div className="p-2.5 rounded-xl text-[#86efac] flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 font-sans font-semibold">
+                  <div className="p-2 rounded-xl text-[#86efac] flex items-center justify-between bg-emerald-950/20 border border-emerald-500/20">
+                    <span className="flex items-center gap-1.5 font-sans font-semibold text-xs">
                       <CheckCircle size={15} weight="fill" className="text-[#4ade80]" />
                       Within policy
                     </span>
@@ -136,15 +140,20 @@ export function HowItWorksSection({ onContactClick }: HowItWorksSectionProps) {
                     </span>
                   </div>
                   {/* Over the Line */}
-                  <div className="p-2.5 rounded-xl  text-[#fca5a5] flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 font-sans font-semibold">
+                  <div className="p-2 rounded-xl text-[#fca5a5] flex items-center justify-between bg-rose-950/20 border border-rose-500/20">
+                    <span className="flex items-center gap-1.5 font-sans font-semibold text-xs">
                       <XCircle size={15} weight="fill" className="text-[#f87171]" />
                       Over the line
                     </span>
                     <span className="font-bold text-[11px] uppercase tracking-wider bg-[#dc2626] text-white px-2 py-0.5 rounded shadow-xs">
-                      Blocked + Reason
+                      Blocked + Rule Fired
                     </span>
                   </div>
+                </div>
+
+                {/* Lean theorem callout */}
+                <div className="p-2.5 rounded-xl bg-[#ff4900]/10 border border-[#ff4900]/25 text-[11px] text-neutral-200 leading-snug">
+                  Behind the Z3 decision sits a <strong className="text-white font-semibold">Lean-proven core</strong>: <em>no execution without an explicit ALLOW</em> is a theorem, not a code review.
                 </div>
               </div>
             </div>
@@ -174,34 +183,38 @@ export function HowItWorksSection({ onContactClick }: HowItWorksSectionProps) {
 
                 {/* Title & Copy */}
                 <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2.5">
-                  3. Execute &amp; record
+                  Step 03 — Execute &amp; record
                 </h3>
                 <p className="text-sm sm:text-base text-neutral-300 leading-relaxed">
-                  Only allowed actions get a short-lived permit to run. Every decision is kept as a receipt.
+                  Only allowed actions release a one-shot capability token (60s TTL). Every decision — ALLOW or BLOCK — becomes a signed receipt bound to the intent hash, the mandate version, and the rules that fired. A proof worker generates a zkVM proof and promotes the receipt to PROVED.
                 </p>
               </div>
 
               {/* Visual Artifact: Permit + Receipt Badge */}
-              <div className="mt-6 pt-5 border-t border-[#27282d]">
-                <div className="p-3.5 rounded-2xl space-y-2 text-xs font-mono">
-                  <div className="flex items-center justify-between p-2 rounded-xl">
+              <div className="mt-6 pt-5 border-t border-[#27282d] flex flex-col gap-2.5">
+                <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/5 space-y-2 text-xs font-mono">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5">
                     <div className="flex items-center gap-1.5 text-neutral-200">
                       <Key size={14} className="text-[#ff4900]" />
-                      <span>One-Shot Permit</span>
+                      <span>One-Shot Capability Token</span>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-[#ff4900] text-white font-bold shadow-xs">
-                      TTL 30s
+                      60s TTL
                     </span>
                   </div>
-                  <div className="flex items-center justify-between p-2 rounded-xl">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-white/5 border border-white/5">
                     <div className="flex items-center gap-1.5 text-neutral-200">
                       <Receipt size={14} className="text-[#4ade80]" />
-                      <span>Decision Receipt</span>
+                      <span>Signed Receipt</span>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-[#16a34a] text-white font-bold shadow-xs">
-                      Recorded
+                      PENDING &rarr; PROVED
                     </span>
                   </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-[11px] text-neutral-300 leading-snug font-mono">
+                  zkVM proof worker attaches SP1 proof &bull; bound to intent hash &amp; active mandate
                 </div>
               </div>
             </div>

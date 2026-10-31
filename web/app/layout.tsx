@@ -28,9 +28,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Swaraj — Formal Authorization & Evidence-Verification for AI Agents",
+  title: "Swaraj — Verifiable & Provable AI Agents",
   description:
-    "Universal formal authorization and portable evidence-verification layer for autonomous AI agents. Deterministic Z3 SMT pre-execution checks and zkVM post-execution proofs.",
+    "Formal authorization for autonomous AI agents: every action is checked against the owner's rules before execution by a deterministic Z3 gateway, the gate's core properties are proven in machine-checked Lean 4, and every decision is recorded as a signed, proof-carrying receipt.",
   icons: {
     icon: [
       { url: "/swaraj_logo.png", href: "/swaraj_logo.png" }

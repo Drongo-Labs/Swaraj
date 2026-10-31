@@ -22,7 +22,7 @@ export interface ContinuousTabsProps {
 
 export const DEFAULT_TABS: TabItem[] = [
   { id: "overview", label: "Overview", href: "#overview" },
-  { id: "what-swaraj-is", label: "What Swaraj is", href: "#what-swaraj-is" },
+  { id: "what-swaraj-is", label: "What is Swaraj?", href: "#what-swaraj-is" },
   { id: "how-it-works", label: "How it works", href: "#how-it-works" },
   { id: "who-its-for", label: "Who it's for", href: "#who-its-for" },
   { id: "faq", label: "FAQ", href: "#faq" },

@@ -191,9 +191,7 @@ export function Navbar({ onContactClick }: NavbarProps) {
                 className="w-auto rounded-full shadow-md text-xs sm:text-sm px-3 sm:px-4 py-1.5"
                 onClick={onContactClick}
               >
-                <span>
-                  <span className="hidden sm:inline">Request </span>Trial
-                </span>
+                <span>Talk to us</span>
               </TextureButton>
 
               {/* Mobile / Tablet Hamburger Button */}
@@ -229,11 +227,11 @@ export function Navbar({ onContactClick }: NavbarProps) {
             >
               {[
                 { id: "overview", label: "Overview" },
-                { id: "what-swaraj-is", label: "What Swaraj is" },
+                { id: "what-swaraj-is", label: "What is Swaraj?" },
                 { id: "how-it-works", label: "How it works" },
                 { id: "who-its-for", label: "Who it's for" },
                 { id: "faq", label: "FAQ" },
-                { id: "contact", label: "Contact & Pilot" },
+                { id: "contact", label: "Talk to us" },
               ].map((item) => (
                 <TextureButton
                   key={item.id}

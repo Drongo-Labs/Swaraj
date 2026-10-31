@@ -6,52 +6,52 @@ import { Faq1, FaqItem } from "@/components/ui/faq-1";
 export const FAQ_ITEMS: FaqItem[] = [
   {
     id: "faq-1",
-    question: "Why do we need Swaraj if our AI agents already have prompt instructions?",
-    category: "Safety & Control",
+    question: "Why not just put the rules in the system prompt?",
+    category: "Architecture & Prompts",
     answer:
-      "System prompts (such as \"never spend more than $1,000\" or \"only transfer to approved vendors\") are merely soft guidelines to an AI model, not enforceable rules. Prompts are vulnerable to hallucinations, unexpected conversational drift, and jailbreak attacks. Swaraj creates an external, unbreakable authorization barrier. Your business policies are enforced before any action reaches an API, payment rail, or database—guaranteeing that agents cannot exceed their limits, no matter what happens inside the model.",
+      "Prompt instructions are suggestions to a model — vulnerable to jailbreaks, hallucination, and conversational drift. Swaraj moves your business rules out of the model and into an external gate that checks every action before execution. What happens inside the model stops mattering.",
   },
   {
     id: "faq-2",
-    question: "How does Swaraj prevent rogue AI agents from causing real-world damage?",
-    category: "Risk Mitigation",
+    question: "What exactly is \"proven\"?",
+    category: "Lean 4 & Formal Verification",
     answer:
-      "Swaraj separates thinking from doing. The AI agent can analyze data and propose what it wants to do, but it is never given direct access keys or unrestricted execution authority. Swaraj intercepts every proposed action and evaluates it against your policies (such as spend caps, permitted recipients, and rate limits). If an action is over the line, it is blocked immediately—stopping unauthorized transactions or unintended commands before they execute.",
+      "Three layers. (1) Each decision is made by a deterministic Z3 evaluation of the mandate. (2) The gate's core properties — default deny, forbid-always-wins, and no execution without ALLOW — are formal theorems, machine-checked by the Lean 4 kernel, not just covered by tests. (3) A proof worker generates a zkVM (SP1) proof per decision and attaches it to the receipt, promoting it to PROVED.",
   },
   {
     id: "faq-3",
-    question: "Can an agent bypass or find a loophole around Swaraj?",
-    category: "Security",
+    question: "What's inside a receipt?",
+    category: "Proof-Carrying Receipts",
     answer:
-      "No. Downstream execution environments (such as cloud services, payment APIs, or database endpoints) only accept single-use, time-limited digital permits generated when Swaraj approves an action. Because the agent never possesses direct, persistent credentials or an alternate execution route, it is impossible for it to circumvent the gate.",
+      "A signed, hash-bound record: the intent hash, the mandate hash and version in force, the decision, and the exact rules that fired. PROVED receipts add proof metadata (proof hash, program key hash, public-inputs hash). The receipt is portable — it verifies against your data without trusting our servers.",
   },
   {
     id: "faq-4",
-    question: "Will running policy checks slow down our agents or introduce latency?",
-    category: "Performance",
+    question: "So my agent can never misbehave?",
+    category: "Security Boundary",
     answer:
-      "Not at all. Swaraj evaluates policy constraints deterministically in single-digit milliseconds—substantially faster than an LLM generates a single word. Your autonomous agents continue operating in real time with virtually zero perceptible overhead.",
+      "For every action routed through Swaraj, execution without an ALLOW is proven impossible — that's the Lean theorem. The honest boundary: an agent holding raw credentials outside the pipeline is out of any policy engine's reach; production deployments keep keys in TEE/HSM custody so the governed executor is the only spender. We'd rather state the boundary than pretend it away.",
   },
   {
     id: "faq-5",
-    question: "How does Swaraj help our company with compliance, audits, and liability?",
-    category: "Compliance & Governance",
+    question: "What happens when an action is blocked?",
+    category: "Enforcement & Auditing",
     answer:
-      "Every action proposal—whether approved or blocked—generates a tamper-proof digital receipt. These receipts capture exactly what the agent intended, which policies were evaluated, why the decision was made, and the execution outcome. This provides an audit-ready paper trail that satisfies internal risk committees, external auditors, and institutional investors.",
+      "Nothing executes. No side effects, no API call, no fee. The block is recorded like any decision — with the rule id that fired — so you can audit attempts, not just outcomes.",
   },
   {
     id: "faq-6",
-    question: "How difficult is it to integrate Swaraj into our existing AI agent stack?",
-    category: "Integration",
+    question: "Can the rules change over time?",
+    category: "Mandates & Governance",
     answer:
-      "Swaraj is designed for fast, drop-in integration. Whether you use popular frameworks like LangChain, CrewAI, AutoGen, or a custom Python/TypeScript setup, Swaraj operates as lightweight middleware. You define your business guardrails in clean, readable policies and protect your live agents with just a few lines of code.",
+      "Yes — by the owner, only. Mandates are versioned; every revision creates a new version, and every receipt binds to the version in force at decision time. Tighten the cap after an incident and history stays verifiable — old decisions still check out against the rules that governed them.",
   },
   {
     id: "faq-7",
-    question: "Does Swaraj need access to our proprietary models, prompts, or sensitive customer data?",
-    category: "Privacy & IP",
+    question: "What does integrating look like?",
+    category: "Developer Integration",
     answer:
-      "No. Swaraj operates on strict data minimization principles. It only reviews the structured action payload (the action type, parameters, and destination) required to evaluate your rules. Your proprietary algorithms, confidential prompts, internal model weights, and sensitive customer data remain completely private and secure within your own infrastructure.",
+      "Your agent sends a typed intent through the SDK (or via the MCP bridge), receives ALLOW + a one-shot capability token, and executes. The mandate schema, the gateway, and the receipt pipeline are already built — you write rules, not infrastructure.",
   },
 ];
 

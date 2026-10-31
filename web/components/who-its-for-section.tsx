@@ -3,14 +3,9 @@
 import React from "react";
 import {
   TrendUp,
-  Receipt,
-  GitBranch,
-  ShieldCheck,
-  ArrowRight,
   CurrencyDollar,
   Terminal,
 } from "@phosphor-icons/react";
-import { TextureButton } from "@/components/ui/texture-button";
 
 interface WhoItsForSectionProps {
   onContactClick?: () => void;
@@ -29,8 +24,11 @@ export function WhoItsForSection({ onContactClick }: WhoItsForSectionProps) {
         {/* Header */}
         <div className="max-w-3xl mb-12 sm:mb-16">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-[1.14] text-[#161616] dark:text-white">
-            <span className="text-[#ff4900]">Who it’s for?</span> - For teams whose agents can move money, ship code, or change real systems.
+            Who it&apos;s for?
           </h2>
+          <p className="mt-4 text-base sm:text-xl text-neutral-600 dark:text-neutral-300 font-normal leading-relaxed">
+            For teams whose agents can move money, ship code, or change real systems.
+          </p>
         </div>
 
         {/* Short Examples Grid (One line each — not a catalog) */}
@@ -42,19 +40,19 @@ export function WhoItsForSection({ onContactClick }: WhoItsForSectionProps) {
                 <TrendUp size={24} weight="bold" />
               </div>
               <h3 className="text-lg sm:text-xl font-bold tracking-tight text-[#161616] dark:text-white leading-snug">
-                Trading agents with spend and venue limits
+                <strong className="font-black text-[#161616] dark:text-white">Trading agents</strong> with spend and venue limits
               </h3>
             </div>
           </div>
 
-          {/* Example 2: Payment or refund agents */}
+          {/* Example 2: Payment & refund agents */}
           <div className="flex flex-col justify-between rounded-3xl bg-[#f8f8f8] dark:bg-[#1a1a1a] border border-black/10 dark:border-[#303030] p-6 sm:p-7 shadow-xs hover:border-[#ff4900]/40 transition-all group">
             <div>
               <div className="w-12 h-12 rounded-2xl bg-white dark:bg-[#252525] border border-black/10 dark:border-[#303030] flex items-center justify-center text-[#ff4900] mb-5 shadow-xs group-hover:scale-105 transition-transform">
                 <CurrencyDollar size={24} weight="bold" />
               </div>
               <h3 className="text-lg sm:text-xl font-bold tracking-tight text-[#161616] dark:text-white leading-snug">
-                Payment or refund agents with recipient and amount caps
+                <strong className="font-black text-[#161616] dark:text-white">Payment &amp; refund agents</strong> with recipient and amount caps
               </h3>
             </div>
           </div>
@@ -66,7 +64,7 @@ export function WhoItsForSection({ onContactClick }: WhoItsForSectionProps) {
                 <Terminal size={24} weight="bold" />
               </div>
               <h3 className="text-lg sm:text-xl font-bold tracking-tight text-[#161616] dark:text-white leading-snug">
-                Coding agents that must not deploy production unchecked
+                <strong className="font-black text-[#161616] dark:text-white">Coding agents</strong> that must not deploy to production unchecked
               </h3>
             </div>
           </div>

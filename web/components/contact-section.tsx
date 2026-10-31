@@ -68,13 +68,8 @@ export function ContactSection() {
       <div className="relative z-10 max-w-4xl mx-auto text-center flex flex-col items-center">
         {/* Main Headline */}
         <h2 className="text-4xl sm:text-5xl lg:text-[3.5rem] font-bold text-white tracking-tight leading-[1.12]">
-          Let&apos;s Work Together
+          Let&apos;s work together
         </h2>
-
-        {/* Subtitle / Description */}
-        <p className="mt-5 sm:mt-6 text-base sm:text-lg text-neutral-400 font-normal leading-relaxed max-w-md mx-auto">
-          Want to integrate Swaraj in your workflow, give us a shout!
-        </p>
 
         {/* Direct Contact - E-mail Card */}
         <div className="mt-10 sm:mt-12 flex justify-center">

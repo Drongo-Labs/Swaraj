@@ -4,14 +4,8 @@ import React from "react";
 import dynamic from "next/dynamic";
 import { TextureButton } from "@/components/ui/texture-button";
 import {
-  ShieldCheck,
   ArrowRight,
   ArrowDown,
-  Lightning,
-  Sparkle,
-  Cpu,
-  Cube,
-  LockKey,
 } from "@phosphor-icons/react";
 
 // Dynamically load DotGrid to ensure pure client-side WebGL canvas initialization
@@ -48,26 +42,16 @@ export function HeroSection({ onContactClick, onHowItWorksClick }: HeroSectionPr
 
         {/* Hero Title */}
         <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white leading-[1.12] sm:leading-[1.08] max-w-4xl break-words">
-          Swaraj <br /> Verifiable layer for <br /> AI Agents.
+          Swaraj <br /> Verifiable &amp; provable <br /> AI agents.
         </h1>
 
         {/* Hero Subtitle */}
         <p className="mt-5 sm:mt-8 text-sm sm:text-lg md:text-xl text-white/95 max-w-2xl mx-auto font-normal leading-relaxed drop-shadow-xs">
-          Natural language prompts cannot stop rogue AI agents. Swaraj enforces mathematical Z3 SMT constraints before execution and delivers zero-knowledge portable receipts afterward.
+          Natural language can&apos;t stop a rogue agent. Swaraj turns your rules into math: every action is checked before execution by an SMT gateway, the gate itself is proven in Lean 4, and every decision — allowed or blocked — lands as a signed receipt you can take anywhere.
         </p>
 
         {/* Hero Buttons (TextureButton) */}
         <div className="mt-8 sm:mt-12 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 w-full sm:w-auto max-w-sm sm:max-w-none">
-          <TextureButton
-            variant="white"
-            size="lg"
-            className="w-full sm:w-auto rounded-full shadow-xl"
-            onClick={onContactClick}
-          >
-            <span>Start Building with Swaraj</span>
-            <ArrowRight size={16} weight="bold" />
-          </TextureButton>
-
           <a
             href="#how-it-works"
             className="w-full sm:w-auto"
@@ -79,13 +63,24 @@ export function HeroSection({ onContactClick, onHowItWorksClick }: HeroSectionPr
             }}
           >
             <TextureButton
-              variant="outline"
+              variant="white"
               size="lg"
-              className="w-full sm:w-auto rounded-full backdrop-blur-md"
+              className="w-full sm:w-auto rounded-full shadow-xl"
             >
-              <span>Explore How it works?</span>
+              <span>Read how it works</span>
+              <ArrowDown size={16} weight="bold" />
             </TextureButton>
           </a>
+
+          <TextureButton
+            variant="outline"
+            size="lg"
+            className="w-full sm:w-auto rounded-full backdrop-blur-md"
+            onClick={onContactClick}
+          >
+            <span>Talk to us</span>
+            <ArrowRight size={16} weight="bold" />
+          </TextureButton>
         </div>
       </div>
     </section>
