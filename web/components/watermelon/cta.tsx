@@ -12,8 +12,8 @@ export function CtaBlock({ onContactClick }: CtaProps) {
   return (
     <div className="w-full flex justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       <Cta1
-        title="Deploy autonomous agents with mathematical certainty."
-        description="Rules enforced before execution. A gate whose properties are proven, not promised. Receipts that prove themselves. Integrate Swaraj's formal authorization layer into your agent stack."
+        title="Give the agent the keys. Keep the rules."
+        description="Autonomy is the point of an agent. Swaraj is what makes it safe to grant. Rules enforced before execution. A gate whose properties are proven, not promised. Receipts that prove themselves. Wherever your agents act with real stakes, put Swaraj between them and the action."
         buttonText="Let's work together"
         buttonIcon={<ArrowRight className="h-4 w-4" />}
         onButtonClick={onContactClick}

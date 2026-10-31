@@ -39,7 +39,7 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
 
             {/* Body */}
             <p className="mt-6 text-base sm:text-lg text-neutral-600 dark:text-neutral-300 leading-relaxed font-normal">
-              The owner writes a mandate. The agent proposes what it wants to do. Swaraj allows or blocks that action <strong className="font-semibold text-[#161616] dark:text-white">before it executes</strong> — then records the decision.
+              The owner writes a mandate. The agent proposes what it wants to do. Swaraj allows or blocks that action <strong className="font-semibold text-[#161616] dark:text-white">before it executes</strong> then records the decision.
             </p>
 
             {/* Soft limits become real enforcement banner */}
@@ -53,7 +53,7 @@ export function WhatIsSwarajSection({ onContactClick }: WhatIsSwarajSectionProps
                     Soft limits become real enforcement.
                   </h3>
                   <p className="mt-1 text-xs sm:text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                    <em>&ldquo;Please don&apos;t spend more than $1,000&rdquo;</em> is a suggestion to a model — vulnerable to jailbreaks, drift, and hallucination. Swaraj turns it into a rigid pre-execution gate. And the gate isn&apos;t just tested — its core properties are <strong className="font-semibold text-[#161616] dark:text-white">proven</strong>, machine-checked in Lean 4.
+                    <em>&ldquo;Please don&apos;t spend more than $1,000&rdquo;</em> is a suggestion to a model and it is vulnerable to jailbreaks, drift, and hallucination. Swaraj turns it into a rigid pre-execution gate. And the gate isn&apos;t just tested, its core properties are <strong className="font-semibold text-[#161616] dark:text-white">proven</strong>, machine-checked in Lean 4.
                   </p>
                 </div>
               </div>

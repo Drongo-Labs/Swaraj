@@ -71,6 +71,11 @@ export function ContactSection() {
           Let&apos;s work together
         </h2>
 
+        {/* Subtitle / Description */}
+        <p className="mt-5 sm:mt-6 text-base sm:text-lg text-neutral-400 font-normal leading-relaxed max-w-2xl mx-auto">
+          Autonomy is the point of an agent. Swaraj is what makes it safe to grant. Wherever your agents act with real stakes, put Swaraj between them and the action.
+        </p>
+
         {/* Direct Contact - E-mail Card */}
         <div className="mt-10 sm:mt-12 flex justify-center">
           <a

@@ -47,7 +47,7 @@ export function HeroSection({ onContactClick, onHowItWorksClick }: HeroSectionPr
 
         {/* Hero Subtitle */}
         <p className="mt-5 sm:mt-8 text-sm sm:text-lg md:text-xl text-white/95 max-w-2xl mx-auto font-normal leading-relaxed drop-shadow-xs">
-          Natural language can&apos;t stop a rogue agent. Swaraj turns your rules into math: every action is checked before execution by an SMT gateway, the gate itself is proven in Lean 4, and every decision — allowed or blocked — lands as a signed receipt you can take anywhere.
+          Prompts can&apos;t stop a rogue agent. Swaraj is the universal layer between autonomous agents and the things they&apos;re allowed to do: every action checked before execution, the gate&apos;s properties proven in Lean 4, every decision a signed receipt you can take anywhere.
         </p>
 
         {/* Hero Buttons (TextureButton) */}

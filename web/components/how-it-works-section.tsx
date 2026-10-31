@@ -186,7 +186,7 @@ export function HowItWorksSection({ onContactClick }: HowItWorksSectionProps) {
                   Step 03 — Execute &amp; record
                 </h3>
                 <p className="text-sm sm:text-base text-neutral-300 leading-relaxed">
-                  Only allowed actions release a one-shot capability token (60s TTL). Every decision — ALLOW or BLOCK — becomes a signed receipt bound to the intent hash, the mandate version, and the rules that fired. A proof worker generates a zkVM proof and promotes the receipt to PROVED.
+                  Only allowed actions release a one-shot capability token (60s TTL). Every decision is ALLOW or BLOCK. It becomes a signed receipt bound to the intent hash, the mandate version, and the rules that fired. A proof worker generates a zkVM proof and promotes the receipt to PROVED.
                 </p>
               </div>
 
