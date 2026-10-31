@@ -5,6 +5,6 @@
   "type": "module",
   "scripts": {
     "sync:vectors": "node scripts/sync-vectors.mjs",
-    "check:lean": "$HOME/.elan/bin/lake build"
+    "check:lean": "$HOME/.elan/bin/lake build && node scripts/check-purity.mjs"
   }
 }
