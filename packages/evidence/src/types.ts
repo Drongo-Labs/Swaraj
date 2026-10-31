@@ -1,8 +1,11 @@
 import type { EvidenceBundle, EvidenceItem } from "@swaraj/schemas";
 
+/** Venues the evidence layer can collect for. Append only. */
+export type EvidenceVenue = "UNISWAP_V3_BASE" | "REF_FINANCE_NEAR";
+
 export type ExecutionRef = {
   txHash: EvidenceItem["payloadHash"];
-  venue: "UNISWAP_V3_BASE";
+  venue: EvidenceVenue;
   executedAt: number;
 };
 

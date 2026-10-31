@@ -1,0 +1,44 @@
+{
+  "mandateId": "mandate_near_payment_v1",
+  "version": 1,
+  "agent": "*",
+  "defaultEffect": "DENY",
+  "validFrom": 0,
+  "validUntil": 4102444800000,
+  "rules": [
+    {
+      "ruleId": "forbid_near_payment_amount",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "5000000"
+        }
+      ]
+    },
+    {
+      "ruleId": "permit_near_payment",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "resource.service",
+          "operator": "EQ",
+          "value": "near_ft_transfer"
+        },
+        {
+          "field": "context.currency",
+          "operator": "IN",
+          "values": ["NEAR", "USDC"]
+        },
+        {
+          "field": "context.amount",
+          "operator": "LTE",
+          "value": "5000000"
+        }
+      ]
+    }
+  ]
+}

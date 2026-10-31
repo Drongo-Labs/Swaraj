@@ -11,6 +11,8 @@ export const ActionResultSchema = z.discriminatedUnion("decision", [
     decision: z.literal("ALLOW"),
     receiptId: Identifier,
     status: z.enum(["PENDING", "NON_PROVABLE", "DEV_UNVERIFIED"]),
+    /** Phase 2 product status — honest mapping of engine state. */
+    productStatus: z.enum(["allowed", "blocked", "proved", "cant_prove"]).optional(),
     capabilityId: z.string().optional(),
     intentHash: z.string().optional(),
     policyHash: z.string().optional(),
@@ -19,6 +21,7 @@ export const ActionResultSchema = z.discriminatedUnion("decision", [
   z.object({
     decision: z.literal("BLOCK"),
     violations: z.array(z.object({ ruleId: z.string(), reason: z.string() })).min(1),
+    productStatus: z.literal("blocked").optional(),
     intentHash: z.string().optional(),
     policyHash: z.string().optional(),
     decisionId: z.string().optional(),
@@ -27,6 +30,7 @@ export const ActionResultSchema = z.discriminatedUnion("decision", [
 export const ReceiptSchema = z.object({
   receiptId: Identifier,
   status: z.enum(["PENDING", "PROVED", "NON_PROVABLE", "INVALIDATED", "DEV_UNVERIFIED"]),
+  productStatus: z.enum(["allowed", "blocked", "proved", "cant_prove"]).optional(),
   claim: z.string().optional(),
   reason: z.string().optional(),
   reasonCode: z.string().optional(),
@@ -57,6 +61,15 @@ export type ActionResult = z.infer<typeof ActionResultSchema>;
 export type Receipt = z.infer<typeof ReceiptSchema>;
 export type PolicyRecord = z.infer<typeof PolicyRecordSchema>;
 export type DecisionView = z.infer<typeof DecisionViewSchema>;
+
+export {
+  ProductStatus,
+  productStatusFromDecision,
+  productStatusFromReceipt,
+  PRODUCT_STATUS_GLOSSARY,
+  type EngineReceiptStatus,
+} from "./productStatus.js";
+export type { ProductStatus as ProductStatusName } from "./productStatus.js";
 
 // ponytail: initial cross-language model uses u64; widen the Rust model and vectors together.
 const uint64 = z.string().max(20).regex(/^(0|[1-9][0-9]*)$/)

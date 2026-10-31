@@ -543,10 +543,12 @@ export async function runPipeline(
     detail: { receiptId: record.receiptId, status: record.status },
   });
 
+  const status = record.status === "NON_PROVABLE" ? "NON_PROVABLE" : "PENDING";
   return {
     decision: "ALLOW",
     receiptId: record.receiptId,
-    status: record.status === "NON_PROVABLE" ? "NON_PROVABLE" : "PENDING",
+    status,
+    productStatus: status === "NON_PROVABLE" ? "cant_prove" : "allowed",
     record,
     capabilityId: token.capabilityId,
     intentHash: decision.intentHash,

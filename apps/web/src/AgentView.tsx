@@ -308,8 +308,11 @@ export function AgentView({ policy, apiOk }: Props) {
                 )}
                 {item.decision === "ALLOW" && (
                   <span className="activity-why muted">
-                    receipt {item.receiptId ?? "—"} · {item.status ?? "PENDING"}
+                    receipt {item.receiptId ?? "—"} · {item.productStatus ?? item.status ?? "PENDING"}
                   </span>
+                )}
+                {item.decision === "BLOCK" && item.productStatus && (
+                  <span className="activity-why muted">status {item.productStatus}</span>
                 )}
               </button>
             </li>
