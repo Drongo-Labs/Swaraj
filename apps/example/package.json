@@ -6,7 +6,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "near-demo": "node dist/near-demo.js"
   },
-  "dependencies": { "@swaraj/sdk": "workspace:*" }
+  "dependencies": {
+    "@swaraj/contracts": "workspace:*",
+    "@swaraj/rules": "workspace:*",
+    "@swaraj/schemas": "workspace:*",
+    "@swaraj/sdk": "workspace:*"
+  }
 }

@@ -27,8 +27,10 @@ export const BoundedId = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 export const IdempotencyKey = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 export const SemVer = z.string().max(32).regex(/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/);
 
-export const Venue = z.enum(["UNISWAP_V3_BASE"]);
-export const FinalityRule = z.enum(["BASE_CONFIRMATIONS_12"]);
+/** Append only — never renumber or remove. Base MVP + NEAR Phase 2 venues. */
+export const Venue = z.enum(["UNISWAP_V3_BASE", "REF_FINANCE_NEAR"]);
+/** Append only. */
+export const FinalityRule = z.enum(["BASE_CONFIRMATIONS_12", "NEAR_FINALITY"]);
 
 /** Order used for every sorted-set field: plain code point order on ASCII strings. */
 export const compareStrings = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

@@ -66,11 +66,15 @@ export type PolicyView = {
   definition: Record<string, unknown>;
 };
 
+/** Phase 2 product-facing status (honest mapping of engine state). */
+export type ProductStatus = "allowed" | "blocked" | "proved" | "cant_prove";
+
 export type ActionResult =
   | {
       decision: "ALLOW";
       receiptId: string;
       status: string;
+      productStatus?: ProductStatus;
       capabilityId?: string;
       intentHash?: string;
       policyHash?: string;
@@ -80,6 +84,7 @@ export type ActionResult =
   | {
       decision: "BLOCK";
       violations: Array<{ ruleId: string; reason: string }>;
+      productStatus?: ProductStatus;
       intentHash?: string;
       policyHash?: string;
       decisionReceipt?: {
@@ -103,6 +108,7 @@ export type ActivityItem = {
   receiptId?: string;
   capabilityId?: string;
   status?: string;
+  productStatus?: ProductStatus;
   decisionReceipt?: { id?: string; status?: string };
   proof?: { status?: string; kurierUrl?: string; transactionHash?: string };
 };
@@ -138,6 +144,7 @@ export type ProofJobFields = {
 export type ReceiptView = {
   receiptId: string;
   status: string;
+  productStatus?: ProductStatus;
   claim?: string;
   evidenceRoot?: string;
   intentHash?: string;

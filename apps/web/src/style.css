@@ -640,3 +640,66 @@ body {
     transition: none !important;
   }
 }
+
+
+/* Product Status Badges (Phase 2 Feature 7) */
+.product-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 9999px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+
+.product-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.product-badge.status-allowed {
+  background: color-mix(in srgb, var(--allow) 12%, transparent);
+  color: var(--allow);
+  border-color: color-mix(in srgb, var(--allow) 28%, transparent);
+}
+.product-badge.status-allowed::before {
+  background: var(--allow);
+}
+
+.product-badge.status-blocked {
+  background: color-mix(in srgb, var(--deny) 12%, transparent);
+  color: var(--deny);
+  border-color: color-mix(in srgb, var(--deny) 28%, transparent);
+}
+.product-badge.status-blocked::before {
+  background: var(--deny);
+}
+
+.product-badge.status-proved {
+  background: color-mix(in srgb, #0b7a42 16%, transparent);
+  color: #0b7a42;
+  border-color: color-mix(in srgb, #0b7a42 35%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, #0b7a42 20%, transparent);
+}
+.product-badge.status-proved::before {
+  background: #0b7a42;
+}
+
+.product-badge.status-cant_prove {
+  background: color-mix(in srgb, var(--brass) 14%, transparent);
+  color: var(--brass);
+  border-color: color-mix(in srgb, var(--brass) 30%, transparent);
+}
+.product-badge.status-cant_prove::before {
+  background: var(--brass);
+}

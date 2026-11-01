@@ -25,8 +25,10 @@ const objectFixtures = [
   [S.ObjectType.EVIDENCE_BUNDLE, "evidence-bundle"],
   [S.ObjectType.RECEIPT, "receipt-unsigned"],
   [S.ObjectType.POLICY_PROFILE, "agent-mandate"],
+  [S.ObjectType.POLICY_PROFILE, "agent-mandate-app"],
   [S.ObjectType.ACTION_INTENT, "unified-action-trade"],
   [S.ObjectType.ACTION_INTENT, "unified-action-payment"],
+  [S.ObjectType.ACTION_INTENT, "unified-action-app"],
   [S.ObjectType.RECEIPT, "receipt-proved"],
 ];
 

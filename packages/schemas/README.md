@@ -22,6 +22,6 @@ Fields excluded from the object's own hash: `intentHash`, `policyHash`, `stateHa
 `ReceiptUnsigned`: `receiptId`, `status` (`PENDING|PROVED|NON_PROVABLE|INVALIDATED|DEV_UNVERIFIED`; the last is dev-only and never PROVED), `claimType` (`ORDER_PLACED|TRADE_EXECUTED`), `intentHash`, `policyHash`, `evidenceRoot` (other objects by hash only), `finalityRule`, `verifierVersion` (semver), `proof?` (required exactly when `PROVED`), `createdAt`. `SignedReceipt` adds `signerKeyId` and `signature`.
 
 ## Assumed values (MVP)
-The venue (`UNISWAP_V3_BASE`), finality rule (`BASE_CONFIRMATIONS_12`), evidence tags and proof system (`SP1`) enums are placeholders sized to the Base spot-trade MVP; extend them by appending values.
+Venues: `UNISWAP_V3_BASE`, `REF_FINANCE_NEAR` (Phase 2). Finality rules: `BASE_CONFIRMATIONS_12`, `NEAR_FINALITY`. Evidence tags and proof system (`SP1`) — append only; never renumber.
 
 `fixtures/valid` has one object per type (plus a PROVED receipt); `fixtures/invalid` has known-bad cases. `@swaraj/crypto` derives its golden vectors from the valid ones.

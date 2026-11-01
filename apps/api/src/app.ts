@@ -5,7 +5,10 @@ import {
   AmountCheckSchema,
   Identifier,
   PolicyRecordSchema,
+  productStatusFromDecision,
+  productStatusFromReceipt,
   type ActionRequest,
+  type EngineReceiptStatus,
 } from "@swaraj/contracts";
 import { LocalKeySigner, hashObject, type Signer } from "@swaraj/crypto";
 import {
@@ -68,9 +71,16 @@ export type ActivityItem = {
   receiptId?: string;
   capabilityId?: string;
   status?: string;
+  /** Phase 2 product status: allowed | blocked | proved | cant_prove */
+  productStatus?: string;
   decisionReceipt?: Record<string, unknown>;
   proof?: Record<string, unknown>;
 };
+
+/** Base Uniswap venue — only these SPOT_TRADEs enter the live Base execution pipeline. */
+function isBaseSpotVenue(venue: string): boolean {
+  return venue === "UNISWAP_V3_BASE";
+}
 
 export type BuildAppOptions = {
   pipelineMode?: PipelineMode;
@@ -718,9 +728,14 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         }
       }
 
-      // SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,
-      // capability, execution, receipts) with the original unified action.
-      if (evaluated.decision === "ALLOW" && action.action === "SPOT_TRADE") {
+      // Base SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,
+      // capability, Uniswap execution, receipts). NEAR SPOT_TRADE / PAYMENT use
+      // the durable mandate-receipt path below (fixture adapters; Phase 2).
+      if (
+        evaluated.decision === "ALLOW" &&
+        action.action === "SPOT_TRADE" &&
+        isBaseSpotVenue(action.resource.venue)
+      ) {
         const policyVersion =
           typeof (policyDefinition as { policyVersion?: unknown } | undefined)?.policyVersion === "number"
             ? (policyDefinition as { policyVersion: number }).policyVersion
@@ -759,6 +774,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           request.log.error(error);
           return { status: "NON_PROVABLE" as const, reasonCode: "NOT_RECORDED" };
         });
+        const productStatus = productStatusFromDecision("BLOCK");
         const activity: ActivityItem = {
           id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
           at,
@@ -769,11 +785,13 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           violations,
           intentHash,
           policyHash,
+          productStatus,
           decisionReceipt: decisionReceipt as Record<string, unknown>,
         };
         activityLog.push(activity);
         return reply.code(200).send({
           decision: "BLOCK",
+          productStatus,
           mandate: { reason: evaluated.reason, matchedRuleIds: evaluated.matchedRuleIds },
           violations,
           intentHash,
@@ -783,10 +801,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         });
       }
 
-      // Permitted non-trade action: no execution adapter exists for it yet —
-      // but the decision is durable: a PENDING receipt is recorded and a
-      // mandate proof job enqueued, so the proof worker can re-derive the
-      // decision and promote the receipt to PROVED (pool mode only).
+      // Permitted NEAR trade / payment / other non-Base actions: durable
+      // PENDING receipt + optional mandate proof job (pool mode). Fixture
+      // execution adapters live in @swaraj/capability / @swaraj/evidence.
       let proofReceipt: { id: string; state: string } | undefined;
       if (pool) {
         try {
@@ -839,6 +856,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           request.log.error(error);
         }
       }
+      const engineStatus: EngineReceiptStatus = proofReceipt ? "PENDING" : "NOT_EXECUTABLE";
+      const productStatus = productStatusFromDecision("ALLOW", engineStatus);
       const activity: ActivityItem = {
         id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
         at,
@@ -846,19 +865,22 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         action: action.action,
         idempotencyKey: action.idempotencyKey,
         decision: "ALLOW",
-        status: "NOT_EXECUTABLE",
+        status: engineStatus,
+        productStatus,
         intentHash,
         policyHash,
+        ...(proofReceipt ? { receiptId: proofReceipt.id } : {}),
       };
       activityLog.push(activity);
       return reply.code(200).send({
         decision: "ALLOW",
+        productStatus,
         mandate: { reason: evaluated.reason, matchedPermitRuleIds: evaluated.matchedPermitRuleIds },
-        status: "NOT_EXECUTABLE",
+        status: engineStatus,
         intentHash,
         policyHash,
         activityId: activity.id,
-        ...(proofReceipt ? { receipt: proofReceipt } : {}),
+        ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
       });
     },
   );
@@ -925,6 +947,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       return {
         receiptId: record.receiptId,
         status: record.status,
+        productStatus: productStatusFromReceipt(record.status as EngineReceiptStatus),
         valid: verification.valid,
         format: verification.format,
         checks: verification.checks,
@@ -954,6 +977,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       return {
         receiptId: record.receiptId,
         status: record.status,
+        productStatus: productStatusFromReceipt(record.status as EngineReceiptStatus),
         claim: record.claimType,
         ...(record.reasonCode !== undefined ? { reason: record.reasonCode, reasonCode: record.reasonCode } : {}),
         signedReceipt: record.signedReceipt,

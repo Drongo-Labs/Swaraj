@@ -1,0 +1,39 @@
+{
+  "mandateId": "mandate_near_trading_v1",
+  "version": 1,
+  "agent": "*",
+  "defaultEffect": "DENY",
+  "validFrom": 0,
+  "validUntil": 4102444800000,
+  "rules": [
+    {
+      "ruleId": "forbid_near_trade_amount",
+      "effect": "FORBID",
+      "action": "SPOT_TRADE",
+      "predicates": [
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "100000000"
+        }
+      ]
+    },
+    {
+      "ruleId": "permit_near_trade_venue",
+      "effect": "PERMIT",
+      "action": "SPOT_TRADE",
+      "predicates": [
+        {
+          "field": "resource.venue",
+          "operator": "EQ",
+          "value": "REF_FINANCE_NEAR"
+        },
+        {
+          "field": "context.amount",
+          "operator": "LTE",
+          "value": "100000000"
+        }
+      ]
+    }
+  ]
+}

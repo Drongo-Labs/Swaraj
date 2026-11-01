@@ -12,7 +12,7 @@ export function createMockVenueAdapter(
 ): VenueAdapter {
   return {
     async collectEvidence(ref: ExecutionRef) {
-      if (ref.venue !== "UNISWAP_V3_BASE") {
+      if (ref.venue !== "UNISWAP_V3_BASE" && ref.venue !== "REF_FINANCE_NEAR") {
         throw new EvidenceValidationError(`unsupported venue: ${ref.venue}`);
       }
       const fixture = fixtures[ref.txHash];
