@@ -39,7 +39,7 @@ Clone the repository and install workspace dependencies:
 # 1. Install dependencies across all monorepo packages
 pnpm install
 
-# 2. Build the core packages in dependency order
+# 2. Build the workspace packages in dependency order
 pnpm --filter @swaraj/schemas build
 pnpm --filter @swaraj/crypto build
 pnpm --filter @swaraj/smt build
@@ -47,6 +47,10 @@ pnpm --filter @swaraj/contracts build
 pnpm --filter @swaraj/rules build
 pnpm --filter @swaraj/evidence build
 pnpm --filter @swaraj/capability build
+pnpm --filter @swaraj/database build
+pnpm --filter @swaraj/receipts build
+pnpm --filter @swaraj/proofs build
+pnpm --filter @swaraj/api build
 pnpm --filter @swaraj/sdk build
 pnpm --filter @swaraj/example build
 pnpm --filter @swaraj/web build
@@ -97,13 +101,12 @@ Open Terminal 1:
 
 **On Linux / macOS:**
 ```bash
-SWARAJ_FORCE_MOCK=1 pnpm --filter @swaraj/api start
+SWARAJ_FORCE_MOCK=1 SWARAJ_DEV_TOKEN=development-test-token-at-least-32-characters pnpm --filter @swaraj/api start
 ```
 
 **On Windows (PowerShell):**
 ```powershell
-$env:SWARAJ_FORCE_MOCK="1"
-pnpm --filter @swaraj/api start
+$env:SWARAJ_FORCE_MOCK="1"; $env:SWARAJ_DEV_TOKEN="development-test-token-at-least-32-characters"; pnpm --filter @swaraj/api start
 ```
 
 *The API will start listening on `http://127.0.0.1:3000`.*
