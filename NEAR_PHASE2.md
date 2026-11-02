@@ -24,6 +24,17 @@ Scenes: `trade.allow` · `trade.block` · `payment.allow` · `payment.block`
 - `createNearMockExecutionAdapter` — `@swaraj/capability`
 - Missing evidence fails closed (`NEAR_MISSING_TX_HASH`)
 
+## Live NEAR (next phase)
+
+Set `NEAR_ACCOUNT_ID` + `NEAR_PRIVATE_KEY` (+ optional `NEAR_RPC_URL`). The API then runs:
+
+mandate ALLOW → capability → on-chain NEAR tx → `NEAR_FINALITY` evidence → receipt
+
+- `createNearLiveExecutionAdapter` — `@swaraj/capability`
+- `createNearLiveVenueAdapter` — `@swaraj/evidence`
+- Settlement: NEP-141 via `NEAR_FT_CONTRACT`, else native NEAR (`NEAR_YOCTO_PER_UNIT`)
+- `/health` reports `nearLive: true` and `phases.near: "live"`
+
 ## Product statuses
 
 `allowed` · `blocked` · `proved` · `cant_prove` via `@swaraj/contracts`  

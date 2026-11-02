@@ -4,9 +4,13 @@ import {
   createMemoryCapabilityStore,
   createMemoryReservationStore,
   createMockExecutionAdapter,
+  createNearLiveExecutionAdapter,
+  isNearLiveConfigured,
+  nearAccountRef,
   type CapabilityService,
   type ExecutionAdapter,
   type ExecutionTrade,
+  type NearExecutionAction,
 } from "@swaraj/capability";
 import {
   createPostgresCapabilityStore,
@@ -18,6 +22,7 @@ import type { ActionRequest, ActionResult } from "@swaraj/contracts";
 import {
   createBaseVenueAdapter,
   createMockVenueAdapter,
+  createNearLiveVenueAdapter,
   DEFAULT_MOCK_FIXTURES,
   resolveBaseNetwork,
   type VenueAdapter,
@@ -115,10 +120,17 @@ export type PipelineStack = {
   evidence: VenueAdapter;
   capabilities: CapabilityService;
   execution: ExecutionAdapter;
+  /** Live NEAR adapters when NEAR_ACCOUNT_ID + NEAR_PRIVATE_KEY are set. */
+  nearLive?: {
+    execution: ReturnType<typeof createNearLiveExecutionAdapter>;
+    evidence: VenueAdapter;
+    accountId: string;
+  };
   labels: {
     base: "mock" | "rpc" | "rpc:base" | "rpc:base-sepolia";
     execution: "mock" | "uniswap_v3";
     capabilityStore: "postgres" | "memory";
+    near?: "live" | "off";
   };
 };
 
@@ -238,19 +250,159 @@ export function createPipelineStack(
   pool?: Pool,
 ): PipelineStack {
   const { capabilities, execution, capabilityStore } = createDefaultCapabilityStack(mode, pool);
+  const nearOpts = {
+    ...(process.env.NEAR_RPC_URL?.trim() ? { rpcUrl: process.env.NEAR_RPC_URL.trim() } : {}),
+    ...(process.env.NEAR_ACCOUNT_ID?.trim()
+      ? { accountId: process.env.NEAR_ACCOUNT_ID.trim() }
+      : {}),
+    ...(process.env.NEAR_PRIVATE_KEY?.trim()
+      ? { privateKey: process.env.NEAR_PRIVATE_KEY.trim() }
+      : {}),
+    ...(process.env.NEAR_FT_CONTRACT?.trim()
+      ? { ftContract: process.env.NEAR_FT_CONTRACT.trim() }
+      : {}),
+  };
+  const nearLive = isNearLiveConfigured(process.env)
+    ? {
+        execution: createNearLiveExecutionAdapter(capabilities, nearOpts),
+        evidence: createNearLiveVenueAdapter({
+          ...(nearOpts.rpcUrl ? { rpcUrl: nearOpts.rpcUrl } : {}),
+          ...(nearOpts.accountId ? { senderAccountId: nearOpts.accountId } : {}),
+        }),
+        accountId: process.env.NEAR_ACCOUNT_ID!.trim(),
+      }
+    : undefined;
   return {
     mode,
     evidence: createDefaultEvidenceAdapter(mode),
     capabilities,
     execution,
+    ...(nearLive ? { nearLive } : {}),
     labels:
       mode === "base"
         ? {
             base: `rpc:${resolveBaseNetwork(process.env).id}`,
             execution: "uniswap_v3",
             capabilityStore,
+            near: nearLive ? "live" : "off",
           }
-        : { base: "mock", execution: "mock", capabilityStore },
+        : {
+            base: "mock",
+            execution: "mock",
+            capabilityStore,
+            near: nearLive ? "live" : "off",
+          },
+  };
+}
+
+/**
+ * After mandate ALLOW for NEAR trade/payment: issue capability → live NEAR tx →
+ * evidence (NEAR_FINALITY) → PENDING receipt. Skips Base SMT / Uniswap.
+ */
+export async function runNearLivePipeline(params: {
+  applicationId: string;
+  idempotencyKey: string;
+  intentHash: string;
+  policyHash: string;
+  amount: string;
+  nearAction: NearExecutionAction;
+  capabilities: CapabilityService;
+  nearExecution: ReturnType<typeof createNearLiveExecutionAdapter>;
+  nearEvidence: VenueAdapter;
+  receipts: ReceiptEngine;
+  signer: Signer;
+  nearAccountId: string;
+  unifiedAction?: UnifiedAction;
+}): Promise<PipelineAllowResult> {
+  const accountRef = nearAccountRef(params.nearAccountId);
+  const { token } = await params.capabilities.issue(
+    {
+      applicationId: params.applicationId,
+      intentHash: params.intentHash as `0x${string}`,
+      policyHash: params.policyHash as `0x${string}`,
+      accountRef,
+      idempotencyKey: params.idempotencyKey,
+      amount: params.amount,
+      // Soft ceiling: one action amount (mandate already gated the real limit).
+      budgetLimit: params.amount,
+      usedBudget: "0",
+    },
+    params.signer,
+  );
+
+  let execution;
+  try {
+    execution = await params.nearExecution.executeNear({
+      token,
+      intentHash: params.intentHash,
+      policyHash: params.policyHash,
+      accountRef,
+      nearAction: params.nearAction,
+    });
+  } catch (error) {
+    await params.capabilities.release(token.capabilityId).catch(() => undefined);
+    throw error;
+  }
+
+  const evidence = await params.nearEvidence.collectEvidence(execution);
+  const receiptId = `receipt_${params.idempotencyKey}`
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .slice(0, 64);
+  const actionId = `action_${params.idempotencyKey}`
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .slice(0, 64);
+
+  const record = await params.receipts.createPendingReceipt({
+    applicationId: params.applicationId,
+    receiptId,
+    actionId,
+    intentHash: params.intentHash,
+    policyHash: params.policyHash,
+    evidenceRoot: evidence.evidenceRoot,
+    claimType: params.nearAction.kind === "PAYMENT" ? "TRADE_EXECUTED" : "TRADE_EXECUTED",
+    finalityRule: "NEAR_FINALITY",
+    verifierVersion: "0.1.0",
+    createdAt: evidence.collectedAt,
+    signer: params.signer,
+    idempotencyKey: params.idempotencyKey,
+    ...(params.unifiedAction
+      ? {
+          intentJson: {
+            format: "unified-action" as const,
+            action: JSON.parse(serializeUnifiedAction(params.unifiedAction)) as Record<
+              string,
+              unknown
+            >,
+            actionHash: unifiedActionHash(params.unifiedAction),
+            nearTxHash: execution.txHash,
+            venue: execution.venue,
+          },
+        }
+      : {
+          intentJson: {
+            nearAction: params.nearAction,
+            nearTxHash: execution.txHash,
+          },
+        }),
+    accountRef,
+  });
+
+  const status = record.status === "NON_PROVABLE" ? "NON_PROVABLE" : "PENDING";
+  return {
+    decision: "ALLOW",
+    receiptId: record.receiptId,
+    status,
+    productStatus: status === "NON_PROVABLE" ? "cant_prove" : "allowed",
+    capabilityId: token.capabilityId,
+    intentHash: params.intentHash,
+    policyHash: params.policyHash,
+    record,
+    proveContext: {
+      intent: params.unifiedAction ?? params.nearAction,
+      policy: { mandateHash: params.policyHash },
+      state: {},
+      evidence,
+    },
   };
 }
 

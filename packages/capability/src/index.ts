@@ -32,3 +32,11 @@ export {
   createNearMockExecutionAdapter,
   type NearMockExecutionOptions,
 } from "./nearExecution.js";
+export {
+  createNearLiveExecutionAdapter,
+  isNearLiveConfigured,
+  nearAccountRef,
+  nearTxHashToHex,
+  type NearExecutionAction,
+  type NearLiveExecutionOptions,
+} from "./nearLiveExecution.js";

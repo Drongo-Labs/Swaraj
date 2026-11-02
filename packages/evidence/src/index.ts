@@ -15,6 +15,11 @@ export { buildEvidenceBundle, type BuildEvidenceBundleOptions } from "./bundle.j
 export { createMockVenueAdapter } from "./mock.js";
 export { createBaseVenueAdapter, type BaseVenueAdapterOptions, type BaseRpcClient } from "./base.js";
 export { createNearMockVenueAdapter } from "./near.js";
+export {
+  createNearLiveVenueAdapter,
+  hexToNearTxHash,
+  type NearLiveVenueAdapterOptions,
+} from "./nearLive.js";
 export { DEFAULT_MOCK_FIXTURES, KNOWN_TX_HASH, CONFLICT_TX_HASH, FINAL_TX_HASH } from "./fixtures.js";
 export {
   DEFAULT_NEAR_MOCK_FIXTURES,

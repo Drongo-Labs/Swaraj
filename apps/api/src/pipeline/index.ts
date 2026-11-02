@@ -9,6 +9,7 @@ export {
 export {
   runPipeline,
   runMockPipeline,
+  runNearLivePipeline,
   createDefaultEvidenceAdapter,
   createDefaultCapabilityStack,
   createPipelineStack,

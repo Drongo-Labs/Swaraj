@@ -21,7 +21,11 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 try {
   const port = Number(process.env.PORT ?? 3000);
   const address = await app.listen({ host: "127.0.0.1", port });
-  console.log(`Swaraj API: ${address} (pipeline mode: ${mode} — live Base, no mock fallback)`);
+  const near =
+    process.env.NEAR_ACCOUNT_ID?.trim() && process.env.NEAR_PRIVATE_KEY?.trim()
+      ? `live NEAR (${process.env.NEAR_ACCOUNT_ID.trim()})`
+      : "NEAR off (set NEAR_ACCOUNT_ID + NEAR_PRIVATE_KEY)";
+  console.log(`Swaraj API: ${address} (pipeline mode: ${mode} — live Base; ${near})`);
 } catch (error) {
   await app.close();
   throw error;

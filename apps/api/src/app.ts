@@ -47,6 +47,7 @@ import {
   MANDATE_POLICY_ID,
   resolvePipelineMode,
   runPipeline,
+  runNearLivePipeline,
   unifiedActionHash,
   unifiedActionToActionRequest,
   type AuditEntry,
@@ -80,6 +81,14 @@ export type ActivityItem = {
 /** Base Uniswap venue — only these SPOT_TRADEs enter the live Base execution pipeline. */
 function isBaseSpotVenue(venue: string): boolean {
   return venue === "UNISWAP_V3_BASE";
+}
+
+function isNearSpotVenue(venue: string): boolean {
+  return venue === "REF_FINANCE_NEAR";
+}
+
+function isNearPaymentService(service: string): boolean {
+  return service === "near_ft_transfer";
 }
 
 export type BuildAppOptions = {
@@ -150,7 +159,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const mandateGateway = createMandatePolicyGate({ base: policyGateway, signer });
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
-  const { evidence, capabilities, execution, labels } = stack;
+  const { evidence, capabilities, execution, labels, nearLive } = stack;
   const liveState: LiveStateOracle | undefined =
     pipelineMode === "base"
       ? createLiveStateOracle({
@@ -255,8 +264,10 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return {
       status: "ok",
       mode: pipelineMode,
-      executionEnabled: pipelineMode === "base" || pipelineMode === "mock",
+      executionEnabled: pipelineMode === "base" || pipelineMode === "mock" || Boolean(nearLive),
       live: pipelineMode === "base",
+      nearLive: Boolean(nearLive),
+      nearAccount: nearLive?.accountId,
       network: pipelineMode === "base" ? network.id : "mock",
       chainId: pipelineMode === "base" ? network.chainId : undefined,
       account: liveState?.accountAddress,
@@ -270,6 +281,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         mandateRules: "PERMIT_FORBID_DEFAULT_DENY",
         base: labels.base,
         execution: labels.execution,
+        near: labels.near ?? "off",
         capabilityStore: labels.capabilityStore,
         policyStore: policyStoreKind,
         proofs: "TRADE_RECEIPT_V1+BLOCK_DECISION_V1",
@@ -801,22 +813,118 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         });
       }
 
-      // Permitted NEAR trade / payment / other non-Base actions: durable
-      // PENDING receipt + optional mandate proof job (pool mode). Fixture
-      // execution adapters live in @swaraj/capability / @swaraj/evidence.
+      // Live NEAR: mandate ALLOW → capability → on-chain NEAR tx → NEAR_FINALITY evidence.
+      const nearTrade =
+        action.action === "SPOT_TRADE" && isNearSpotVenue(action.resource.venue);
+      const nearPay =
+        action.action === "PAYMENT" && isNearPaymentService(action.resource.service);
+      if (nearLive && (nearTrade || nearPay)) {
+        const amount =
+          action.action === "SPOT_TRADE"
+            ? action.context.amount.toString()
+            : action.context.amount.toString();
+        // Demo fixtures use placeholder accounts (vendor.near). Live testnet
+        // needs a real account — remap via env or self-transfer.
+        const rawReceiver =
+          action.action === "PAYMENT"
+            ? action.context.recipient
+            : (process.env.NEAR_TRADE_RECEIVER?.trim() || nearLive.accountId);
+        const placeholder =
+          rawReceiver === "vendor.near" ||
+          rawReceiver === "usdc.near" ||
+          rawReceiver === "wrap.near";
+        const receiverId =
+          process.env.NEAR_PAYMENT_RECEIVER?.trim() ||
+          (placeholder ? nearLive.accountId : rawReceiver);
+        try {
+          const result = await runNearLivePipeline({
+            applicationId,
+            idempotencyKey: action.idempotencyKey,
+            intentHash,
+            policyHash,
+            amount,
+            nearAction: {
+              kind: nearPay ? "PAYMENT" : "SPOT_TRADE",
+              amount,
+              receiverId,
+              ...(action.action === "SPOT_TRADE"
+                ? { assetIn: action.context.assetIn, assetOut: action.context.assetOut }
+                : {}),
+              memo: `swaraj:${action.action}:${action.intentId}`,
+            },
+            capabilities,
+            nearExecution: nearLive.execution,
+            nearEvidence: nearLive.evidence,
+            receipts,
+            signer,
+            nearAccountId: nearLive.accountId,
+            unifiedAction: action,
+          });
+          proveContexts.set(`${applicationId}:${result.receiptId}`, result.proveContext);
+          const proof = await proofs
+            .recordTradeReceipt(applicationId, result.record, result.proveContext)
+            .catch((error: unknown) => {
+              request.log.error(error);
+              return { status: "NOT_PROVABLE" as const, reason: "proof inputs could not be recorded" };
+            });
+          const productStatus = productStatusFromDecision("ALLOW", result.status as EngineReceiptStatus);
+          const activity: ActivityItem = {
+            id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+            at,
+            applicationId,
+            action: action.action,
+            idempotencyKey: action.idempotencyKey,
+            decision: "ALLOW",
+            status: result.status,
+            productStatus,
+            intentHash,
+            policyHash,
+            receiptId: result.receiptId,
+            capabilityId: result.capabilityId,
+            proof: proof as Record<string, unknown>,
+          };
+          activityLog.push(activity);
+          const nearTxHash =
+            result.record.intentJson &&
+            typeof result.record.intentJson === "object" &&
+            "nearTxHash" in result.record.intentJson
+              ? String((result.record.intentJson as { nearTxHash?: unknown }).nearTxHash ?? "")
+              : undefined;
+          return reply.code(200).send({
+            decision: "ALLOW",
+            productStatus,
+            mandate: { reason: evaluated.reason, matchedPermitRuleIds: evaluated.matchedPermitRuleIds },
+            status: result.status,
+            receiptId: result.receiptId,
+            capabilityId: result.capabilityId,
+            intentHash,
+            policyHash,
+            near: {
+              live: true,
+              accountId: nearLive.accountId,
+              venue: "REF_FINANCE_NEAR",
+              ...(nearTxHash ? { txHash: nearTxHash } : {}),
+            },
+            proof,
+            activityId: activity.id,
+          });
+        } catch (error) {
+          request.log.error(error);
+          const message = error instanceof Error ? error.message : "unknown";
+          return reply.code(500).send({ error: "near_pipeline_failed", message });
+        }
+      }
+
+      // Mandate-only path (NEAR fixtures / non-Base) when live NEAR is not configured.
       let proofReceipt: { id: string; state: string } | undefined;
       if (pool) {
         try {
           const receiptId = randomUUID();
           const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
-          // The receipts table references the applications registry — make
-          // sure the application row exists (idempotent).
           await handle.raw.query(
             "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
             [applicationId],
           );
-          // Log the decision (authz_decisions) — the receipt's decision_id
-          // references it.
           const logged = await insertDecision(handle, {
             appId: applicationId,
             intentDigest: intentHash,
@@ -880,6 +988,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         intentHash,
         policyHash,
         activityId: activity.id,
+        near: { live: false, reason: "NEAR_ACCOUNT_ID/NEAR_PRIVATE_KEY not configured" },
         ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
       });
     },

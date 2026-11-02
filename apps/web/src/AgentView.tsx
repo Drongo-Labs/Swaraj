@@ -172,7 +172,7 @@ export function AgentView({ policy, apiOk }: Props) {
 
   const refreshActivity = useCallback(async () => {
     const data = await api<{ items: ActivityItem[] }>(`/v1/applications/${APP_ID}/activity`);
-    setActivity(data.items);
+    setActivity(Array.isArray(data.items) ? data.items : []);
   }, []);
 
   const refreshLiveState = useCallback(async () => {
@@ -185,14 +185,28 @@ export function AgentView({ policy, apiOk }: Props) {
   }, []);
 
   useEffect(() => {
-    void refreshActivity().catch(() => undefined);
-    void refreshLiveState().catch(() => undefined);
-    const timer = setInterval(() => {
-      void refreshActivity().catch(() => undefined);
-      void refreshLiveState().catch(() => undefined);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [refreshActivity, refreshLiveState]);
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const data = await api<{ items: ActivityItem[] }>(`/v1/applications/${APP_ID}/activity`);
+        if (!cancelled) setActivity(Array.isArray(data.items) ? data.items : []);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      }
+      try {
+        const state = await api<LiveStateView>(`/v1/applications/${APP_ID}/state`);
+        if (!cancelled) setLiveState(state);
+      } catch {
+        if (!cancelled) setLiveState(null);
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   async function propose(kind: "within" | "over") {
     if (!policy) return;
@@ -233,6 +247,70 @@ export function AgentView({ policy, apiOk }: Props) {
             ? i.receiptId === decision.receiptId
             : i.decision === "BLOCK" && i.intentHash === decision.intentHash,
         );
+      if (match) setSelected(match);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Phase 2 NEAR — unified-action scenes against the registered Agent Mandate. */
+  async function proposeNear(
+    scene: "trade.allow" | "trade.block" | "payment.allow" | "payment.block",
+  ) {
+    setBusy(true);
+    setError(null);
+    const now = Date.now();
+    const ZERO_SIG =
+      "0x2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222";
+    const policyHash =
+      "0x3333333333333333333333333333333333333333333333333333333333333333";
+    const isTrade = scene.startsWith("trade.");
+    const allow = scene.endsWith(".allow");
+    const amount = isTrade ? (allow ? "50000000" : "100000001") : allow ? "1000000" : "5000001";
+    const idempotencyKey = `near_${scene.replace(/\./g, "_")}_${now}`.slice(0, 128);
+    const action = isTrade
+      ? {
+          intentId: `intent_near_t_${amount}_${now}`.slice(0, 64),
+          agent: "agent:near",
+          action: "SPOT_TRADE",
+          resource: { venue: "REF_FINANCE_NEAR" },
+          context: {
+            amount,
+            assetIn: "usdc.near",
+            assetOut: "wrap.near",
+            slippageBps: 50,
+          },
+          policyHash,
+          timestamp: now,
+          expiry: now + 300_000,
+          idempotencyKey,
+          signature: ZERO_SIG,
+        }
+      : {
+          intentId: `intent_near_p_${amount}_${now}`.slice(0, 64),
+          agent: "agent:near",
+          action: "PAYMENT",
+          resource: { service: "near_ft_transfer" },
+          context: { amount, currency: "USDC", recipient: "vendor.near" },
+          policyHash,
+          timestamp: now,
+          expiry: now + 300_000,
+          idempotencyKey,
+          signature: ZERO_SIG,
+        };
+    try {
+      const decision = await api<ActionResult>(`/v1/applications/${APP_ID}/unified-actions`, {
+        method: "POST",
+        body: JSON.stringify({ action }),
+      });
+      await refreshActivity();
+      const items = await api<{ items: ActivityItem[] }>(`/v1/applications/${APP_ID}/activity`);
+      setActivity(items.items);
+      const match =
+        items.items.find((i) => i.idempotencyKey === idempotencyKey) ??
+        items.items.find((i) => i.intentHash === decision.intentHash);
       if (match) setSelected(match);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -313,6 +391,55 @@ export function AgentView({ policy, apiOk }: Props) {
             }}
           >
             {busy ? "Running…" : "Run demo sequence"}
+          </button>
+        </div>
+        <div className="presets" style={{ marginTop: "0.75rem" }}>
+          <button
+            type="button"
+            className="chip"
+            disabled={busy || apiOk === false}
+            onClick={() => void proposeNear("trade.allow")}
+          >
+            NEAR trade ALLOW
+          </button>
+          <button
+            type="button"
+            className="chip"
+            disabled={busy || apiOk === false}
+            onClick={() => void proposeNear("trade.block")}
+          >
+            NEAR trade BLOCK
+          </button>
+          <button
+            type="button"
+            className="chip"
+            disabled={busy || apiOk === false}
+            onClick={() => void proposeNear("payment.allow")}
+          >
+            NEAR payment ALLOW
+          </button>
+          <button
+            type="button"
+            className="chip"
+            disabled={busy || apiOk === false}
+            onClick={() => void proposeNear("payment.block")}
+          >
+            NEAR payment BLOCK
+          </button>
+          <button
+            type="button"
+            className="cta ghost"
+            disabled={busy || apiOk === false}
+            onClick={() => {
+              void (async () => {
+                await proposeNear("trade.allow");
+                await proposeNear("trade.block");
+                await proposeNear("payment.allow");
+                await proposeNear("payment.block");
+              })();
+            }}
+          >
+            {busy ? "Running NEAR…" : "Run NEAR Phase 2"}
           </button>
         </div>
         {error && <p className="err">{error}</p>}

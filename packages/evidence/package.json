@@ -3,7 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,6 +17,7 @@
   "dependencies": {
     "@swaraj/crypto": "workspace:*",
     "@swaraj/schemas": "workspace:*",
+    "near-api-js": "7.4.0",
     "viem": "^2.21.0"
   }
 }
