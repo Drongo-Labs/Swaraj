@@ -29,9 +29,11 @@ export interface MandateJobPayload {
   mandate: unknown;
   /** Wire unified action as submitted (JSON-safe). */
   action: unknown;
-  expected: { decision: "ALLOW" | "BLOCK"; matchedRuleIds: string[] };
+  expected: { decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL"; matchedRuleIds: string[] };
   intentHash: string;
   mandateHash: string;
+  /** Who approved a NEEDS_APPROVAL decision. */
+  approvedBy?: string;
   /** Evidence root of the executed action; bound into the proved statement. */
   evidenceDigest?: string;
   /** Live NEAR transaction reference, carried through to the receipt bundle. */
@@ -81,8 +83,11 @@ async function runMandateJob(
     const action = parseUnifiedAction(payload.action);
     const decision = evaluateParsedMandate(mandate, action);
     const expectedIds = payload.expected.matchedRuleIds.slice().sort().join(",");
-    const actualIds = [...decision.matchedPermitRuleIds, ...decision.matchedForbidRuleIds].sort().join(",");
+    const actualIds = decision.matchedRuleIds.slice().sort().join(",");
     const sameOutcome = decision.decision === payload.expected.decision && actualIds === expectedIds;
+    if (decision.decision === "NEEDS_APPROVAL" && payload.approvedBy === undefined) {
+      throw new Error("mandate parity failure: NEEDS_APPROVAL with no approver");
+    }
     if (!sameOutcome) {
       throw new Error(
         `mandate parity failure: recorded ${payload.expected.decision} [${expectedIds}], recomputed ${decision.decision} [${actualIds}]`,
@@ -93,7 +98,8 @@ async function runMandateJob(
       intentHash: payload.intentHash,
       mandateHash: payload.mandateHash,
       decision: decision.decision,
-      matchedRuleIds: [...decision.matchedPermitRuleIds, ...decision.matchedForbidRuleIds],
+      matchedRuleIds: decision.matchedRuleIds,
+      ...(payload.approvedBy !== undefined ? { approvedBy: payload.approvedBy } : {}),
       ...(payload.evidenceDigest !== undefined ? { evidenceDigest: payload.evidenceDigest } : {}),
     });
     const id = mandateStatementId(statement);

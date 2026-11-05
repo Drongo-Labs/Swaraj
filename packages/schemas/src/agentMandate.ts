@@ -10,7 +10,8 @@ import {
 } from "./primitives.js";
 import { UnifiedActionType } from "./unifiedAction.js";
 
-export const MandateRuleEffect = z.enum(["PERMIT", "FORBID"]);
+/** FORBID beats REQUIRE_APPROVAL, which beats PERMIT. */
+export const MandateRuleEffect = z.enum(["PERMIT", "FORBID", "REQUIRE_APPROVAL"]);
 
 export const MandateStringField = z.enum([
   "agent",

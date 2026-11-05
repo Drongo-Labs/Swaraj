@@ -5,8 +5,8 @@ import { evaluateParsedMandate, ruleMatches } from "../dist/index.js";
 
 /**
  * Random mandates and actions checked against the decision the Lean suite
- * proves (Gate/Mandate.lean): ALLOW exactly when a permit matches and no
- * forbid does. A failure prints the seed; set SWARAJ_RANDOM_SEED to replay it.
+ * proves (Gate/Mandate.lean, Gate/Approval.lean): ALLOW exactly when a permit
+ * matches and no forbid or approval rule does. A failure prints the seed; set SWARAJ_RANDOM_SEED to replay it.
  */
 
 const seed = Number(process.env.SWARAJ_RANDOM_SEED ?? Date.now() % 2147483647);
@@ -55,7 +55,7 @@ function randomMandate() {
     const make = action === "PAYMENT" ? paymentPredicate : tradePredicate;
     return {
       ruleId: `r${String(i).padStart(2, "0")}`,
-      effect: pick(["PERMIT", "FORBID"]),
+      effect: pick(["PERMIT", "PERMIT", "FORBID", "REQUIRE_APPROVAL"]),
       action,
       predicates: Array.from({ length: upTo(3) }, make),
     };
@@ -87,9 +87,12 @@ test(`random mandates match the Lean-proved decision (seed ${seed})`, () => {
     const matching = mandate.rules.filter((rule) => ruleMatches(action, rule));
     const anyForbid = matching.some((rule) => rule.effect === "FORBID");
     const anyPermit = matching.some((rule) => rule.effect === "PERMIT");
+    const anyApproval = matching.some((rule) => rule.effect === "REQUIRE_APPROVAL");
     const context = `seed ${seed}, case ${i}`;
-    assert.equal(decision.decision === "ALLOW", anyPermit && !anyForbid, context);
-    assert.equal(decision.reason, anyForbid ? "FORBID_MATCH" : anyPermit ? "PERMIT_MATCH" : "DEFAULT_DENY", context);
+    assert.equal(decision.decision === "ALLOW", anyPermit && !anyForbid && !anyApproval, context);
+    assert.equal(decision.decision === "NEEDS_APPROVAL", anyApproval && !anyForbid, context);
+    const reason = anyForbid ? "FORBID_MATCH" : anyApproval ? "APPROVAL_REQUIRED" : anyPermit ? "PERMIT_MATCH" : "DEFAULT_DENY";
+    assert.equal(decision.reason, reason, context);
     if (decision.decision === "ALLOW") allowed += 1;
   }
   // A generator that only ever blocks would prove nothing.

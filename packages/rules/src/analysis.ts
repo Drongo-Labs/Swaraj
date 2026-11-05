@@ -61,7 +61,7 @@ function jsonKey(value: unknown): string {
 
 export function lintMandate(mandate: AgentMandate): MandateIssue[] {
   const issues: MandateIssue[] = [];
-  if (!mandate.rules.some((rule) => rule.effect === "PERMIT" && !ruleCanNeverMatch(rule))) {
+  if (!mandate.rules.some((rule) => rule.effect !== "FORBID" && !ruleCanNeverMatch(rule))) {
     issues.push({ code: "NO_PERMIT", message: "no rule can permit anything, so every action is blocked" });
   }
   const seen = new Map<string, string>();
@@ -144,6 +144,7 @@ export type MandateDiff = {
   checked: number;
   newlyAllowed: unknown[];
   newlyBlocked: unknown[];
+  newlyNeedsApproval: unknown[];
   rulesAdded: string[];
   rulesRemoved: string[];
   rulesChanged: string[];
@@ -167,6 +168,7 @@ export function diffMandates(before: AgentMandate, after: AgentMandate): Mandate
     checked: 0,
     newlyAllowed: [],
     newlyBlocked: [],
+    newlyNeedsApproval: [],
     rulesAdded: [...newRules.keys()].filter((id) => !oldRules.has(id)),
     rulesRemoved: [...oldRules.keys()].filter((id) => !newRules.has(id)),
     rulesChanged: [...newRules.keys()].filter((id) => oldRules.has(id) && oldRules.get(id) !== newRules.get(id)),
@@ -211,7 +213,7 @@ export function diffMandates(before: AgentMandate, after: AgentMandate): Mandate
       const was = evaluateParsedMandate(before, parsed.data).decision;
       const now = evaluateParsedMandate(after, parsed.data).decision;
       if (was === now) continue;
-      const list = now === "ALLOW" ? diff.newlyAllowed : diff.newlyBlocked;
+      const list = now === "ALLOW" ? diff.newlyAllowed : now === "BLOCK" ? diff.newlyBlocked : diff.newlyNeedsApproval;
       if (list.length < MAX_EXAMPLES) {
         const { resource, context } = wire;
         list.push({ action, resource, context });

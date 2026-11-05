@@ -10,6 +10,7 @@ import {
 export type MandateDecisionReason =
   | "PERMIT_MATCH"
   | "FORBID_MATCH"
+  | "APPROVAL_REQUIRED"
   | "DEFAULT_DENY"
   | "MANDATE_INACTIVE"
   | "SUBJECT_MISMATCH"
@@ -22,11 +23,13 @@ export type MandateDecisionReason =
   | "ENGINE_DISAGREEMENT";
 
 export interface MandateDecision {
-  decision: "ALLOW" | "BLOCK";
+  decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
   reason: MandateDecisionReason;
   matchedRuleIds: string[];
   matchedPermitRuleIds: string[];
   matchedForbidRuleIds: string[];
+  /** Present only on NEEDS_APPROVAL. */
+  matchedApprovalRuleIds?: string[];
 }
 
 function blocked(reason: MandateDecisionReason): MandateDecision {
@@ -117,8 +120,9 @@ export function ruleMatches(action: UnifiedAction, rule: MandateRule): boolean {
 }
 
 /**
- * Pure mandate evaluation. FORBID is checked globally before PERMIT;
- * absence of a matching permit is always a BLOCK (default deny).
+ * Pure mandate evaluation. FORBID is checked globally first, then
+ * REQUIRE_APPROVAL, then PERMIT; absence of a matching permit is always a
+ * BLOCK (default deny).
  */
 export function evaluateParsedMandate(mandate: AgentMandate, action: UnifiedAction): MandateDecision {
   if (action.timestamp < mandate.validFrom || action.timestamp >= mandate.validUntil) {
@@ -143,6 +147,19 @@ export function evaluateParsedMandate(mandate: AgentMandate, action: UnifiedActi
       matchedRuleIds: matchedForbidRuleIds,
       matchedPermitRuleIds,
       matchedForbidRuleIds,
+    };
+  }
+  const matchedApprovalRuleIds = matching
+    .filter((rule) => rule.effect === "REQUIRE_APPROVAL")
+    .map((rule) => rule.ruleId);
+  if (matchedApprovalRuleIds.length > 0) {
+    return {
+      decision: "NEEDS_APPROVAL",
+      reason: "APPROVAL_REQUIRED",
+      matchedRuleIds: matchedApprovalRuleIds,
+      matchedPermitRuleIds,
+      matchedForbidRuleIds,
+      matchedApprovalRuleIds,
     };
   }
   if (matchedPermitRuleIds.length > 0) {

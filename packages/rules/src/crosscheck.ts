@@ -121,10 +121,10 @@ function ruleTerm(rule: MandateRule, binding: Map<string, bigint>, action: Unifi
   return { kind: "all", parts: [kindOk, ...rule.predicates.map((predicate) => predicateTerm(predicate, binding))] };
 }
 
-/** The decision formula: allow iff (no forbid matches) ∧ (some permit matches). */
+/** The decision formula: allow iff (no forbid or approval rule matches) ∧ (some permit matches). */
 export function mandateDecisionTerm(mandate: AgentMandate, action: UnifiedAction): BoolTerm {
   const binding = actionBinding(action);
-  const forbids = mandate.rules.filter((rule) => rule.effect === "FORBID").map((rule) => ruleTerm(rule, binding, action));
+  const forbids = mandate.rules.filter((rule) => rule.effect !== "PERMIT").map((rule) => ruleTerm(rule, binding, action));
   const permits = mandate.rules.filter((rule) => rule.effect === "PERMIT").map((rule) => ruleTerm(rule, binding, action));
   const forbidAny: BoolTerm = { kind: "any", parts: forbids };
   const noForbid: BoolTerm = forbids.length === 0 ? TRUE : { kind: "not", part: forbidAny };
