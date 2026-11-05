@@ -1,0 +1,39 @@
+{
+  "mandateId": "mandate_near_live_v1",
+  "version": 1,
+  "agent": "*",
+  "defaultEffect": "DENY",
+  "validFrom": 0,
+  "validUntil": 4102444800000,
+  "rules": [
+    {
+      "ruleId": "forbid_near_live_over_cap",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "10000000000000000000000"
+        }
+      ]
+    },
+    {
+      "ruleId": "permit_near_live_transfer",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "resource.service",
+          "operator": "EQ",
+          "value": "near_transfer"
+        },
+        {
+          "field": "context.currency",
+          "operator": "EQ",
+          "value": "NEAR"
+        }
+      ]
+    }
+  ]
+}
