@@ -30,5 +30,8 @@ export {
 } from "./baseExecution.js";
 export {
   createNearMockExecutionAdapter,
+  createNearPaymentExecutor,
+  type NearLiveOptions,
   type NearMockExecutionOptions,
+  type NearPaymentExecutor,
 } from "./nearExecution.js";

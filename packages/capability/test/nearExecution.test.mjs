@@ -6,6 +6,7 @@ import {
   createMemoryCapabilityStore,
   createMemoryReservationStore,
   createNearMockExecutionAdapter,
+  createNearPaymentExecutor,
 } from "../dist/index.js";
 import { NEAR_KNOWN_TX_HASH } from "@swaraj/evidence";
 
@@ -41,4 +42,35 @@ test("NEAR mock execution consumes capability and returns REF_FINANCE_NEAR ref",
   });
   assert.equal(exec.venue, "REF_FINANCE_NEAR");
   assert.equal(exec.txHash, NEAR_KNOWN_TX_HASH);
+});
+
+test("live NEAR executor sends nothing when the capability is rejected", async () => {
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (...args) => { calls.push(args); throw new Error("no network in this test"); };
+  try {
+    const executor = createNearPaymentExecutor({
+      capabilities: {
+        verify: async () => { throw new Error("capability rejected"); },
+        consume: async () => { calls.push("consume"); },
+        commitReservation: async () => {},
+      },
+      rpcUrl: "http://127.0.0.1:9",
+      accountId: "agent.testnet",
+      privateKey: "ed25519:3D4YudUahN1nawWvHfEKBGpmJLfbCTbvdXDJKqfLhQ98XewyWK4tEDWvmAYPZqcgz7qfkCEHyWD15m8JVVWJ3LXD",
+    });
+    await assert.rejects(
+      executor.execute({
+        token: { capabilityId: "cap" },
+        intentHash: "0x",
+        policyHash: "0x",
+        accountRef: "0x",
+        expect: { kind: "transfer", receiverId: "v.testnet", amount: "1" },
+      }),
+      /capability rejected/,
+    );
+    assert.deepEqual(calls, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
