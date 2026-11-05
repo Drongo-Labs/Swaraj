@@ -77,9 +77,9 @@ export function ProductStatusBadge({
   decision,
 }: {
   status?: string | null | undefined;
-  decision?: "ALLOW" | "BLOCK" | undefined;
+  decision?: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL" | undefined;
 }) {
-  let resolved: "allowed" | "blocked" | "proved" | "cant_prove" = "allowed";
+  let resolved: "allowed" | "blocked" | "proved" | "cant_prove" | "needs_approval" = "allowed";
 
   if (status === "proved" || status === "PROVED") {
     resolved = "proved";
@@ -90,6 +90,8 @@ export function ProductStatusBadge({
     status === "DEV_UNVERIFIED"
   ) {
     resolved = "cant_prove";
+  } else if (status === "needs_approval" || decision === "NEEDS_APPROVAL") {
+    resolved = "needs_approval";
   } else if (status === "blocked" || decision === "BLOCK") {
     resolved = "blocked";
   } else {
@@ -101,7 +103,9 @@ export function ProductStatusBadge({
       ? "proved"
       : resolved === "cant_prove"
         ? "can’t prove"
-        : resolved === "blocked"
+        : resolved === "needs_approval"
+          ? "needs approval"
+          : resolved === "blocked"
           ? "blocked"
           : "allowed";
 

@@ -703,3 +703,13 @@ body {
 .product-badge.status-cant_prove::before {
   background: var(--brass);
 }
+
+.product-badge.status-needs_approval {
+  background: color-mix(in srgb, var(--brass) 8%, transparent);
+  color: var(--brass);
+  border-color: var(--brass);
+  border-style: dashed;
+}
+.product-badge.status-needs_approval::before {
+  background: var(--brass);
+}
