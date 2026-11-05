@@ -20,6 +20,7 @@
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",
     "@swaraj/smt": "workspace:*",
+    "@swaraj/verify": "workspace:*",
     "fastify": "^5.6.0",
     "pg": "^8.16.0",
     "viem": "^2.21.0"

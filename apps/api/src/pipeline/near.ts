@@ -21,7 +21,7 @@ const DEFAULT_RPC_URL = "https://rpc.testnet.near.org";
 const CAPABILITY_TTL_SECONDS = 120;
 
 export type NearSettlement =
-  | { status: "FINAL"; evidenceDigest: string; txHash: string; nearTx?: string }
+  | { status: "FINAL"; evidenceDigest: string; txHash: string; nearTx?: string; near?: ExecutionRef["near"] }
   | { status: "NOT_PROVABLE"; reason: string; txHash?: string; nearTx?: string };
 
 export type NearSettler = {
@@ -99,7 +99,7 @@ export function createNearSettler(
         const bundle: EvidenceBundle = await evidence.collectEvidence(ref);
         const chain = { txHash: ref.txHash, ...(ref.near ? { nearTx: ref.near.hash } : {}) };
         return bundle.finalityResult === "FINAL"
-          ? { status: "FINAL", evidenceDigest: bundle.evidenceRoot, ...chain }
+          ? { status: "FINAL", evidenceDigest: bundle.evidenceRoot, ...chain, ...(ref.near ? { near: ref.near } : {}) }
           : { status: "NOT_PROVABLE", reason: `EVIDENCE_${bundle.finalityResult}`, ...chain };
       } catch (error) {
         return {

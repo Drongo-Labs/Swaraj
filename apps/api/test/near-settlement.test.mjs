@@ -8,6 +8,7 @@ import test from "node:test";
 import { LocalKeySigner } from "@swaraj/crypto";
 import * as db from "@swaraj/database";
 import { runOneProofJob } from "@swaraj/proofs";
+import { verifyReceiptBundle } from "@swaraj/verify";
 import { buildApp } from "../dist/app.js";
 
 const url = process.env.SWARAJ_TEST_DATABASE_URL;
@@ -61,7 +62,7 @@ async function harness(nearSettler) {
     (await app.inject({ method: "POST", url: `/v1/applications/${applicationId}/unified-actions`, headers, payload: { action } })).json();
   const receipt = async (id) =>
     (await app.inject({ method: "GET", url: `/v1/applications/${applicationId}/receipts/${id}`, headers })).json();
-  return { app, submit, receipt };
+  return { app, submit, receipt, applicationId };
 }
 
 const settler = (result) => {
@@ -71,7 +72,7 @@ const settler = (result) => {
 
 test("final evidence reaches proved, and the proof binds that evidence", { skip }, async () => {
   const near = settler({ status: "FINAL", evidenceDigest: EVIDENCE, txHash: "0x01", nearTx: "Hash" });
-  const { app, submit, receipt } = await harness(near);
+  const { app, submit, receipt, applicationId } = await harness(near);
   const pool = db.openPool(url);
   const artifactRoot = await mkdtemp(join(tmpdir(), "swaraj-near-"));
   try {
@@ -85,6 +86,14 @@ test("final evidence reaches proved, and the proof binds that evidence", { skip 
     assert.equal((await receipt(res.receiptId)).productStatus, "proved");
     const bundle = JSON.parse(await readFile(outcome.artifactPath, "utf8"));
     assert.match(bundle.canonicalText, new RegExp(`evidence=${EVIDENCE}`));
+    // The worker and the standalone verifier must agree on the statement, byte for byte.
+    const exported = (await app.inject({
+      method: "GET",
+      url: `/v1/applications/${applicationId}/receipts/${res.receiptId}/bundle`,
+      headers,
+    })).json();
+    const verified = await verifyReceiptBundle(exported, { issuer: exported.issuer });
+    assert.equal(verified.valid, true, JSON.stringify(verified.checks));
   } finally {
     await rm(artifactRoot, { recursive: true, force: true });
     await pool.close();

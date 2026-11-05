@@ -22,6 +22,7 @@ import {
 } from "@swaraj/schemas";
 import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
+import { bundleDigest } from "@swaraj/verify";
 import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
   createDatabase,
@@ -29,6 +30,7 @@ import {
   advanceReceipt,
   claimIdempotencyKey,
   enqueueProofJob,
+  findProofRecord,
   findReceipt,
   findReceiptByIdempotencyKey,
   insertDecision,
@@ -941,6 +943,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
                 intentHash,
                 mandateHash: policyHash,
                 ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
+                ...(settlement?.near ? { near: settlement.near } : {}),
               },
             });
           }
@@ -1118,6 +1121,58 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           proofs: storedBundle || proveContexts.has(key) ? "guest_bundle_ready" : "not_configured",
           claimScope: "TRADE_RECEIPT_V1",
         },
+      };
+    },
+  );
+
+  /** Portable proof of a mandate receipt; `swaraj-verify` checks it with no Swaraj service. */
+  app.get<{ Params: { applicationId: string; receiptId: string } }>(
+    "/v1/applications/:applicationId/receipts/:receiptId/bundle",
+    async (request, reply) => {
+      const { applicationId, receiptId } = request.params;
+      if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(receiptId).success) {
+        return reply.code(400).send({ error: "invalid_receipt_id" });
+      }
+      if (!pool) return reply.code(404).send({ error: "receipt_not_found" });
+      const handle = { raw: pool, close: async () => {} };
+      const ledger = await findReceipt(handle, receiptId);
+      if (!ledger || ledger.appId !== applicationId) {
+        return reply.code(404).send({ error: "receipt_not_found" });
+      }
+      const record = await findProofRecord(handle, receiptId);
+      if (ledger.state !== "PROVED" || !ledger.proofRef || !record) {
+        return reply.code(409).send({ error: "receipt_not_proved", state: ledger.state });
+      }
+      const job = record.payload as {
+        action: unknown;
+        mandate: unknown;
+        intentHash: string;
+        mandateHash: string;
+        expected: { decision: string; matchedRuleIds: string[] };
+        evidenceDigest?: string;
+        near?: unknown;
+      };
+      const artifact = record.artifact as { statementId: string; canonicalText: string };
+      const unsigned = {
+        receiptId,
+        state: ledger.state,
+        proofRef: ledger.proofRef,
+        statementId: artifact.statementId,
+      };
+      return {
+        version: "swaraj/receipt-bundle/v1",
+        ...unsigned,
+        action: job.action,
+        mandate: job.mandate,
+        intentHash: job.intentHash,
+        mandateHash: job.mandateHash,
+        decision: job.expected.decision,
+        matchedRuleIds: job.expected.matchedRuleIds,
+        ...(job.evidenceDigest !== undefined ? { evidenceDigest: job.evidenceDigest } : {}),
+        ...(job.near !== undefined ? { near: job.near } : {}),
+        statementText: artifact.canonicalText,
+        issuer: signer.address,
+        signature: await signer.signDigest(bundleDigest(unsigned)),
       };
     },
   );

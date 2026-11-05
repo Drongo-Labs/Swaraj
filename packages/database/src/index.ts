@@ -30,6 +30,7 @@ export {
   enqueueProofJob,
   failProofJob,
   finishProofJob,
+  findProofRecord,
   insertProofArtifact,
   leaseNextProofJob,
   type ProofJob,

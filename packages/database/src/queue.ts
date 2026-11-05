@@ -114,3 +114,21 @@ export async function insertProofArtifact(
   );
   return Number(result.rows[0]!.artifact_id);
 }
+
+/** The proof job payload and verification bundle behind a receipt, if it was proved. */
+export async function findProofRecord(
+  handle: PoolHandle,
+  receiptId: string,
+): Promise<{ payload: unknown; artifact: unknown } | undefined> {
+  const result = await handle.raw.query<{ payload: unknown; content: unknown }>(
+    `SELECT j.payload, a.content
+     FROM proof_artifacts a
+     JOIN proof_jobs j ON j.job_id = a.job_id
+     WHERE a.receipt_id = $1 AND a.kind = 'VERIFICATION_BUNDLE'
+     ORDER BY a.artifact_id DESC
+     LIMIT 1`,
+    [receiptId],
+  );
+  const row = result.rows[0];
+  return row ? { payload: row.payload, artifact: row.content } : undefined;
+}
