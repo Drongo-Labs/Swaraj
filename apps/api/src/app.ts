@@ -26,7 +26,11 @@ import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngi
 import {
   createDatabase,
   createProofJobQueue,
+  advanceReceipt,
+  claimIdempotencyKey,
   enqueueProofJob,
+  findReceipt,
+  findReceiptByIdempotencyKey,
   insertDecision,
   insertReceipt,
   ensureApplication,
@@ -48,6 +52,10 @@ import {
   resolvePipelineMode,
   runPipeline,
   agentSignatureValid,
+  createNearSettler,
+  isNearAction,
+  type NearSettlement,
+  type NearSettler,
   unifiedActionHash,
   unifiedActionToActionRequest,
   type AuditEntry,
@@ -90,6 +98,8 @@ export type BuildAppOptions = {
   databaseUrl?: string;
   /** Phase 8 proof queue lookup; defaults to the Postgres queue when DATABASE_URL is set. */
   proofJobs?: Pick<ReturnType<typeof createProofJobQueue>, "getByReceipt">;
+  /** Overrides the env-selected NEAR settler (tests). */
+  nearSettler?: NearSettler;
 };
 
 type StoredPolicy = {
@@ -152,6 +162,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
   const { evidence, capabilities, execution, labels } = stack;
+  const nearSettler = options.nearSettler ?? createNearSettler(capabilities, signer);
   const liveState: LiveStateOracle | undefined =
     pipelineMode === "base"
       ? createLiveStateOracle({
@@ -821,10 +832,28 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       // PENDING receipt + optional mandate proof job (pool mode). Fixture
       // execution adapters live in @swaraj/capability / @swaraj/evidence.
       let proofReceipt: { id: string; state: string } | undefined;
+      let settlement: NearSettlement | undefined;
       if (pool) {
+        const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
         try {
+          // A replay returns the original outcome and must never execute again.
+          const replay = await findReceiptByIdempotencyKey(handle, applicationId, action.idempotencyKey);
+          if (replay) {
+            if (replay.intentDigest !== intentHash) {
+              return reply.code(409).send({ error: "idempotency_conflict" });
+            }
+            return reply.code(200).send({
+              decision: "ALLOW",
+              productStatus: productStatusFromReceipt(replay.state),
+              status: replay.state,
+              replayed: true,
+              intentHash,
+              policyHash,
+              receipt: { id: replay.receiptId, state: replay.state },
+              receiptId: replay.receiptId,
+            });
+          }
           const receiptId = randomUUID();
-          const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
           // The receipts table references the applications registry — make
           // sure the application row exists (idempotent).
           await handle.raw.query(
@@ -856,23 +885,46 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
               mandateHash: policyHash,
             },
           });
-          await enqueueProofJob(handle, {
+          const claimed = await claimIdempotencyKey(handle, {
+            appId: applicationId,
+            idemKey: action.idempotencyKey,
+            intentDigest: intentHash,
             receiptId,
-            payload: {
-              kind: "MANDATE",
-              mandate: mandateDefinition,
-              action: (request.body as { action?: unknown })?.action,
-              expected: { decision: "ALLOW", matchedRuleIds: evaluated.matchedPermitRuleIds },
-              intentHash,
-              mandateHash: policyHash,
-            },
           });
+          if (!claimed) {
+            await advanceReceipt(handle, receiptId, "INVALIDATED", { note: "lost the idempotency race" });
+            return reply.code(409).send({ error: "idempotency_conflict" });
+          }
           proofReceipt = { id: receiptId, state: "PENDING" };
+
+          // The receipt exists before anything moves on chain.
+          if (isNearAction(action)) {
+            settlement = await nearSettler.settle(action, { applicationId, intentHash, policyHash });
+          }
+          if (settlement?.status === "NOT_PROVABLE") {
+            await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
+            proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
+          } else {
+            await enqueueProofJob(handle, {
+              receiptId,
+              payload: {
+                kind: "MANDATE",
+                mandate: mandateDefinition,
+                action: (request.body as { action?: unknown })?.action,
+                expected: { decision: "ALLOW", matchedRuleIds: evaluated.matchedPermitRuleIds },
+                intentHash,
+                mandateHash: policyHash,
+                ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
+              },
+            });
+          }
         } catch (error) {
           request.log.error(error);
         }
       }
-      const engineStatus: EngineReceiptStatus = proofReceipt ? "PENDING" : "NOT_EXECUTABLE";
+      const engineStatus: EngineReceiptStatus = proofReceipt
+        ? (proofReceipt.state as EngineReceiptStatus)
+        : "NOT_EXECUTABLE";
       const productStatus = productStatusFromDecision("ALLOW", engineStatus);
       const activity: ActivityItem = {
         id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
@@ -897,6 +949,16 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         policyHash,
         activityId: activity.id,
         ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
+        ...(settlement
+          ? {
+              execution: {
+                live: nearSettler.live,
+                ...(settlement.txHash ? { txHash: settlement.txHash } : {}),
+                ...(settlement.nearTx ? { nearTx: settlement.nearTx } : {}),
+                ...(settlement.status === "NOT_PROVABLE" ? { reason: settlement.reason } : {}),
+              },
+            }
+          : {}),
       });
     },
   );
@@ -986,7 +1048,23 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         return reply.code(400).send({ error: "invalid_receipt_id" });
       }
       const record = await receipts.getReceipt(request.params.applicationId, request.params.receiptId);
-      if (!record) return reply.code(404).send({ error: "receipt_not_found" });
+      if (!record) {
+        // Mandate receipts (non-Base actions) live in the proof ledger, not the trade store.
+        const ledger = pool
+          ? await findReceipt({ raw: pool, close: async () => {} }, request.params.receiptId)
+          : undefined;
+        if (!ledger || ledger.appId !== request.params.applicationId) {
+          return reply.code(404).send({ error: "receipt_not_found" });
+        }
+        return {
+          receiptId: ledger.receiptId,
+          status: ledger.state,
+          productStatus: productStatusFromReceipt(ledger.state),
+          claim: ledger.claim,
+          intentHash: ledger.intentDigest,
+          proof: { ...(ledger.proofRef ? { reference: ledger.proofRef } : {}) },
+        };
+      }
       const key = `${request.params.applicationId}:${request.params.receiptId}`;
       const proofJob = await proofJobs?.getByReceipt(request.params.applicationId, request.params.receiptId);
       const storedBundle = await proofs.getTradeBundle(request.params.applicationId, request.params.receiptId);
