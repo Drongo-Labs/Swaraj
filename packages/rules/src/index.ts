@@ -166,3 +166,4 @@ export function evaluateMandate(mandateInput: unknown, actionInput: unknown): Ma
   return evaluateParsedMandate(mandate.data, action.data);
 }
 export * from "./crosscheck.js";
+export { diffMandates, lintMandate, ruleCanNeverMatch, type MandateDiff, type MandateIssue } from "./analysis.js";
