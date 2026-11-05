@@ -19,6 +19,7 @@ import {
   MandatePolicySchema,
   UnifiedActionSchema,
   normalizeMandatePolicy,
+  type AgentMandate,
   type UnifiedAction,
 } from "@swaraj/schemas";
 import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMandate, type MandateDecision } from "@swaraj/rules";
@@ -55,10 +56,14 @@ import {
   resolvePipelineMode,
   runPipeline,
   agentSignatureValid,
+  certificateValid,
   createNearSettler,
   isNearAction,
+  programAllowed,
+  ProgramCertificateSchema,
   type NearSettlement,
   type NearSettler,
+  type ProgramCertificate,
   unifiedActionHash,
   unifiedActionToActionRequest,
   type AuditEntry,
@@ -839,6 +844,57 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
+  const CERTIFICATES_ID = "program_certificates";
+  const loadCertificates = async (applicationId: string) => {
+    const stored = (await loadActivePolicy(applicationId, CERTIFICATES_ID)) as
+      | { revision: number; certificates: ProgramCertificate[] }
+      | undefined;
+    return stored ?? { revision: 0, certificates: [] };
+  };
+
+  /** Mandate-level checks outside the rule engine. Returns why the action may not proceed. */
+  const mandateGateFailure = async (
+    applicationId: string,
+    mandate: AgentMandate,
+    action: UnifiedAction,
+  ): Promise<"INVALID_SIGNATURE" | "UNVERIFIED_PROGRAM" | undefined> => {
+    if (mandate.agentSigner !== undefined && !(await agentSignatureValid(action, mandate.agentSigner))) {
+      return "INVALID_SIGNATURE";
+    }
+    if (mandate.programCertifier !== undefined) {
+      const { certificates } = await loadCertificates(applicationId);
+      if (!(await programAllowed(action, mandate.programCertifier, certificates, Date.now()))) {
+        return "UNVERIFIED_PROGRAM";
+      }
+    }
+    return undefined;
+  };
+
+  /** Adds a certificate. Only one signed by the active mandate's certifier is accepted. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/program-certificates",
+    async (request, reply) => {
+      const { applicationId } = request.params;
+      const certificate = ProgramCertificateSchema.safeParse(request.body);
+      if (!Identifier.safeParse(applicationId).success || !certificate.success) {
+        return reply.code(400).send({ error: "invalid_certificate" });
+      }
+      const mandate = AgentMandateSchema.safeParse(await loadActivePolicy(applicationId, MANDATE_POLICY_ID));
+      const certifier = mandate.success ? mandate.data.programCertifier : undefined;
+      if (certifier === undefined || !(await certificateValid(certificate.data, certifier, Date.now()))) {
+        return reply.code(422).send({ error: "certificate_rejected" });
+      }
+      const stored = await loadCertificates(applicationId);
+      const certificates = [
+        ...stored.certificates.filter((c) => c.program !== certificate.data.program),
+        certificate.data,
+      ];
+      const revision = stored.revision + 1;
+      await saveActiveDefinition(applicationId, CERTIFICATES_ID, revision, { revision, certificates });
+      return reply.code(201).send({ program: certificate.data.program, codeHash: certificate.data.codeHash });
+    },
+  );
+
   /** A person's decision. Needs the approver token: the agent's token cannot reach this route. */
   app.post<{ Params: { applicationId: string; approvalId: string } }>(
     APPROVAL_DECISION_ROUTE,
@@ -884,6 +940,11 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       ) {
         await close("STALE");
         return reply.code(409).send({ error: "mandate_changed" });
+      }
+      const gateFailure = await mandateGateFailure(applicationId, mandate.data, action);
+      if (gateFailure !== undefined) {
+        await close("STALE");
+        return reply.code(409).send({ error: "gate_failed", reason: gateFailure });
       }
       // ponytail: the Base pipeline re-gates on ALLOW only, so it cannot run an approved action yet.
       if (action.action === "SPOT_TRADE" && isBaseSpotVenue(action.resource.venue)) {
@@ -1049,15 +1110,11 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         }
       }
 
-      // A mandate that names an agent key only accepts actions signed by it.
-      if (
-        mandateParsed.success &&
-        mandateParsed.data.agentSigner !== undefined &&
-        !(await agentSignatureValid(action, mandateParsed.data.agentSigner))
-      ) {
+      const gateFailure = mandateParsed.success ? await mandateGateFailure(applicationId, mandateParsed.data, action) : undefined;
+      if (gateFailure !== undefined) {
         evaluated = {
           decision: "BLOCK",
-          reason: "INVALID_SIGNATURE",
+          reason: gateFailure,
           matchedRuleIds: [],
           matchedPermitRuleIds: [],
           matchedForbidRuleIds: [],

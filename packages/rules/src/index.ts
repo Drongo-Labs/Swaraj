@@ -18,6 +18,8 @@ export type MandateDecisionReason =
   | "INVALID_ACTION"
   /** The mandate names an agentSigner and the action's signature does not verify. */
   | "INVALID_SIGNATURE"
+  /** The mandate names a programCertifier and the target has no valid certificate. */
+  | "UNVERIFIED_PROGRAM"
   /** Dual-engine cross-check failed: the predicate engine and Z3 disagree,
    * or the solver could not settle. Fail closed. */
   | "ENGINE_DISAGREEMENT";
