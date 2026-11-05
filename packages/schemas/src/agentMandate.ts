@@ -130,6 +130,8 @@ export const AgentMandateSchema = z.strictObject({
   mandateId: BoundedId,
   version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   agent: z.union([z.literal("*"), z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/)]),
+  /** When set, every action must carry a valid signature from this secp256k1 address. */
+  agentSigner: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   defaultEffect: z.literal("DENY"),
   validFrom: UnixMilliseconds,
   validUntil: UnixMilliseconds,

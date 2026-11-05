@@ -15,6 +15,8 @@ export type MandateDecisionReason =
   | "SUBJECT_MISMATCH"
   | "INVALID_MANDATE"
   | "INVALID_ACTION"
+  /** The mandate names an agentSigner and the action's signature does not verify. */
+  | "INVALID_SIGNATURE"
   /** Dual-engine cross-check failed: the predicate engine and Z3 disagree,
    * or the solver could not settle. Fail closed. */
   | "ENGINE_DISAGREEMENT";

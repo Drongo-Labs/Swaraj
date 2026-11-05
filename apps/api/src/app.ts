@@ -47,6 +47,7 @@ import {
   MANDATE_POLICY_ID,
   resolvePipelineMode,
   runPipeline,
+  agentSignatureValid,
   unifiedActionHash,
   unifiedActionToActionRequest,
   type AuditEntry,
@@ -726,6 +727,21 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             matchedForbidRuleIds: [],
           };
         }
+      }
+
+      // A mandate that names an agent key only accepts actions signed by it.
+      if (
+        mandateParsed.success &&
+        mandateParsed.data.agentSigner !== undefined &&
+        !(await agentSignatureValid(action, mandateParsed.data.agentSigner))
+      ) {
+        evaluated = {
+          decision: "BLOCK",
+          reason: "INVALID_SIGNATURE",
+          matchedRuleIds: [],
+          matchedPermitRuleIds: [],
+          matchedForbidRuleIds: [],
+        };
       }
 
       // Base SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,

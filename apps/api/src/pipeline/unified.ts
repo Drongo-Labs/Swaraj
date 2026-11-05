@@ -2,8 +2,10 @@ import type { ActionRequest } from "@swaraj/contracts";
 import { createHash } from "node:crypto";
 import {
   serializeUnifiedAction,
+  unifiedActionSigningPayload,
   type UnifiedAction,
 } from "@swaraj/schemas";
+import { recoverAddress } from "viem";
 
 /**
  * Task 2.1 — gateway input handling for the unified action format.
@@ -16,8 +18,9 @@ import {
  * converting the action into the legacy trade request the SMT gateway and
  * adapters consume.
  *
- * The action `signature` is schema-validated but not cryptographically
- * verified yet: agent key registration/verification is out of 2.1 scope.
+ * The action `signature` is verified when the mandate names an `agentSigner`
+ * (see agentSignatureValid). A mandate without one trusts the API bearer token
+ * alone, so the signature is only schema-validated there.
  */
 
 /** Policy id the mandate registry reuses (the policy store persists mandates like policies). */
@@ -26,6 +29,17 @@ export const MANDATE_POLICY_ID = "mandate";
 /** sha256 over the canonical unified action serialization (sorted keys, amounts as decimal strings). */
 export function unifiedActionHash(action: UnifiedAction): string {
   return `0x${createHash("sha256").update(serializeUnifiedAction(action)).digest("hex")}`;
+}
+
+/** True when `action.signature` recovers to `signer`. Never throws: malformed means invalid. */
+export async function agentSignatureValid(action: UnifiedAction, signer: string): Promise<boolean> {
+  try {
+    const hash = `0x${createHash("sha256").update(unifiedActionSigningPayload(action)).digest("hex")}` as const;
+    const recovered = await recoverAddress({ hash, signature: action.signature as `0x${string}` });
+    return recovered.toLowerCase() === signer.toLowerCase();
+  } catch {
+    return false;
+  }
 }
 
 /**
