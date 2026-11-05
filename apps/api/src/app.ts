@@ -20,7 +20,7 @@ import {
   normalizeMandatePolicy,
   type UnifiedAction,
 } from "@swaraj/schemas";
-import { crossCheckMandateDecision, evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
+import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
 import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
@@ -595,6 +595,31 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return runActionRoute(request.params.applicationId, body, request.log, reply);
   });
 
+  /** Dry run: what is wrong with a candidate mandate, and what it would change. Nothing is saved. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/mandates/check",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application" });
+      }
+      const parsed = AgentMandateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
+          path: issue.path.join(".") || "(root)",
+          message: issue.message,
+        }));
+        return reply.code(400).send({ error: "invalid_mandate", issues });
+      }
+      const active = AgentMandateSchema.safeParse(
+        await loadActivePolicy(request.params.applicationId, MANDATE_POLICY_ID),
+      );
+      return {
+        issues: lintMandate(parsed.data),
+        ...(active.success ? { diff: diffMandates(active.data, parsed.data) } : {}),
+      };
+    },
+  );
+
   /** Task 2.1 (Agent Mandate): register the application's ACTIVE mandate. */
   app.post<{ Params: { applicationId: string } }>(
     "/v1/applications/:applicationId/mandates",
@@ -653,6 +678,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         version,
         policyHash: mandateHash,
         ruleCount: Array.isArray(definition.rules) ? definition.rules.length : 0,
+        issues: lintMandate(parsed.data),
       });
     },
   );
