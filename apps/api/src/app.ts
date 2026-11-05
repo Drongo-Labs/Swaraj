@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyReply } from "fastify";
 import {
@@ -75,7 +76,8 @@ export type ActivityItem = {
   applicationId: string;
   action: string;
   idempotencyKey: string;
-  decision: "ALLOW" | "BLOCK";
+  decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
+  approvalId?: string;
   intentHash?: string;
   policyHash?: string;
   violations?: Array<{ ruleId: string; reason: string }>;
@@ -100,6 +102,8 @@ export type BuildAppOptions = {
   databaseUrl?: string;
   /** Phase 8 proof queue lookup; defaults to the Postgres queue when DATABASE_URL is set. */
   proofJobs?: Pick<ReturnType<typeof createProofJobQueue>, "getByReceipt">;
+  /** Bearer token for approval decisions; defaults to SWARAJ_APPROVER_TOKEN. */
+  approverToken?: string;
   /** Overrides the env-selected NEAR settler (tests). */
   nearSettler?: NearSettler;
 };
@@ -113,6 +117,24 @@ type StoredPolicy = {
   policyHash: string;
 };
 
+type ApprovalRecord = {
+  approvalId: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "STALE";
+  revision: number;
+  action: unknown;
+  mandateHash: string;
+  matchedRuleIds: string[];
+  requestedAt: number;
+  decidedBy?: string;
+  decidedAt?: number;
+};
+
+const APPROVAL_DECISION_ROUTE = "/v1/applications/:applicationId/approvals/:approvalId/decision";
+const ApprovalDecisionSchema = z.strictObject({
+  decision: z.enum(["APPROVE", "REJECT"]),
+  approver: z.string().regex(/^[A-Za-z0-9._:@-]{1,128}$/),
+});
+
 const DEV_SIGNER_KEY = "0x" + "11".repeat(32);
 
 export async function buildApp(token: string, options: BuildAppOptions = {}) {
@@ -125,6 +147,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const app = Fastify({ bodyLimit: 65536 });
   const amountSolver = await createAmountSolver();
   const expected = Buffer.from(`Bearer ${token}`);
+  const approverToken = options.approverToken ?? process.env.SWARAJ_APPROVER_TOKEN ?? "";
+  if (approverToken.length > 0 && approverToken.length < 32) {
+    throw new Error("SWARAJ_APPROVER_TOKEN must contain at least 32 characters");
+  }
+  if (approverToken === token) throw new Error("SWARAJ_APPROVER_TOKEN must differ from SWARAJ_DEV_TOKEN");
+  const approverExpected = approverToken ? Buffer.from(`Bearer ${approverToken}`) : undefined;
 
   let pool: Pool | undefined;
   let proofJobs = options.proofJobs;
@@ -258,6 +286,14 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     }
     if (request.routeOptions.url === "/health") return;
     const supplied = Buffer.from(request.headers.authorization ?? "");
+    if (request.routeOptions.url === APPROVAL_DECISION_ROUTE) {
+      // Fails closed: with no approver token set, nothing can be approved.
+      if (!approverExpected) return reply.code(403).send({ error: "approvals_not_configured" });
+      if (supplied.length !== approverExpected.length || !timingSafeEqual(supplied, approverExpected)) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      return;
+    }
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
       return reply.code(401).send({ error: "unauthorized" });
     }
@@ -597,6 +633,279 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return runActionRoute(request.params.applicationId, body, request.log, reply);
   });
 
+  /** Records, executes and queues proof for an action cleared to run, automatically or by a person. */
+  const settleAllowed = async (ctx: {
+    applicationId: string;
+    action: UnifiedAction;
+    wireAction: unknown;
+    mandateDefinition: unknown;
+    mandateVersion: number;
+    decision: "ALLOW" | "NEEDS_APPROVAL";
+    matchedRuleIds: string[];
+    reason: string;
+    approvedBy?: string;
+    log: { error: (message: unknown) => void };
+    reply: FastifyReply;
+  }) => {
+    const { applicationId, action, wireAction, mandateDefinition, mandateVersion, decision, matchedRuleIds, reason, approvedBy, log, reply } = ctx;
+    const at = Math.floor(Date.now() / 1000);
+    const intentHash = unifiedActionHash(action);
+    const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+    // Permitted NEAR trade / payment / other non-Base actions: durable
+    // PENDING receipt + optional mandate proof job (pool mode). Fixture
+    // execution adapters live in @swaraj/capability / @swaraj/evidence.
+    let proofReceipt: { id: string; state: string } | undefined;
+    let settlement: NearSettlement | undefined;
+    if (pool) {
+      const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
+      try {
+        // A replay returns the original outcome and must never execute again.
+        const replay = await findReceiptByIdempotencyKey(handle, applicationId, action.idempotencyKey);
+        if (replay) {
+          if (replay.intentDigest !== intentHash) {
+            return reply.code(409).send({ error: "idempotency_conflict" });
+          }
+          return reply.code(200).send({
+            decision: "ALLOW",
+            productStatus: productStatusFromReceipt(replay.state),
+            status: replay.state,
+            replayed: true,
+            intentHash,
+            policyHash,
+            receipt: { id: replay.receiptId, state: replay.state },
+            receiptId: replay.receiptId,
+          });
+        }
+        const receiptId = randomUUID();
+        // The receipts table references the applications registry — make
+        // sure the application row exists (idempotent).
+        await handle.raw.query(
+          "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
+          [applicationId],
+        );
+        // Log the decision (authz_decisions) — the receipt's decision_id
+        // references it.
+        const logged = await insertDecision(handle, {
+          appId: applicationId,
+          intentDigest: intentHash,
+          policyId: MANDATE_POLICY_ID,
+          policyRevision: mandateVersion,
+          outcome: "ALLOW",
+          violatedRules: matchedRuleIds,
+          smtScript: "",
+        });
+        await insertReceipt(handle, {
+          receiptId,
+          appId: applicationId,
+          intentDigest: intentHash,
+          decisionId: Number(logged.decisionId),
+          claim: {
+            kind: "MANDATE_DECISION_V1",
+            action: wireAction,
+            decision,
+            matchedRuleIds,
+            intentHash,
+            mandateHash: policyHash,
+            ...(approvedBy !== undefined ? { approvedBy } : {}),
+          },
+        });
+        const claimed = await claimIdempotencyKey(handle, {
+          appId: applicationId,
+          idemKey: action.idempotencyKey,
+          intentDigest: intentHash,
+          receiptId,
+        });
+        if (!claimed) {
+          await advanceReceipt(handle, receiptId, "INVALIDATED", { note: "lost the idempotency race" });
+          return reply.code(409).send({ error: "idempotency_conflict" });
+        }
+        proofReceipt = { id: receiptId, state: "PENDING" };
+
+        // The receipt exists before anything moves on chain.
+        if (isNearAction(action)) {
+          settlement = await nearSettler.settle(action, { applicationId, intentHash, policyHash });
+        }
+        if (settlement?.status === "NOT_PROVABLE") {
+          await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
+          proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
+        } else {
+          await enqueueProofJob(handle, {
+            receiptId,
+            payload: {
+              kind: "MANDATE",
+              mandate: mandateDefinition,
+              action: wireAction,
+              expected: { decision, matchedRuleIds },
+              intentHash,
+              mandateHash: policyHash,
+              ...(approvedBy !== undefined ? { approvedBy } : {}),
+              ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
+              ...(settlement?.near ? { near: settlement.near } : {}),
+            },
+          });
+        }
+      } catch (error) {
+        log.error(error);
+      }
+    }
+    const engineStatus: EngineReceiptStatus = proofReceipt
+      ? (proofReceipt.state as EngineReceiptStatus)
+      : "NOT_EXECUTABLE";
+    const productStatus = productStatusFromDecision("ALLOW", engineStatus);
+    const activity: ActivityItem = {
+      id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+      at,
+      applicationId,
+      action: action.action,
+      idempotencyKey: action.idempotencyKey,
+      decision: "ALLOW",
+      status: engineStatus,
+      productStatus,
+      intentHash,
+      policyHash,
+      ...(proofReceipt ? { receiptId: proofReceipt.id } : {}),
+    };
+    activityLog.push(activity);
+    return reply.code(200).send({
+      decision: "ALLOW",
+      ...(approvedBy !== undefined ? { approvedBy } : {}),
+      productStatus,
+      mandate: { reason, matchedPermitRuleIds: matchedRuleIds },
+      status: engineStatus,
+      intentHash,
+      policyHash,
+      activityId: activity.id,
+      ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
+      ...(settlement
+        ? {
+            execution: {
+              live: nearSettler.live,
+              ...(settlement.txHash ? { txHash: settlement.txHash } : {}),
+              ...(settlement.nearTx ? { nearTx: settlement.nearTx } : {}),
+              ...(settlement.status === "NOT_PROVABLE" ? { reason: settlement.reason } : {}),
+            },
+          }
+        : {}),
+    });
+
+  };
+
+  const saveActiveDefinition = async (
+    applicationId: string,
+    policyId: string,
+    version: number,
+    definition: Record<string, unknown>,
+  ): Promise<string> => {
+    const policyHash = hashObject(ObjectType.POLICY_PROFILE, definition);
+    if (pool) {
+      await ensureApplication(pool, applicationId, applicationId);
+      await upsertActivePolicy(pool, { applicationId, policyId, version, definition, policyHash });
+      return policyHash;
+    }
+    for (const [key, existing] of policiesMemory) {
+      if (existing.applicationId === applicationId && existing.policyId === policyId && existing.status === "ACTIVE") {
+        policiesMemory.set(key, { ...existing, status: "RETIRED" });
+      }
+    }
+    policiesMemory.set(`${applicationId}:${policyId}:${version}`, {
+      applicationId,
+      policyId,
+      version,
+      status: "ACTIVE",
+      definition,
+      policyHash,
+    });
+    return policyHash;
+  };
+
+  // ponytail: approvals reuse the versioned policy store, one row per approval;
+  // give them a table when they need listing or querying.
+  const approvalKey = (approvalId: string) => `approval_${approvalId}`;
+  const saveApproval = (applicationId: string, record: ApprovalRecord) =>
+    saveActiveDefinition(applicationId, approvalKey(record.approvalId), record.revision, record);
+  const loadApproval = async (applicationId: string, approvalId: string) =>
+    (await loadActivePolicy(applicationId, approvalKey(approvalId))) as ApprovalRecord | undefined;
+
+  app.get<{ Params: { applicationId: string; approvalId: string } }>(
+    "/v1/applications/:applicationId/approvals/:approvalId",
+    async (request, reply) => {
+      const { applicationId, approvalId } = request.params;
+      if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(approvalId).success) {
+        return reply.code(400).send({ error: "invalid_approval_id" });
+      }
+      const record = await loadApproval(applicationId, approvalId);
+      if (!record) return reply.code(404).send({ error: "approval_not_found" });
+      return record;
+    },
+  );
+
+  /** A person's decision. Needs the approver token: the agent's token cannot reach this route. */
+  app.post<{ Params: { applicationId: string; approvalId: string } }>(
+    APPROVAL_DECISION_ROUTE,
+    async (request, reply) => {
+      const { applicationId, approvalId } = request.params;
+      const body = ApprovalDecisionSchema.safeParse(request.body);
+      if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(approvalId).success || !body.success) {
+        return reply.code(400).send({ error: "invalid_approval_decision" });
+      }
+      const record = await loadApproval(applicationId, approvalId);
+      if (!record) return reply.code(404).send({ error: "approval_not_found" });
+      if (record.status !== "PENDING") {
+        return reply.code(409).send({ error: "approval_already_decided", status: record.status });
+      }
+      const close = async (status: ApprovalRecord["status"]) => {
+        await saveApproval(applicationId, {
+          ...record,
+          status,
+          revision: record.revision + 1,
+          decidedBy: body.data.approver,
+          decidedAt: Date.now(),
+        });
+      };
+      if (body.data.decision === "REJECT") {
+        await close("REJECTED");
+        return reply.code(200).send({ decision: "BLOCK", productStatus: "blocked", approvalId, status: "REJECTED" });
+      }
+
+      const action = UnifiedActionSchema.parse(record.action);
+      if (Date.now() >= action.expiry) {
+        await close("EXPIRED");
+        return reply.code(409).send({ error: "approval_expired" });
+      }
+      // The approval covers the mandate it was requested under, never a later one.
+      const mandateDefinition = await loadActivePolicy(applicationId, MANDATE_POLICY_ID);
+      const mandate = AgentMandateSchema.safeParse(mandateDefinition);
+      const current = mandate.success ? evaluateParsedMandate(mandate.data, action) : undefined;
+      if (
+        !mandate.success ||
+        !current ||
+        hashObject(ObjectType.POLICY_PROFILE, mandateDefinition) !== record.mandateHash ||
+        current.decision !== "NEEDS_APPROVAL"
+      ) {
+        await close("STALE");
+        return reply.code(409).send({ error: "mandate_changed" });
+      }
+      // ponytail: the Base pipeline re-gates on ALLOW only, so it cannot run an approved action yet.
+      if (action.action === "SPOT_TRADE" && isBaseSpotVenue(action.resource.venue)) {
+        return reply.code(409).send({ error: "approval_unsupported_for_venue" });
+      }
+      await close("APPROVED");
+      return settleAllowed({
+        applicationId,
+        action,
+        wireAction: record.action,
+        mandateDefinition,
+        mandateVersion: mandate.data.version,
+        decision: "NEEDS_APPROVAL",
+        matchedRuleIds: current.matchedRuleIds,
+        reason: current.reason,
+        approvedBy: body.data.approver,
+        log: request.log,
+        reply,
+      });
+    },
+  );
+
   /** Dry run: what is wrong with a candidate mandate, and what it would change. Nothing is saved. */
   app.post<{ Params: { applicationId: string } }>(
     "/v1/applications/:applicationId/mandates/check",
@@ -642,39 +951,11 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       const definition = normalizeAgentMandate(
         request.body as { rules: Array<{ ruleId: string }> },
       ) as Record<string, unknown>;
-      const mandateHash = hashObject(ObjectType.POLICY_PROFILE, definition);
       const version =
         typeof (definition as { version?: unknown }).version === "number"
           ? ((definition as { version: number }).version)
           : 1;
-      if (pool) {
-        await ensureApplication(pool, applicationId, applicationId);
-        await upsertActivePolicy(pool, {
-          applicationId,
-          policyId: MANDATE_POLICY_ID,
-          version,
-          definition,
-          policyHash: mandateHash,
-        });
-      } else {
-        for (const [key, existing] of policiesMemory) {
-          if (
-            existing.applicationId === applicationId &&
-            existing.policyId === MANDATE_POLICY_ID &&
-            existing.status === "ACTIVE"
-          ) {
-            policiesMemory.set(key, { ...existing, status: "RETIRED" });
-          }
-        }
-        policiesMemory.set(`${applicationId}:${MANDATE_POLICY_ID}:${version}`, {
-          applicationId,
-          policyId: MANDATE_POLICY_ID,
-          version,
-          status: "ACTIVE",
-          definition,
-          policyHash: mandateHash,
-        });
-      }
+      const mandateHash = await saveActiveDefinition(applicationId, MANDATE_POLICY_ID, version, definition);
       return reply.code(201).send({
         mandateId: String(definition.mandateId),
         version,
@@ -808,6 +1089,43 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       const intentHash = unifiedActionHash(action);
       const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
 
+      if (evaluated.decision === "NEEDS_APPROVAL") {
+        const approvalId = `appr_${intentHash.slice(2, 34)}`;
+        const existing = await loadApproval(applicationId, approvalId);
+        const record: ApprovalRecord = existing ?? {
+          approvalId,
+          status: "PENDING",
+          revision: 1,
+          action: (request.body as { action?: unknown })?.action,
+          mandateHash: policyHash,
+          matchedRuleIds: evaluated.matchedRuleIds,
+          requestedAt: Date.now(),
+        };
+        if (!existing) await saveApproval(applicationId, record);
+        const productStatus = productStatusFromDecision("NEEDS_APPROVAL");
+        activityLog.push({
+          id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+          at,
+          applicationId,
+          action: action.action,
+          idempotencyKey: action.idempotencyKey,
+          decision: "NEEDS_APPROVAL",
+          intentHash,
+          policyHash,
+          productStatus,
+          approvalId,
+        });
+        return reply.code(202).send({
+          decision: "NEEDS_APPROVAL",
+          productStatus,
+          mandate: { reason: evaluated.reason, matchedRuleIds: evaluated.matchedRuleIds },
+          intentHash,
+          policyHash,
+          approvalId,
+          approvalStatus: record.status,
+        });
+      }
+
       if (evaluated.decision === "BLOCK") {
         const matched = [...evaluated.matchedForbidRuleIds, ...evaluated.matchedPermitRuleIds];
         const detail = matched.length > 0 ? ` (${matched.join(", ")})` : "";
@@ -856,138 +1174,17 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         });
       }
 
-      // Permitted NEAR trade / payment / other non-Base actions: durable
-      // PENDING receipt + optional mandate proof job (pool mode). Fixture
-      // execution adapters live in @swaraj/capability / @swaraj/evidence.
-      let proofReceipt: { id: string; state: string } | undefined;
-      let settlement: NearSettlement | undefined;
-      if (pool) {
-        const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
-        try {
-          // A replay returns the original outcome and must never execute again.
-          const replay = await findReceiptByIdempotencyKey(handle, applicationId, action.idempotencyKey);
-          if (replay) {
-            if (replay.intentDigest !== intentHash) {
-              return reply.code(409).send({ error: "idempotency_conflict" });
-            }
-            return reply.code(200).send({
-              decision: "ALLOW",
-              productStatus: productStatusFromReceipt(replay.state),
-              status: replay.state,
-              replayed: true,
-              intentHash,
-              policyHash,
-              receipt: { id: replay.receiptId, state: replay.state },
-              receiptId: replay.receiptId,
-            });
-          }
-          const receiptId = randomUUID();
-          // The receipts table references the applications registry — make
-          // sure the application row exists (idempotent).
-          await handle.raw.query(
-            "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
-            [applicationId],
-          );
-          // Log the decision (authz_decisions) — the receipt's decision_id
-          // references it.
-          const logged = await insertDecision(handle, {
-            appId: applicationId,
-            intentDigest: intentHash,
-            policyId: MANDATE_POLICY_ID,
-            policyRevision: mandateParsed.success ? mandateParsed.data.version : 1,
-            outcome: "ALLOW",
-            violatedRules: evaluated.matchedPermitRuleIds,
-            smtScript: "",
-          });
-          await insertReceipt(handle, {
-            receiptId,
-            appId: applicationId,
-            intentDigest: intentHash,
-            decisionId: Number(logged.decisionId),
-            claim: {
-              kind: "MANDATE_DECISION_V1",
-              action: (request.body as { action?: unknown })?.action,
-              decision: "ALLOW",
-              matchedRuleIds: evaluated.matchedPermitRuleIds,
-              intentHash,
-              mandateHash: policyHash,
-            },
-          });
-          const claimed = await claimIdempotencyKey(handle, {
-            appId: applicationId,
-            idemKey: action.idempotencyKey,
-            intentDigest: intentHash,
-            receiptId,
-          });
-          if (!claimed) {
-            await advanceReceipt(handle, receiptId, "INVALIDATED", { note: "lost the idempotency race" });
-            return reply.code(409).send({ error: "idempotency_conflict" });
-          }
-          proofReceipt = { id: receiptId, state: "PENDING" };
-
-          // The receipt exists before anything moves on chain.
-          if (isNearAction(action)) {
-            settlement = await nearSettler.settle(action, { applicationId, intentHash, policyHash });
-          }
-          if (settlement?.status === "NOT_PROVABLE") {
-            await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
-            proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
-          } else {
-            await enqueueProofJob(handle, {
-              receiptId,
-              payload: {
-                kind: "MANDATE",
-                mandate: mandateDefinition,
-                action: (request.body as { action?: unknown })?.action,
-                expected: { decision: "ALLOW", matchedRuleIds: evaluated.matchedPermitRuleIds },
-                intentHash,
-                mandateHash: policyHash,
-                ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
-                ...(settlement?.near ? { near: settlement.near } : {}),
-              },
-            });
-          }
-        } catch (error) {
-          request.log.error(error);
-        }
-      }
-      const engineStatus: EngineReceiptStatus = proofReceipt
-        ? (proofReceipt.state as EngineReceiptStatus)
-        : "NOT_EXECUTABLE";
-      const productStatus = productStatusFromDecision("ALLOW", engineStatus);
-      const activity: ActivityItem = {
-        id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
-        at,
+      return settleAllowed({
         applicationId,
-        action: action.action,
-        idempotencyKey: action.idempotencyKey,
+        action,
+        wireAction: (request.body as { action?: unknown })?.action,
+        mandateDefinition,
+        mandateVersion: mandateParsed.success ? mandateParsed.data.version : 1,
         decision: "ALLOW",
-        status: engineStatus,
-        productStatus,
-        intentHash,
-        policyHash,
-        ...(proofReceipt ? { receiptId: proofReceipt.id } : {}),
-      };
-      activityLog.push(activity);
-      return reply.code(200).send({
-        decision: "ALLOW",
-        productStatus,
-        mandate: { reason: evaluated.reason, matchedPermitRuleIds: evaluated.matchedPermitRuleIds },
-        status: engineStatus,
-        intentHash,
-        policyHash,
-        activityId: activity.id,
-        ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
-        ...(settlement
-          ? {
-              execution: {
-                live: nearSettler.live,
-                ...(settlement.txHash ? { txHash: settlement.txHash } : {}),
-                ...(settlement.nearTx ? { nearTx: settlement.nearTx } : {}),
-                ...(settlement.status === "NOT_PROVABLE" ? { reason: settlement.reason } : {}),
-              },
-            }
-          : {}),
+        matchedRuleIds: evaluated.matchedPermitRuleIds,
+        reason: evaluated.reason,
+        log: request.log,
+        reply,
       });
     },
   );
@@ -1149,6 +1346,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         intentHash: string;
         mandateHash: string;
         expected: { decision: string; matchedRuleIds: string[] };
+        approvedBy?: string;
         evidenceDigest?: string;
         near?: unknown;
       };
@@ -1168,6 +1366,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         mandateHash: job.mandateHash,
         decision: job.expected.decision,
         matchedRuleIds: job.expected.matchedRuleIds,
+        ...(job.approvedBy !== undefined ? { approvedBy: job.approvedBy } : {}),
         ...(job.evidenceDigest !== undefined ? { evidenceDigest: job.evidenceDigest } : {}),
         ...(job.near !== undefined ? { near: job.near } : {}),
         statementText: artifact.canonicalText,

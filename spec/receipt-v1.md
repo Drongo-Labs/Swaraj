@@ -23,8 +23,9 @@ The command exits 0 when the bundle is valid and 1 when it is not.
 | `mandate` | The Agent Mandate that decided it |
 | `intentHash` | `0x` + SHA-256 of the canonical action serialization |
 | `mandateHash` | `hashObject(POLICY_PROFILE, mandate)` |
-| `decision` | `ALLOW` |
-| `matchedRuleIds` | Rule ids that matched |
+| `decision` | `ALLOW`, or `NEEDS_APPROVAL` for an action a person approved |
+| `matchedRuleIds` | Rule ids that decided it |
+| `approvedBy` | Who approved a `NEEDS_APPROVAL` decision |
 | `evidenceDigest` | Root of the on-chain evidence; absent if nothing executed on chain |
 | `near` | NEAR transaction hash, signer and expected effect; absent off NEAR |
 | `statementText` | Canonical statement, below |
@@ -35,8 +36,8 @@ The command exits 0 when the bundle is valid and 1 when it is not.
 ## Statement
 
 Lines joined by `\n`, with no trailing newline. Rule ids are sorted, and `-`
-stands in for an empty list. The `evidence` line appears only when
-`evidenceDigest` is present.
+stands in for an empty list. The `approved_by` and `evidence` lines appear only
+when their fields are present.
 
 ```text
 swaraj/statement/mandate/v1
@@ -44,6 +45,7 @@ intent=<intentHash>
 mandate=<mandateHash>
 decision=<decision>
 matched=<id,id>
+approved_by=<approvedBy>
 evidence=<evidenceDigest>
 ```
 
@@ -63,7 +65,8 @@ swaraj/receipt-bundle/v1
 
 1. `action` and `mandate` parse under the strict schemas.
 2. `intentHash` and `mandateHash` recompute.
-3. Evaluating the mandate on the action gives `decision` and `matchedRuleIds`.
+3. Evaluating the mandate on the action gives `decision` and `matchedRuleIds`,
+   and a `NEEDS_APPROVAL` decision names an approver.
 4. `statementText` and `statementId` recompute.
 5. `state` is `PROVED`.
 6. `signature` recovers to the expected issuer.
@@ -76,4 +79,6 @@ swaraj/receipt-bundle/v1
   worker re-derived the decision. It is not a zero-knowledge proof.
 - **`evidenceDigest` commits to RPC data.** The light-client proof is hashed,
   and its Merkle path is not verified. `--near-rpc` trusts the chosen RPC.
+- **`approvedBy` is the issuer's record.** The approver's token is checked by
+  the API, and the approver does not sign the bundle.
 - **Blocked actions use Decision Receipts,** which this bundle does not cover.

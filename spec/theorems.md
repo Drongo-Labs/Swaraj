@@ -11,6 +11,18 @@ build rejects `sorry`, added axioms and other proof escapes.
 | `forbid_always_wins` | A matching forbid blocks, whatever permits match |
 | `allow_iff_permit_without_forbid` | ALLOW exactly when a permit matches and no forbid does |
 
+## Human approval (`Approval.lean`)
+
+| Theorem | Statement |
+|---|---|
+| `forbid_beats_approval` | A matching forbid blocks, so no person can approve it |
+| `approval_rule_stops_allow` | A matching approval rule always stops automatic ALLOW |
+| `allow_implies_mandate_allow` | Approval rules never allow what the mandate would not |
+| `no_approval_keeps_decision` | With no approval rule matching, an allowed action stays allowed |
+
+These cover the decision. The approval flow around it, including who may approve,
+is tested in `apps/api/test/approval.test.mjs` and is not proved.
+
 ## Concrete model (`Concrete.lean`)
 
 | Theorem | Statement |
