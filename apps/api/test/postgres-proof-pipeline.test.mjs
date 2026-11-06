@@ -1,11 +1,6 @@
 /**
- * Phase 8/9 end to end against a real, disposable Postgres (WIPES the proof/receipt tables):
- *
- *   SWARAJ_TEST_DATABASE_URL=postgres://… pnpm --filter @swaraj/api test
- *
- * Real: API, SMT gateway, decision log, receipt store/engine, proof_inputs, both queues, both workers,
- * gates, JS public-value derivation and zkVerify recovery logic. Simulated: the SP1 host (it emits an
- * artifact with the guest's public values) and the zkVerify chain (a fake polkadot API).
+ * Phase 8/9 end to end on a disposable Postgres; WIPES proof and receipt tables.
+ * The SP1 host and zkVerify chain are simulated.
  */
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -143,10 +138,7 @@ test("API on Postgres: mandate gate, receipts, Decision Receipts, proof inputs, 
   }
 });
 
-// The receipt-specific prover and its queue methods (createWorkerDependencies deps.prover,
-// deps.trade.queue.enqueue/markIncluded/fail) were removed in the core-protocol merge. The
-// supported automated proof path is @swaraj/proofs runOneProofJob — see INTEGRATION_STATUS.md.
-// Re-enable this end-to-end worker test once the prover path is restored against runOneProofJob.
+// Skipped: the receipt-specific prover was removed. Re-enable once it is restored against runOneProofJob.
 test("Phase 8/9 worker pipeline on Postgres (receipt-specific prover)", {
   skip: "legacy receipt-specific prover removed in the core-protocol merge; the supported path is @swaraj/proofs runOneProofJob (see INTEGRATION_STATUS.md)",
 }, async () => {

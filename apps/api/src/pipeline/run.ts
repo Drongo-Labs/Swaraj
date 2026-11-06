@@ -54,26 +54,16 @@ export type PipelineDeps = {
   checkPolicy: (input: PolicyGatewayInput) => Promise<PolicyDecision>;
   capabilities: CapabilityService;
   execution: ExecutionAdapter;
-  /**
-   * Integrated path: load the ACTIVE policy from the registry.
-   * When set, client-supplied `input.policy` is ignored (cannot bypass the store).
-   */
+  /** Loads the ACTIVE policy. When set, client `input.policy` is ignored. */
   loadActivePolicy?: (
     applicationId: string,
     policyId: string,
   ) => Promise<Record<string, unknown> | undefined>;
-  /**
-   * Live Base mode: load chain balances for the execution wallet.
-   * When set, client-supplied `input.state` is ignored (cannot fake portfolio).
-   */
+  /** Loads live balances. When set, client `input.state` is ignored. */
   loadLiveState?: () => Promise<Record<string, unknown>>;
   /** When true (base mode), refuse client fixture state. */
   requireLiveState?: boolean;
-  /**
-   * The agent-submitted unified action this request originated from
-   * (task 2.1). Receipts bind its canonical wire form so they can be
-   * verified against the unified action format.
-   */
+  /** The submitted unified action, whose canonical form receipts bind. */
   unifiedAction?: UnifiedAction;
   audit?: (entry: AuditEntry) => void;
 };
@@ -122,13 +112,7 @@ export type PipelineStack = {
   };
 };
 
-/**
- * Mode resolution — fail-closed for runtime:
- * - explicit `pipelineMode` in tests wins (`mock` | `base`)
- * - `SWARAJ_FORCE_MOCK=1` → mock (CI / unit only)
- * - otherwise **base** (requires DATABASE_URL + BASE_RPC_URL + execution key)
- * Never silently falls back to mock.
- */
+/** Fail-closed mode: explicit `pipelineMode`, then `SWARAJ_FORCE_MOCK=1`, else base. Never falls back to mock. */
 export function resolvePipelineMode(
   env: NodeJS.ProcessEnv = process.env,
   explicit?: PipelineMode,
@@ -392,12 +376,7 @@ function tradeFromIntent(intentObj: Record<string, unknown>): ExecutionTrade | u
   };
 }
 
-/**
- * Runtime order:
- * Agent proposes → Phase 4 SMT → Phase 5 capability + reservation → execute
- * → Phase 2 evidence → Phase 3 receipt.
- * Never issues PROVED itself: the API records proof inputs and the Phase 8/9 workers promote receipts.
- */
+/** SMT → capability → execute → evidence → receipt. Never sets PROVED: proof workers do that. */
 export async function runPipeline(
   applicationId: string,
   request: ActionRequest,

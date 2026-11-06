@@ -546,11 +546,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /**
-   * Shared action handling: run the pipeline (SMT + mandate gates) and
-   * respond with the Phase 8/9 receipt/decision-receipt bookkeeping.
-   * Used by the legacy actions route and the unified-actions route (task 2.1).
-   */
+  /** Shared action handling: runs both gates and records receipts for the action routes. */
   const runActionRoute = async (
     applicationId: string,
     actionRequest: ActionRequest,
@@ -1128,12 +1124,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /**
-   * Task 2.1: gateway input for the unified action format. The action is
-   * strictly validated, evaluated against the application's ACTIVE Agent
-   * Mandate (registered mandate, else derived from the active policy), and
-   * SPOT_TRADE allows feed the existing execution/receipt pipeline.
-   */
+  /** Gateway for unified actions: checks the active mandate, then settles what it allows. */
   app.post<{ Params: { applicationId: string } }>(
     "/v1/applications/:applicationId/unified-actions",
     async (request, reply) => {
@@ -1375,11 +1366,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /**
-   * Task 3.2: verify a receipt against the unified action format. Checks the
-   * stored action against the strict schema, recomputes its canonical hash,
-   * verifies the issuer signature and the record↔signed-receipt binding.
-   */
+  /** Verifies a receipt's action, hash, issuer signature and binding. */
   app.get<{ Params: { applicationId: string; receiptId: string } }>(
     "/v1/applications/:applicationId/receipts/:receiptId/verify",
     async (request, reply) => {

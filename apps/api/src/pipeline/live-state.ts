@@ -19,10 +19,7 @@ export type LiveStateOracleOptions = {
   weth?: `0x${string}`;
 };
 
-/**
- * Live portfolio state for the execution wallet on Base mainnet or Base Sepolia.
- * Client-supplied fixture balances must not be used in base mode.
- */
+/** Live wallet state on Base. Client-supplied balances must not be used in base mode. */
 export function createLiveStateOracle(options: LiveStateOracleOptions): LiveStateOracle {
   const network = resolveBaseNetwork(process.env);
   const account = privateKeyToAccount(options.privateKey);

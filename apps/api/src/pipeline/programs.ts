@@ -3,11 +3,7 @@ import type { UnifiedAction } from "@swaraj/schemas";
 import { recoverAddress } from "viem";
 import { z } from "zod";
 
-/**
- * Verified-programs-only: a mandate with a `programCertifier` only lets an
- * agent reach programs that key has certified. The API store is not trusted;
- * signatures are checked on every action.
- */
+/** Mandates with a `programCertifier` only reach certified programs. Signatures are checked on every action, so the store needs no trust. */
 
 export const ProgramCertificateSchema = z.strictObject({
   program: z.string().min(1).max(256),

@@ -11,11 +11,7 @@ export function embeddedProofServiceEnabled(env: NodeJS.ProcessEnv = process.env
   return autoProveEnabled(env) && env.SWARAJ_PROOF_SERVICE !== "external";
 }
 
-/**
- * Drains jobs one at a time, then waits for more. A thrown error only delays
- * the next pass, because leased jobs are retried from Postgres. Returns a stop
- * function that waits for the job in flight.
- */
+/** Drains jobs, then waits. Errors only delay the next pass, because leased jobs retry from Postgres. */
 export function startProofLoop(runOne: () => Promise<unknown>, idleMs = 2000): () => Promise<void> {
   let stopped = false;
   let wake: (() => void) | undefined;
