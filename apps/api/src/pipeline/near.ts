@@ -18,6 +18,7 @@ export const NEAR_TRANSFER_SERVICE = "near_transfer";
 export const NEAR_FT_TRANSFER_SERVICE = "near_ft_transfer";
 const REF_FINANCE_VENUE = "REF_FINANCE_NEAR";
 const DEFAULT_RPC_URL = "https://rpc.testnet.near.org";
+const DEFAULT_REF_CONTRACT = "ref-finance-101.testnet";
 const CAPABILITY_TTL_SECONDS = 120;
 
 export type NearSettlement =
@@ -35,7 +36,7 @@ export function isNearAction(action: UnifiedAction): boolean {
     && (action.resource.service === NEAR_TRANSFER_SERVICE || action.resource.service === NEAR_FT_TRANSFER_SERVICE);
 }
 
-/** The exact on-chain effect a permitted payment is allowed to have. */
+/** The exact on-chain effect a permitted payment is allowed to have. Swaps are quoted live instead. */
 export function nearExpectation(action: UnifiedAction, ftContract: string | undefined): NearExpectation | undefined {
   if (action.action !== "PAYMENT") return undefined;
   const base = { receiverId: action.context.recipient, amount: action.context.amount.toString() };
@@ -57,6 +58,8 @@ export function createNearSettler(
   const privateKey = env.NEAR_PRIVATE_KEY?.trim();
   const rpcUrl = env.NEAR_RPC_URL?.trim() || DEFAULT_RPC_URL;
   const ftContract = env.NEAR_FT_CONTRACT?.trim() || undefined;
+  const refContract = env.NEAR_REF_CONTRACT?.trim() || DEFAULT_REF_CONTRACT;
+  const refPool = env.NEAR_REF_POOL_ID?.trim() ? Number(env.NEAR_REF_POOL_ID) : undefined;
   const live = Boolean(accountId && privateKey);
   const liveExecutor = live
     ? createNearPaymentExecutor({ capabilities, rpcUrl, accountId: accountId!, privateKey: privateKey! })
@@ -66,17 +69,27 @@ export function createNearSettler(
   return {
     live,
     async settle(action, { applicationId, intentHash, policyHash }) {
-      const expect = nearExpectation(action, ftContract);
-      if (liveExecutor && expect === undefined) {
-        // ponytail: no live Ref Finance swap yet; a live trade is never faked.
-        return { status: "NOT_PROVABLE", reason: "NEAR_LIVE_EXECUTOR_UNAVAILABLE" };
-      }
       if (action.action !== "PAYMENT" && action.action !== "SPOT_TRADE") {
         return { status: "NOT_PROVABLE", reason: "NOT_A_NEAR_ACTION" };
       }
 
       let ref: ExecutionRef | undefined;
       try {
+        let expect = nearExpectation(action, ftContract);
+        if (liveExecutor && action.action === "SPOT_TRADE" && refPool !== undefined) {
+          expect = await liveExecutor.quoteSwap({
+            refContract,
+            poolId: refPool,
+            tokenIn: action.context.assetIn,
+            tokenOut: action.context.assetOut,
+            amount: action.context.amount.toString(),
+            slippageBps: action.context.slippageBps,
+          });
+        }
+        // A live action with no real route is never faked.
+        if (liveExecutor && expect === undefined) {
+          return { status: "NOT_PROVABLE", reason: "NEAR_LIVE_EXECUTOR_UNAVAILABLE" };
+        }
         const amount = action.context.amount.toString();
         const accountRef = `0x${createHash("sha256").update(action.agent).digest("hex")}` as Hex;
         const { token } = await capabilities.issue({

@@ -59,9 +59,16 @@ export function bundleDigest(bundle: Pick<ReceiptBundle, "receiptId" | "statemen
 }
 
 function nearMatchesAction(near: NearExecution, action: ReturnType<typeof parseUnifiedAction>): boolean {
+  const { expect } = near;
+  if (expect.kind === "ref_swap") {
+    return action.action === "SPOT_TRADE"
+      && expect.tokenIn === action.context.assetIn
+      && expect.tokenOut === action.context.assetOut
+      && expect.amount === action.context.amount.toString();
+  }
   return action.action === "PAYMENT"
-    && near.expect.receiverId === action.context.recipient
-    && near.expect.amount === action.context.amount.toString();
+    && expect.receiverId === action.context.recipient
+    && expect.amount === action.context.amount.toString();
 }
 
 export async function verifyReceiptBundle(
@@ -109,7 +116,7 @@ export async function verifyReceiptBundle(
       try {
         const ref: ExecutionRef = {
           txHash: `0x${"00".repeat(32)}` as ExecutionRef["txHash"],
-          venue: "NEAR_PAYMENT",
+          venue: bundle.near.expect.kind === "ref_swap" ? "REF_FINANCE_NEAR" : "NEAR_PAYMENT",
           executedAt: Math.floor(Date.now() / 1000),
           near: bundle.near,
         };
