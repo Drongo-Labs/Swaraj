@@ -17,7 +17,7 @@ import type { UnifiedAction } from "@swaraj/schemas";
 export const NEAR_TRANSFER_SERVICE = "near_transfer";
 export const NEAR_FT_TRANSFER_SERVICE = "near_ft_transfer";
 const REF_FINANCE_VENUE = "REF_FINANCE_NEAR";
-const DEFAULT_RPC_URL = "https://rpc.testnet.near.org";
+const DEFAULT_RPC_URL = "https://test.rpc.fastnear.com";
 const DEFAULT_REF_CONTRACT = "ref-finance-101.testnet";
 const CAPABILITY_TTL_SECONDS = 120;
 
@@ -91,7 +91,10 @@ export function createNearSettler(
           return { status: "NOT_PROVABLE", reason: "NEAR_LIVE_EXECUTOR_UNAVAILABLE" };
         }
         const amount = action.context.amount.toString();
-        const accountRef = `0x${createHash("sha256").update(action.agent).digest("hex")}` as Hex;
+        // One reservation per action: sharing it across an agent's actions made parallel
+        // payments fail, and one crashed payment would hold up every later one.
+        // ponytail: the mandate caps each action; add a shared ref if per-agent totals are needed.
+        const accountRef = `0x${createHash("sha256").update(`${action.agent}:${action.idempotencyKey}`).digest("hex")}` as Hex;
         const { token } = await capabilities.issue({
           applicationId,
           intentHash: intentHash as Hex,
@@ -99,7 +102,7 @@ export function createNearSettler(
           accountRef,
           idempotencyKey: action.idempotencyKey,
           amount,
-          // The mandate already bounded the amount; the capability scopes it to this one action.
+          // The mandate already bounded the amount.
           budgetLimit: amount,
           ttlSeconds: CAPABILITY_TTL_SECONDS,
         }, signer);

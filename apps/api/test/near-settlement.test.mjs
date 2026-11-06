@@ -144,6 +144,9 @@ test("fixture NEAR execution can never be reported as proved", { skip }, async (
     assert.equal(res.execution.live, false);
     assert.equal(res.productStatus, "cant_prove", JSON.stringify(res));
     assert.equal(res.execution.reason, "EVIDENCE_PENDING");
+    // Parallel actions from one agent must not trip over each other's reservations.
+    const parallel = await Promise.all([submit(payment()), submit(payment()), submit(payment())]);
+    assert.deepEqual(parallel.map((r) => r.execution.reason), ["EVIDENCE_PENDING", "EVIDENCE_PENDING", "EVIDENCE_PENDING"]);
   } finally {
     if (saved.id !== undefined) process.env.NEAR_ACCOUNT_ID = saved.id;
     if (saved.key !== undefined) process.env.NEAR_PRIVATE_KEY = saved.key;
