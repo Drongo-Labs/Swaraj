@@ -1,5 +1,5 @@
 import { applyMigrations, openPool } from "@swaraj/database";
-import { runOneProofJob, type Sp1ProverConfig } from "../dist/index.js";
+import { runOneProofJob } from "../dist/index.js";
 
 const pool = openPool();
 try {
@@ -9,7 +9,7 @@ try {
   // The SP1 guest proves the statement when the toolchain artifacts are
   // configured; otherwise the worker produces the deterministic local
   // verification bundle only.
-  const sp1: Sp1ProverConfig | undefined =
+  const sp1 =
     process.env.SWARAJ_SP1_ELF !== undefined && process.env.SWARAJ_SP1_HOST_BIN !== undefined
       ? { elfPath: process.env.SWARAJ_SP1_ELF, hostBin: process.env.SWARAJ_SP1_HOST_BIN }
       : undefined;
