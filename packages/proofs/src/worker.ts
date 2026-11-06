@@ -32,6 +32,8 @@ export interface MandateJobPayload {
   expected: { decision: "ALLOW" | "BLOCK"; matchedRuleIds: string[] };
   intentHash: string;
   mandateHash: string;
+  /** Evidence root of the executed action; bound into the proved statement. */
+  evidenceDigest?: string;
 }
 
 /**
@@ -90,6 +92,7 @@ async function runMandateJob(
       mandateHash: payload.mandateHash,
       decision: decision.decision,
       matchedRuleIds: [...decision.matchedPermitRuleIds, ...decision.matchedForbidRuleIds],
+      ...(payload.evidenceDigest !== undefined ? { evidenceDigest: payload.evidenceDigest } : {}),
     });
     const id = mandateStatementId(statement);
     const bundle = {
