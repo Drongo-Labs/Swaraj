@@ -15,10 +15,7 @@ export type NearVenueAdapter = {
   collectEvidence(ref: NearExecutionRef): Promise<EvidenceBundle>;
 };
 
-/**
- * Fixture NEAR venue adapter (Phase 2). Exact-input by txHash.
- * Unknown / missing evidence fails closed — never invents FINAL.
- */
+/** Fixture adapter keyed by txHash. Unknown evidence fails closed and never invents FINAL. */
 export function createNearMockVenueAdapter(
   fixtures: Readonly<Record<string, MockEvidenceFixture>> = DEFAULT_NEAR_MOCK_FIXTURES,
 ): NearVenueAdapter {
@@ -93,10 +90,7 @@ export function nearTxMatches(tx: NearTxResult["transaction"], expect: NearExpec
   }
 }
 
-/**
- * ft_transfer_call refunds a failed swap and can still report success, so the
- * call's return value, the amount actually used, is what shows the swap ran.
- */
+/** ft_transfer_call can report success after refunding, so the amount used shows whether the swap ran. */
 function swapConsumedAmount(status: NearTxResult["status"], amount: string): boolean {
   const value = status.SuccessValue;
   if (typeof value !== "string") return false;
@@ -108,10 +102,8 @@ function swapConsumedAmount(status: NearTxResult["status"], amount: string): boo
 }
 
 /**
- * Live NEAR evidence over JSON-RPC. FINAL is claimed only when the chain says
- * FINAL, the transaction matches the approved action, and nothing failed.
- * ponytail: proofHash commits to the RPC's light-client proof but does not
- * verify its Merkle path; verify it here or in the guest to drop RPC trust.
+ * FINAL only when the chain says so, the transaction matches and nothing failed.
+ * ponytail: proofHash does not verify the Merkle path; do that here or in the guest to drop RPC trust.
  */
 export function createNearVenueAdapter(options: {
   rpcUrl: string;

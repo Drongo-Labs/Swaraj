@@ -1,15 +1,6 @@
 /**
- * NEAR demo: every scene goes through the running Swaraj API, so decisions,
- * capabilities, execution, evidence and receipts are all the real path.
- *
- *   pnpm --filter @swaraj/near near-demo -- --scene=all
- *
- * Needs a running API (SWARAJ_URL, SWARAJ_DEV_TOKEN) with DATABASE_URL set, or
- * no receipt is stored. Without NEAR credentials on the API the scenes use
- * fixtures, which end at cant_prove. `live.allow`, `live.trade` and
- * `live.block` need NEAR_ACCOUNT_ID and NEAR_PRIVATE_KEY on the API;
- * live.allow and live.trade spend real funds. live.trade also needs
- * NEAR_REF_POOL_ID on the API and one run of near-setup.
+ * Runs NEAR scenes through the API: pnpm --filter @swaraj/near near-demo -- --scene=all
+ * The API needs DATABASE_URL for receipts. live.allow and live.trade spend real funds.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";

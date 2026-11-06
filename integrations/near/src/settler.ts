@@ -28,11 +28,7 @@ export function nearExpectation(action: UnifiedAction, ftContract: string | unde
   return ftContract === undefined ? undefined : { kind: "ft_transfer", contractId: ftContract, ...base };
 }
 
-/**
- * Executes a permitted NEAR action. Live when NEAR_ACCOUNT_ID and
- * NEAR_PRIVATE_KEY are set, fixtures otherwise. Never throws: anything short
- * of final, matching evidence is reported as NOT_PROVABLE.
- */
+/** Live with NEAR credentials, fixtures otherwise. Never throws: anything short of final, matching evidence is NOT_PROVABLE. */
 export function createNearSettler(
   capabilities: CapabilityService,
   signer: Signer,

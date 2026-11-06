@@ -11,11 +11,7 @@ export type NearMockExecutionOptions = {
   venue?: NearVenue;
 };
 
-/**
- * Fixture NEAR execution adapter (Phase 2).
- * Verifies + consumes a capability, then returns a REF_FINANCE_NEAR ExecutionRef.
- * Never talks to NEAR RPC.
- */
+/** Fixture adapter: consumes a capability, returns a fixture ref, never calls RPC. */
 export function createNearMockExecutionAdapter(
   capabilities: CapabilityService,
   options: NearMockExecutionOptions = {},

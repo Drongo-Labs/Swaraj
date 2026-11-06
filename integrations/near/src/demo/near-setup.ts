@@ -1,8 +1,4 @@
-/**
- * One-time setup for the live.trade scene: registers the account with the
- * token and Ref Finance contracts and wraps 0.1 NEAR. Spends real funds from
- * NEAR_ACCOUNT_ID, about 0.475 NEAR on testnet including storage deposits.
- */
+/** One-time live.trade setup: registers the account and wraps 0.1 NEAR. Spends about 0.475 NEAR. */
 import { prepareNearSwapAccount } from "../execution.js";
 
 const accountId = process.env.NEAR_ACCOUNT_ID;
