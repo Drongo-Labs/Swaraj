@@ -50,7 +50,8 @@
     "build:sp1": "cd guest && cargo prove build --docker --tag v5.2.4 --workspace-directory .. --output-directory ../artifacts --elf-name swaraj-gate-guest",
     "execute:sp1": "cargo run --release --manifest-path host/Cargo.toml -- artifacts/swaraj-gate-guest",
     "prove:sp1": "cargo run --release --manifest-path host/Cargo.toml -- artifacts/swaraj-gate-guest --prove",
-    "worker:once": "pnpm build && node --env-file ../../.env scripts/run-worker-once.mjs"
+    "worker:once": "pnpm build && node --env-file ../../.env scripts/run-worker-once.mjs",
+    "build:sp1:private": "cd private-guest && cargo prove build --output-directory ../artifacts --elf-name swaraj-private-guest"
   },
   "dependencies": {
     "@swaraj/database": "workspace:*",
