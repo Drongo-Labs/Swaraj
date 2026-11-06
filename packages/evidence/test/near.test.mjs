@@ -122,3 +122,28 @@ test("ft_transfer evidence checks the contract, receiver and amount inside the c
   assert.equal(nearTxMatches(tx("usdc.testnet", { receiver_id: "v.testnet", amount: "8" }), expectFt), false);
   assert.equal(nearTxMatches(tx("fake.testnet", { receiver_id: "v.testnet", amount: "7" }), expectFt), false);
 });
+
+const swapExpect = {
+  kind: "ref_swap", refContract: "ref.testnet", poolId: 17, tokenIn: "wrap.testnet",
+  tokenOut: "ref.fakes.testnet", amount: "100", minAmountOut: "90",
+};
+
+function swapTx({ used = "100", minOut = "90", amount = "100" } = {}) {
+  const msg = JSON.stringify({ force: 0, actions: [{ pool_id: 17, token_in: "wrap.testnet", token_out: "ref.fakes.testnet", amount_in: amount, min_amount_out: minOut }] });
+  const args = Buffer.from(JSON.stringify({ receiver_id: "ref.testnet", amount, msg })).toString("base64");
+  return transferTx({
+    status: { SuccessValue: Buffer.from(JSON.stringify(used)).toString("base64") },
+    transaction: { receiver_id: "wrap.testnet", actions: [{ FunctionCall: { method_name: "ft_transfer_call", args } }] },
+  });
+}
+
+test("a swap is FINAL only when the pool consumed the full amount", async () => {
+  const collect = (tx) => createNearVenueAdapter({ rpcUrl: "http://rpc", fetchImpl: stubRpc({ tx }) }).collectEvidence(liveRef(swapExpect));
+  assert.equal((await collect(swapTx())).finalityResult, "FINAL");
+  assert.equal((await collect(swapTx({ used: "0" }))).finalityResult, "CONFLICT");
+});
+
+test("a swap with weaker slippage protection than approved does not match", async () => {
+  const adapter = createNearVenueAdapter({ rpcUrl: "http://rpc", fetchImpl: stubRpc({ tx: swapTx({ minOut: "1" }) }) });
+  await assert.rejects(adapter.collectEvidence(liveRef(swapExpect)), /does not match/);
+});

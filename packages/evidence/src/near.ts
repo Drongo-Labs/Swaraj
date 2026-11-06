@@ -60,10 +60,38 @@ export function nearTxMatches(tx: NearTxResult["transaction"], expect: NearExpec
     return tx.receiver_id === expect.receiverId && action.Transfer?.deposit === expect.amount;
   }
   const call = action.FunctionCall;
-  if (tx.receiver_id !== expect.contractId || call?.method_name !== "ft_transfer") return false;
+  if (call === undefined) return false;
   try {
     const args = JSON.parse(Buffer.from(call.args, "base64").toString("utf8")) as Record<string, unknown>;
-    return args.receiver_id === expect.receiverId && args.amount === expect.amount;
+    if (expect.kind === "ft_transfer") {
+      return tx.receiver_id === expect.contractId
+        && call.method_name === "ft_transfer"
+        && args.receiver_id === expect.receiverId
+        && args.amount === expect.amount;
+    }
+    if (tx.receiver_id !== expect.tokenIn || call.method_name !== "ft_transfer_call") return false;
+    if (args.receiver_id !== expect.refContract || args.amount !== expect.amount) return false;
+    const msg = JSON.parse(String(args.msg)) as { actions?: Array<Record<string, unknown>> };
+    const step = msg.actions?.[0];
+    return msg.actions?.length === 1
+      && step?.pool_id === expect.poolId
+      && step.token_in === expect.tokenIn
+      && step.token_out === expect.tokenOut
+      && step.min_amount_out === expect.minAmountOut;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * ft_transfer_call refunds a failed swap and can still report success, so the
+ * call's return value, the amount actually used, is what shows the swap ran.
+ */
+function swapConsumedAmount(status: NearTxResult["status"], amount: string): boolean {
+  const value = status.SuccessValue;
+  if (typeof value !== "string") return false;
+  try {
+    return JSON.parse(Buffer.from(value, "base64").toString("utf8")) === amount;
   } catch {
     return false;
   }
@@ -110,7 +138,9 @@ export function createNearVenueAdapter(options: {
         light_client_head: head.header.hash,
       });
 
-      const failed = "Failure" in tx.status || tx.receipts_outcome.some((r) => "Failure" in r.outcome.status);
+      const failed = "Failure" in tx.status
+        || tx.receipts_outcome.some((r) => "Failure" in r.outcome.status)
+        || (expect.kind === "ref_swap" && !swapConsumedAmount(tx.status, expect.amount));
       const finalityResult: FinalityResult = failed
         ? "CONFLICT"
         : tx.final_execution_status === "FINAL" ? "FINAL" : "PENDING";

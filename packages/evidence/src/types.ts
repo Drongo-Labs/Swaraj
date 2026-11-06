@@ -6,7 +6,16 @@ export type EvidenceVenue = "UNISWAP_V3_BASE" | "REF_FINANCE_NEAR" | "NEAR_PAYME
 /** What the chain must show for a NEAR execution to count as the approved action. */
 export type NearExpectation =
   | { kind: "transfer"; receiverId: string; amount: string }
-  | { kind: "ft_transfer"; contractId: string; receiverId: string; amount: string };
+  | { kind: "ft_transfer"; contractId: string; receiverId: string; amount: string }
+  | {
+      kind: "ref_swap";
+      refContract: string;
+      poolId: number;
+      tokenIn: string;
+      tokenOut: string;
+      amount: string;
+      minAmountOut: string;
+    };
 
 export type ExecutionRef = {
   txHash: EvidenceItem["payloadHash"];
