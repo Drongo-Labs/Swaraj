@@ -6,8 +6,10 @@
  *
  * Needs a running API (SWARAJ_URL, SWARAJ_DEV_TOKEN) with DATABASE_URL set, or
  * no receipt is stored. Without NEAR credentials on the API the scenes use
- * fixtures, which end at cant_prove. `live.allow` / `live.block` need
- * NEAR_ACCOUNT_ID and NEAR_PRIVATE_KEY on the API; live.allow sends real funds.
+ * fixtures, which end at cant_prove. `live.allow`, `live.trade` and
+ * `live.block` need NEAR_ACCOUNT_ID and NEAR_PRIVATE_KEY on the API;
+ * live.allow and live.trade spend real funds. live.trade also needs
+ * NEAR_REF_POOL_ID on the API and one run of near-setup.
  */
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -68,6 +70,13 @@ const payment = (amount: string) => ({
   context: { amount, currency: "USDC", recipient },
 });
 
+const liveTrade = (amount: string) => ({
+  ...common(),
+  action: "SPOT_TRADE",
+  resource: { venue: "REF_FINANCE_NEAR" },
+  context: { amount, assetIn: "wrap.testnet", assetOut: "ref.fakes.testnet", slippageBps: 100 },
+});
+
 const livePayment = (amount: string) => ({
   ...common(),
   action: "PAYMENT",
@@ -122,6 +131,9 @@ if (isLive) {
   await registerMandate("app_near_live", "near-mandate-live.json");
   if (scene === "live.allow") {
     await run("app_near_live", `Send 0.001 NEAR to ${recipient}. Expect ALLOW.`, livePayment(ONE_MILLI_NEAR), "ALLOW");
+  }
+  if (scene === "live.trade") {
+    await run("app_near_live", "Swap 0.001 wNEAR on Ref Finance. Expect ALLOW.", liveTrade(ONE_MILLI_NEAR), "ALLOW");
   }
   if (scene === "live.block") {
     await run("app_near_live", "Send just over the 0.01 NEAR cap. Expect BLOCK.", livePayment(OVER_LIVE_CAP), "BLOCK");
