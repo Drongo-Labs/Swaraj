@@ -21,14 +21,16 @@ for the phase map and what is implemented today, and
 | `packages/receipts` | Receipt lifecycle and memory/Postgres stores |
 | `packages/contracts` | Shared API contracts and policy fixtures |
 | `packages/sdk` | Typed HTTP client for agents |
+| `packages/verify` | `swaraj-verify`: checks a receipt bundle with no Swaraj service |
 | `packages/smt` | Typed integer rule AST, SMT-LIB renderer, Z3 session, fail-closed policy gateway with rule attribution |
 | `packages/database` | Postgres migrations, pool, decision records, trigger-guarded receipt lifecycle, idempotency ledger, proof queue, artifact ledger |
 | `packages/proofs` | Rust gate engine, SP1 guest/host, statement/bundle layer, proof worker, zkVerify submission sink |
 | `packages/lean` | Lean 4 assurance suite: kernel-checked framework properties, shared vector proofs |
 | `apps/api` | Authorization, execution, receipt, and proof HTTP service |
-| `apps/mcp` | `swaraj-mcp`: MCP stdio bridge over the API contract |
+| `apps/mcp` | `swaraj-mcp` tools, and `swaraj-mcp-gateway`: a fail-closed proxy for an agent's MCP servers |
 | `apps/web` | React owner and agent interface |
 | `apps/example` | SDK demo and live-agent example |
+| `spec/` | [Receipt format](spec/receipt-v1.md) and [theorem list](spec/theorems.md) |
 | `docs/` | [phase plan](docs/phase_plan.md), [integration guide](docs/integration.md), [proof pipeline](docs/proof-pipeline.md) |
 | `examples/` | [JSON → SMT walkthrough](examples/json-to-smt.md), kept honest by a contract test |
 
@@ -43,7 +45,7 @@ pnpm install                       # workspace install
 
 cp .env.example .env               # local secrets/config; never commit .env
 pnpm db:up                         # Postgres 16 in Docker; schema loads on first boot
-pnpm check                         # build + typecheck + all TS tests
+pnpm check                         # build + typecheck + all TS tests; needs the Postgres above
 ```
 
 The test suites for `database`, `proofs`, and `mcp` run against the

@@ -2,7 +2,7 @@
 
 > **Sprint Window:** Fri 31 Oct → Sat 1 Nov 2026  
 > **Lead:** Kushagra Tiwari · **Support & Operations:** Kushal  
-> **Status:** P0 Shipped & Verified · Feature 8 Deferred
+> **Status:** NEAR payments and Ref Finance swaps run on testnet. See section 7 for limits.
 
 ---
 
@@ -13,7 +13,7 @@ This runbook allows any operator to clone, configure, run, and verify the **Swar
 Swaraj sits between autonomous AI agents and execution venues to enforce owner-defined **Agent Mandates** (fail-closed, permit/forbid policies). In Phase 2:
 - The same mandate engine gates **NEAR Trading** (`REF_FINANCE_NEAR`) and **NEAR Payments** (`near_ft_transfer`).
 - Every decision returns an honest product status: **`allowed`**, **`blocked`**, **`proved`**, or **`can’t prove`**.
-- Deterministic fixture adapters (`@swaraj/evidence` and `@swaraj/capability`) allow running complete, reproducible demos without external testnet token dependencies or RPC flakiness.
+- With `NEAR_ACCOUNT_ID` and `NEAR_PRIVATE_KEY` set on the API, permitted actions execute on chain. Without them, fixture adapters run instead and every allowed action ends at `cant_prove`, so a fixture run can never show `proved`.
 
 ---
 
@@ -58,37 +58,65 @@ pnpm --filter @swaraj/web build
 
 ---
 
-## 4. Running the 4 Demo Scenes (CLI)
+## 4. Running the Demo Scenes (CLI)
 
-The demo script demonstrates both **ALLOW** and **BLOCK** paths for NEAR trading and NEAR payments against [`packages/contracts/fixtures/near-mandate-combined.json`](packages/contracts/fixtures/near-mandate-combined.json).
+Every scene goes through the running API, so it needs Postgres and a started API. Without `DATABASE_URL`, no receipt is stored.
 
-### Run All 4 Scenes at Once
 ```bash
+# Terminal 1
+pnpm db:up
+export DATABASE_URL=postgresql://swaraj:<password>@127.0.0.1:5432/swaraj
+export SWARAJ_DEV_TOKEN=development-test-token-at-least-32-characters
+SWARAJ_FORCE_MOCK=1 pnpm --filter @swaraj/api start
+
+# Terminal 2
+export SWARAJ_DEV_TOKEN=development-test-token-at-least-32-characters
 pnpm --filter @swaraj/example near-demo -- --scene=all
 ```
 
-### Run Individual Scenes
+### Fixture scenes
+
+These use [`near-mandate-combined.json`](packages/contracts/fixtures/near-mandate-combined.json).
+
+| Scene | Action | Amount | Decision | Rule | Product status |
+|---|---|---|---|---|---|
+| `trade.allow` | `SPOT_TRADE` on `REF_FINANCE_NEAR` | 50 USDC | `ALLOW` | `permit_near_trade_venue` | `cant_prove` |
+| `trade.block` | `SPOT_TRADE` on `REF_FINANCE_NEAR` | 100.000001 USDC | `BLOCK` | `forbid_near_trade_amount` | `blocked` |
+| `payment.allow` | `PAYMENT` via `near_ft_transfer` | 1 USDC | `ALLOW` | `permit_near_payment` | `cant_prove` |
+| `payment.block` | `PAYMENT` via `near_ft_transfer` | 5.000001 USDC | `BLOCK` | `forbid_near_payment_amount` | `blocked` |
+
+### Live testnet scenes
+
+These spend real testnet funds and use [`near-mandate-live.json`](packages/contracts/fixtures/near-mandate-live.json), which caps each action at 0.01 NEAR.
+
 ```bash
-# Scene 1: Trade ALLOW (50 USDC on REF_FINANCE_NEAR, limit is 100 USDC)
-pnpm --filter @swaraj/example near-demo -- --scene=trade.allow
+# Set on the API before starting it
+export NEAR_ACCOUNT_ID=<account>.testnet NEAR_PRIVATE_KEY=ed25519:... NEAR_REF_POOL_ID=17
 
-# Scene 2: Trade BLOCK (100.000001 USDC on REF_FINANCE_NEAR, exceeds limit)
-pnpm --filter @swaraj/example near-demo -- --scene=trade.block
+# Once per account, before the first swap (about 0.475 NEAR)
+pnpm --filter @swaraj/example build
+pnpm --filter @swaraj/example near-setup
 
-# Scene 3: Payment ALLOW (1 USDC via near_ft_transfer to vendor.near, limit is 5 USDC)
-pnpm --filter @swaraj/example near-demo -- --scene=payment.allow
-
-# Scene 4: Payment BLOCK (5.000001 USDC via near_ft_transfer, exceeds limit)
-pnpm --filter @swaraj/example near-demo -- --scene=payment.block
+NEAR_DEMO_RECIPIENT=<account>.testnet pnpm --filter @swaraj/example near-demo -- --scene=live.allow
+pnpm --filter @swaraj/example near-demo -- --scene=live.trade
+pnpm --filter @swaraj/example near-demo -- --scene=live.block
 ```
 
-### Expected Output Summary
-| Scene | Action | Target / Venue | Amount | Decision | Matched Rule / Attribution | Product Status |
-|---|---|---|---|---|---|---|
-| `trade.allow` | `SPOT_TRADE` | `REF_FINANCE_NEAR` | 50 USDC | `ALLOW` | `permit_near_trade_venue` | `allowed` |
-| `trade.block` | `SPOT_TRADE` | `REF_FINANCE_NEAR` | 100.000001 USDC | `BLOCK` | `forbid_near_trade_amount` | `blocked` |
-| `payment.allow` | `PAYMENT` | `near_ft_transfer` | 1 USDC | `ALLOW` | `permit_near_payment` | `allowed` |
-| `payment.block` | `PAYMENT` | `near_ft_transfer` | 5.000001 USDC | `BLOCK` | `forbid_near_payment_amount` | `blocked` |
+Nothing runs proof jobs automatically, so run the worker to move a receipt to `proved`:
+
+```bash
+pnpm proofs:worker
+```
+
+Then export the receipt and check it with no Swaraj service running:
+
+```bash
+curl -H "authorization: Bearer $SWARAJ_DEV_TOKEN" \
+  http://127.0.0.1:3000/v1/applications/app_near_live/receipts/<receiptId>/bundle > bundle.json
+node packages/verify/dist/cli.js bundle.json --issuer <issuer address> --near-rpc https://rpc.testnet.near.org
+```
+
+Take the issuer address from the application owner. The format is in [`spec/receipt-v1.md`](spec/receipt-v1.md).
 
 ---
 
@@ -143,28 +171,46 @@ Swaraj enforces strict honesty between cryptographic engine realities and user-f
 |---|---|---|
 | **`allowed`** | `ALLOW` / `PENDING` | Action passed policy checks; capability issued; execution in flight or awaiting finality. |
 | **`blocked`** | `BLOCK` | Denied by mandate (default deny or forbid rule); zero execution capability issued. Attributable rule IDs provided. |
-| **`proved`** | `PROVED` | Cryptographic proof generated and verified via zkVerify/SP1. Never shown without proof metadata. |
+| **`proved`** | `PROVED` | The worker re-derived the decision and bound the evidence. The default sink is local (`zkv_local_`), so this is not a zero-knowledge proof unless SP1 and a remote sink are configured. |
 | **`cant_prove`** | `NON_PROVABLE` / `INVALIDATED` | Missing, conflicted, or unprovable evidence. Never falsely called "proved". |
+| **`needs_approval`** | `NEEDS_APPROVAL` | Paused for a person. Nothing executes until they approve it with the approver token. |
 
 ---
 
-## 7. Scope & Feature Disposition
+## 7. Scope & Limits
 
-| Feature | Description | Sprint Status | Notes |
-|---|---|---|---|
-| **Feature 6** | NEAR adapter + trade & payment templates | **Shipped & Verified** | Mock venue/execution adapters + fixtures in `@swaraj/contracts` |
-| **Feature 7** | Clear receipt & product statuses | **Shipped & Verified** | `productStatus` schema, API fields, and UI badge components |
-| **Feature 8** | Private Mandate (ZK hidden rules) | **DEFERRED** | Dropped per sprint rule to ensure core demo stability |
-| **Feature 9** | MCP Gateway | **OUT OF SCOPE** | Postponed to subsequent sprint |
+| Feature | Status | Limits |
+|---|---|---|
+| 6: NEAR adapter and templates | Native transfers and Ref Finance swaps verified on testnet | `near_ft_transfer` is built and unit tested but has not run live. Mainnet is untested. |
+| 7: Receipt statuses | Done | `proved` means the local sink by default |
+| 8: Private Mandate | See section 8 | Standalone proof, not connected to the gateway |
+| 9: MCP gateway | `swaraj-mcp-gateway` is done | Gates `tools/call` only; other MCP requests pass through |
+| 10: Human approval | API, proofs and status badge | No approve button in the UI. Base trades that need approval are refused. |
+| 11: Verified programs only | Done | Certificates are signed by the certifier and not compared with on-chain code |
+| 12, 13: Rule checks and diff | `POST /mandates/check` | The diff reports `complete: false` when it hits its search cap |
+| 14: Random testing | Done | Checks the proved characterization, and does not run the Lean model |
+| 15: Public spec and checker | `spec/`, `swaraj-verify` | Blocked actions use Decision Receipts, which the bundle does not cover |
+| 16: Web2 evidence | Stripe and GitHub signed webhooks | Tested with simulated signed events, not real accounts |
+
+Other things to know:
+
+- Proof jobs need `pnpm proofs:worker`; nothing runs them automatically.
+- Tests that touch the database need Postgres. Set `SWARAJ_TEST_DATABASE_URL` to a disposable database to include the API-on-Postgres tests.
+- Actions are only signature-checked when the mandate names an `agentSigner`. Without one, the API token is the only check.
 
 ---
 
-## 8. Exit Checklist — 1 Nov EOD Signoff
+## 8. Private Mandate
 
-- [x] NEAR **trading**: ALLOW + BLOCK demo verified (`trade.allow`, `trade.block`)
-- [x] NEAR **payment**: ALLOW + BLOCK demo verified (`payment.allow`, `payment.block`)
-- [x] Statuses: `allowed` / `blocked` / `proved` / `can’t prove` mapped honestly and rendered in UI
-- [x] Monorepo packages build cleanly (`pnpm build` / core packages)
-- [x] All 63 core unit tests pass across schemas, contracts, rules, evidence, capability
-- [x] Operator Runbook provided and verified for solo execution
-- [x] Feature 8: Explicitly marked as **DEFERRED** in runbook and release notes
+The rules stay secret, a salted commitment is public, and an SP1 proof shows an action passed them. The guest aborts on anything but ALLOW, so a blocked action has no proof.
+
+```bash
+pnpm --filter @swaraj/proofs build:sp1:private
+cargo build --release --manifest-path packages/proofs/host/Cargo.toml
+```
+
+`runPrivateMandate` in `@swaraj/proofs` runs the guest, and passing `proofPath` produces a proof. Check a proof with:
+
+```bash
+packages/proofs/host/target/release/swaraj-gate-host packages/proofs/artifacts/swaraj-private-guest --verify <proof>
+```

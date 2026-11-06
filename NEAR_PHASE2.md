@@ -1,30 +1,23 @@
 # Phase 2 NEAR — Kushagra deliverable
 
-Features **6** (NEAR adapter + templates) and **7** (product statuses). Feature **8** Private Mandate is **deferred**.
+Features **6** (NEAR adapter and templates), **7** (product statuses) and **8** (Private Mandate).
+
+The steps and current limits are in [RUNBOOK_PHASE2_NEAR.md](RUNBOOK_PHASE2_NEAR.md).
 
 ## Demo
 
-```bash
-pnpm --filter @swaraj/schemas build
-pnpm --filter @swaraj/contracts build
-pnpm --filter @swaraj/rules build
-pnpm --filter @swaraj/example build
-pnpm --filter @swaraj/example near-demo -- --scene=all
-```
-
-Scenes: `trade.allow` · `trade.block` · `payment.allow` · `payment.block`
+Scenes run through the API: `trade.allow` · `trade.block` · `payment.allow` · `payment.block` · `live.allow` · `live.trade` · `live.block`
 
 ## Mandates
 
-`packages/contracts/fixtures/near-mandate-{trading,payment,combined}.json`
+`packages/contracts/fixtures/near-mandate-{trading,payment,combined,live}.json`
 
 ## Adapters
 
-- `createNearMockVenueAdapter` — `@swaraj/evidence` (`REF_FINANCE_NEAR`)
-- `createNearMockExecutionAdapter` — `@swaraj/capability`
-- Missing evidence fails closed (`NEAR_MISSING_TX_HASH`)
+- Live: `createNearPaymentExecutor` (`@swaraj/capability`) and `createNearVenueAdapter` (`@swaraj/evidence`)
+- Fixtures: `createNearMockExecutionAdapter` and `createNearMockVenueAdapter`, used when no NEAR account is set
+- Evidence fails closed unless the chain shows a final, matching, successful transaction
 
 ## Product statuses
 
-`allowed` · `blocked` · `proved` · `cant_prove` via `@swaraj/contracts`  
-Returned as `productStatus` on unified-action responses and receipt GETs.
+`allowed` · `blocked` · `proved` · `cant_prove` · `needs_approval` via `@swaraj/contracts`
