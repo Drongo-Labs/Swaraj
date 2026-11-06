@@ -52,7 +52,7 @@ pnpm --filter @swaraj/receipts build
 pnpm --filter @swaraj/proofs build
 pnpm --filter @swaraj/api build
 pnpm --filter @swaraj/sdk build
-pnpm --filter @swaraj/example build
+pnpm --filter @swaraj/near build
 pnpm --filter @swaraj/web build
 ```
 
@@ -71,12 +71,12 @@ SWARAJ_FORCE_MOCK=1 pnpm --filter @swaraj/api start
 
 # Terminal 2
 export SWARAJ_DEV_TOKEN=development-test-token-at-least-32-characters
-pnpm --filter @swaraj/example near-demo -- --scene=all
+pnpm --filter @swaraj/near near-demo -- --scene=all
 ```
 
 ### Fixture scenes
 
-These use [`near-mandate-combined.json`](packages/contracts/fixtures/near-mandate-combined.json).
+These use [`combined.json`](integrations/near/mandates/combined.json).
 
 | Scene | Action | Amount | Decision | Rule | Product status |
 |---|---|---|---|---|---|
@@ -87,26 +87,22 @@ These use [`near-mandate-combined.json`](packages/contracts/fixtures/near-mandat
 
 ### Live testnet scenes
 
-These spend real testnet funds and use [`near-mandate-live.json`](packages/contracts/fixtures/near-mandate-live.json), which caps each action at 0.01 NEAR.
+These spend real testnet funds and use [`live.json`](integrations/near/mandates/live.json), which caps each action at 0.01 NEAR.
 
 ```bash
 # Set on the API before starting it
 export NEAR_ACCOUNT_ID=<account>.testnet NEAR_PRIVATE_KEY=ed25519:... NEAR_REF_POOL_ID=17
 
 # Once per account, before the first swap (about 0.475 NEAR)
-pnpm --filter @swaraj/example build
-pnpm --filter @swaraj/example near-setup
+pnpm --filter @swaraj/near build
+pnpm --filter @swaraj/near near-setup
 
-NEAR_DEMO_RECIPIENT=<account>.testnet pnpm --filter @swaraj/example near-demo -- --scene=live.allow
-pnpm --filter @swaraj/example near-demo -- --scene=live.trade
-pnpm --filter @swaraj/example near-demo -- --scene=live.block
+NEAR_DEMO_RECIPIENT=<account>.testnet pnpm --filter @swaraj/near near-demo -- --scene=live.allow
+pnpm --filter @swaraj/near near-demo -- --scene=live.trade
+pnpm --filter @swaraj/near near-demo -- --scene=live.block
 ```
 
-Nothing runs proof jobs automatically, so run the worker to move a receipt to `proved`:
-
-```bash
-pnpm proofs:worker
-```
+The API runs proof jobs itself, so receipts move to `proved` without a separate worker. Set `SWARAJ_AUTO_PROVE=0` to run them by hand with `pnpm proofs:worker`.
 
 Then export the receipt and check it with no Swaraj service running:
 
@@ -194,7 +190,6 @@ Swaraj enforces strict honesty between cryptographic engine realities and user-f
 
 Other things to know:
 
-- Proof jobs need `pnpm proofs:worker`; nothing runs them automatically.
 - Tests that touch the database need Postgres. Set `SWARAJ_TEST_DATABASE_URL` to a disposable database to include the API-on-Postgres tests.
 - Actions are only signature-checked when the mandate names an `agentSigner`. Without one, the API token is the only check.
 

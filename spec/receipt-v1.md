@@ -27,7 +27,7 @@ The command exits 0 when the bundle is valid and 1 when it is not.
 | `matchedRuleIds` | Rule ids that decided it |
 | `approvedBy` | Who approved a `NEEDS_APPROVAL` decision |
 | `evidenceDigest` | Root of the on-chain evidence; absent if nothing executed on chain |
-| `near` | NEAR transaction hash, signer and expected effect; absent off NEAR |
+| `chainExecution` | On-chain transaction hash, signer and expected effect; absent when nothing ran on chain |
 | `statementText` | Canonical statement, below |
 | `statementId` | `stmt_` + SHA-256 of `statementText` |
 | `issuer` | Issuer address, informational |
@@ -70,7 +70,7 @@ swaraj/receipt-bundle/v1
 4. `statementText` and `statementId` recompute.
 5. `state` is `PROVED`.
 6. `signature` recovers to the expected issuer.
-7. If `near` is present, its receiver and amount match the action.
+7. If `chainExecution` is present, its receiver and amount match the action.
 8. With `--near-rpc`, the transaction is final and matches on chain.
 
 ## What a valid bundle does not show

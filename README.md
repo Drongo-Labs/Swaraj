@@ -26,6 +26,7 @@ for the phase map and what is implemented today, and
 | `packages/database` | Postgres migrations, pool, decision records, trigger-guarded receipt lifecycle, idempotency ledger, proof queue, artifact ledger |
 | `packages/proofs` | Rust gate engine, SP1 guest/host, statement/bundle layer, proof worker, zkVerify submission sink |
 | `packages/lean` | Lean 4 assurance suite: kernel-checked framework properties, shared vector proofs |
+| `integrations/near` | `@swaraj/near`: everything NEAR, including execution, evidence, mandates and the demo |
 | `apps/api` | Authorization, execution, receipt, and proof HTTP service |
 | `apps/mcp` | `swaraj-mcp` tools, and `swaraj-mcp-gateway`: a fail-closed proxy for an agent's MCP servers |
 | `apps/web` | React owner and agent interface |

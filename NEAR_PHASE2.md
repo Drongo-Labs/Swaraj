@@ -10,11 +10,12 @@ Scenes run through the API: `trade.allow` · `trade.block` · `payment.allow` ·
 
 ## Mandates
 
-`packages/contracts/fixtures/near-mandate-{trading,payment,combined,live}.json`
+`integrations/near/mandates/{trading,payment,combined,live}.json`
 
 ## Adapters
 
-- Live: `createNearPaymentExecutor` (`@swaraj/capability`) and `createNearVenueAdapter` (`@swaraj/evidence`)
+- All NEAR code is in `integrations/near` and imports from `@swaraj/near`
+- Live: `createNearPaymentExecutor` and `createNearVenueAdapter`
 - Fixtures: `createNearMockExecutionAdapter` and `createNearMockVenueAdapter`, used when no NEAR account is set
 - Evidence fails closed unless the chain shows a final, matching, successful transaction
 
