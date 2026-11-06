@@ -147,3 +147,32 @@ test("a swap with weaker slippage protection than approved does not match", asyn
   const adapter = createNearVenueAdapter({ rpcUrl: "http://rpc", fetchImpl: stubRpc({ tx: swapTx({ minOut: "1" }) }) });
   await assert.rejects(adapter.collectEvidence(liveRef(swapExpect)), /does not match/);
 });
+
+test("a rate-limited or failing RPC is retried, and a client error is not", async () => {
+  const flaky = (failures) => {
+    let calls = 0;
+    const ok = stubRpc({ tx: transferTx() });
+    const fetchImpl = async (url, init) => {
+      calls += 1;
+      if (calls <= failures.length) {
+        const failure = failures[calls - 1];
+        if (failure === "drop") throw new Error("connection reset");
+        return new Response("", { status: failure });
+      }
+      return ok(url, init);
+    };
+    return { fetchImpl, calls: () => calls };
+  };
+  const collect = (fetchImpl) =>
+    createNearVenueAdapter({ rpcUrl: "http://rpc", fetchImpl, retryDelayMs: 0 }).collectEvidence(liveRef(expectTransfer));
+
+  assert.equal((await collect(flaky([429, 503, "drop"]).fetchImpl)).finalityResult, "FINAL");
+
+  const forever = flaky(Array(50).fill(429));
+  await assert.rejects(collect(forever.fetchImpl), /429/);
+  assert.equal(forever.calls(), 6);
+
+  const denied = flaky([403]);
+  await assert.rejects(collect(denied.fetchImpl), /403/);
+  assert.equal(denied.calls(), 1);
+});

@@ -47,6 +47,8 @@ type NearTxResult = {
   receipts_outcome: Array<{ id: string; outcome: { status: Record<string, unknown> } }>;
 };
 
+const RPC_ATTEMPTS = 6;
+
 function sha256(text: string): HexHash {
   return `0x${createHash("sha256").update(text).digest("hex")}` as HexHash;
 }
@@ -106,20 +108,39 @@ function swapConsumedAmount(status: NearTxResult["status"], amount: string): boo
 export function createNearVenueAdapter(options: {
   rpcUrl: string;
   fetchImpl?: typeof fetch;
+  /** First retry delay; doubles each attempt. */
+  retryDelayMs?: number;
 }): VenueAdapter {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const retryDelayMs = options.retryDelayMs ?? 1000;
   const rpc = async <T>(method: string, params: unknown): Promise<T> => {
-    const response = await fetchImpl(options.rpcUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: "swaraj", method, params }),
-    });
-    if (!response.ok) throw new EvidenceValidationError(`NEAR RPC ${method} returned ${response.status}`);
-    const body = (await response.json()) as { result?: T; error?: unknown };
-    if (body.result === undefined) {
-      throw new EvidenceValidationError(`NEAR RPC ${method} failed: ${JSON.stringify(body.error).slice(0, 200)}`);
+    // By now the transaction is on chain, so a busy RPC must not turn it into cant_prove.
+    for (let attempt = 1; ; attempt += 1) {
+      let response: Response | undefined;
+      try {
+        response = await fetchImpl(options.rpcUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: "swaraj", method, params }),
+        });
+      } catch (error) {
+        if (attempt >= RPC_ATTEMPTS) throw error;
+      }
+      if (response?.ok) {
+        const body = (await response.json()) as { result?: T; error?: unknown };
+        if (body.result === undefined) {
+          throw new EvidenceValidationError(`NEAR RPC ${method} failed: ${JSON.stringify(body.error).slice(0, 200)}`);
+        }
+        return body.result;
+      }
+      if (response && response.status !== 429 && response.status < 500) {
+        throw new EvidenceValidationError(`NEAR RPC ${method} returned ${response.status}`);
+      }
+      if (attempt >= RPC_ATTEMPTS) {
+        throw new EvidenceValidationError(`NEAR RPC ${method} returned ${response?.status ?? "no response"}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs * 2 ** (attempt - 1)));
     }
-    return body.result;
   };
 
   return {
