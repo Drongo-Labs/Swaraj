@@ -30,3 +30,11 @@ export {
   type BaseNetworkId,
   type BaseNetworkConfig,
 } from "./networks.js";
+export {
+  githubDeploymentMatches,
+  githubReceiptId,
+  githubSignatureValid,
+  stripeEventMatches,
+  stripeReceiptId,
+  stripeSignatureValid,
+} from "./web2.js";
