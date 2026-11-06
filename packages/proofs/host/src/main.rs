@@ -3,12 +3,13 @@
 //! statement id so the caller can bind it to the receipt.
 //!
 //! Usage:
-//!   swaraj-gate-host <elf-path> <input-json> [--prove]
+//!   swaraj-gate-host <elf-path> <input-json> [--prove] [--groth16] [--proof-out <path>]
+//!   swaraj-gate-host <elf-path> --verify <proof-path>
 
 use std::sync::Arc;
 
 use sp1_sdk::blocking::{Elf, Prover, ProveRequest, ProverClient, SP1Stdin};
-use sp1_sdk::ProvingKey;
+use sp1_sdk::{ProvingKey, SP1ProofWithPublicValues};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
@@ -17,26 +18,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(2);
     }
     let elf_path = &args[1];
-    let input_path = &args[2];
     let prove = args.iter().any(|arg| arg == "--prove");
+    // The default STARK is not zero knowledge; only the Groth16 wrap hides the witness.
+    let groth16 = args.iter().any(|arg| arg == "--groth16");
+    let proof_out = args
+        .iter()
+        .position(|arg| arg == "--proof-out")
+        .and_then(|index| args.get(index + 1));
 
     let elf_bytes = std::fs::read(elf_path)?;
     let elf = Elf::Dynamic(Arc::from(elf_bytes.as_slice()));
-    let input_json = std::fs::read_to_string(input_path)?;
-
     let prover = ProverClient::builder().cpu().build();
+
+    if args[2] == "--verify" {
+        let bytes = std::fs::read(&args[3])?;
+        let (mut proof, _): (SP1ProofWithPublicValues, usize) =
+            bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
+        let pk = prover.setup(elf)?;
+        prover.verify(&proof, pk.verifying_key(), None)?;
+        println!("verified");
+        println!("{}", proof.public_values.read::<String>());
+        return Ok(());
+    }
+
+    let input_json = std::fs::read_to_string(&args[2])?;
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(input_json.into_bytes());
 
     if prove {
         let pk = prover.setup(elf)?;
-        let mut proof = prover.prove(&pk, stdin).run()?;
+        let request = prover.prove(&pk, stdin);
+        let mut proof = if groth16 { request.groth16().run()? } else { request.run()? };
         prover.verify(&proof, pk.verifying_key(), None)?;
 
         let statement_id = proof.public_values.read::<String>();
         println!("statement_id={statement_id}");
 
-        let proof_path = format!("{statement_id}.bin");
+        let proof_path = proof_out.cloned().unwrap_or_else(|| format!("{statement_id}.bin"));
         let bytes = bincode::serde::encode_to_vec(&proof, bincode::config::standard())?;
         std::fs::write(&proof_path, bytes)?;
         println!("proof={proof_path}");
