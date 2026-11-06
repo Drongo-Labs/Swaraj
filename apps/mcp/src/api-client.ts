@@ -1,7 +1,4 @@
-/**
- * HTTP client for the Swaraj gateway API: authorize a unified action, read a
- * receipt, read the active mandate.
- */
+/** HTTP client for the Swaraj gateway API. */
 
 export type SubmitActionResponse = {
   decision?: "ALLOW" | "BLOCK";

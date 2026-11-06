@@ -2,14 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import type { SwarajApiClient } from "./api-client.js";
 
 /**
- * MCP gateway: a stdio proxy between an agent and an upstream MCP server.
- * Every tools/call is authorized as an APP_ACTION first; everything else
- * passes through untouched. Anything but an explicit ALLOW stops the call.
- *
- * Mandates address calls by `resource.app` (the upstream name),
- * `resource.target` (the tool name) and `context.params`. `argsDigest` always
- * binds the full arguments, so values too complex to be params still reach
- * the receipt.
+ * Proxies an MCP server, authorizing each tools/call as an APP_ACTION. Anything but ALLOW stops the call.
+ * `argsDigest` binds all arguments, including ones too complex to be params.
  */
 
 export interface GatewayOptions {
@@ -96,10 +90,7 @@ export async function authorizeToolCall(
   }
 }
 
-/**
- * Handles one line from the agent. Returns what to send upstream, what to
- * reply to the agent directly, or nothing for unparseable input.
- */
+/** Returns what to send upstream or to the agent, or nothing for unparseable input. */
 export async function gatewayLine(
   options: GatewayOptions,
   line: string,

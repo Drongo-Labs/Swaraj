@@ -9,11 +9,7 @@ import { join } from "node:path";
 import { LocalKeySigner } from "@swaraj/crypto";
 import { buildApp } from "../../api/dist/app.js";
 
-/**
- * End-to-end over real stdio: an MCP host process talks to swaraj-mcp, which
- * calls the real Swaraj API. Covers the handshake, tool discovery, mandate
- * lookup, and the allowed and blocked paths with rule attribution.
- */
+/** End to end over real stdio against the real API. */
 
 interface JsonRpcMessage {
   jsonrpc?: string;

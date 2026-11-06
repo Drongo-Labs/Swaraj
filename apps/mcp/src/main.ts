@@ -3,11 +3,7 @@ import { SwarajApiClient } from "./api-client.js";
 import { McpServer, PROTOCOL_VERSION } from "./server.js";
 import { dispatchToolCall } from "./tools.js";
 
-/**
- * Entry point: swaraj-mcp. Speaks MCP over stdio and talks to the Swaraj
- * API over HTTP. Requires SWARAJ_URL and SWARAJ_DEV_TOKEN in the
- * environment (see .env.example).
- */
+/** swaraj-mcp entry point: MCP over stdio. Requires SWARAJ_URL and SWARAJ_DEV_TOKEN. */
 
 function main(): void {
   const baseUrl = process.env.SWARAJ_URL;

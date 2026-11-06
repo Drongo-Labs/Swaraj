@@ -8,12 +8,7 @@ import {
 import { ApiError } from "./api-client.js";
 import { InvalidArgumentsError, TOOL_DEFINITIONS, UnknownToolError } from "./tools.js";
 
-/**
- * Minimal MCP stdio server. The caller feeds input line by line; every
- * request yields a response line to write back, notifications yield none.
- * Tool calls are routed through the injected dispatcher so tests can wire
- * a stub in place of the API client.
- */
+/** Minimal MCP stdio server. Tool calls go through the injected dispatcher. */
 
 export const PROTOCOL_VERSION = "2025-06-18";
 
@@ -25,10 +20,7 @@ export interface McpServerOptions {
 export class McpServer {
   constructor(private readonly options: McpServerOptions) {}
 
-  /**
-   * Handle one raw input line. Returns the response line (with trailing
-   * newline) or undefined for notifications and unparseable input.
-   */
+  /** Returns the response line, or undefined for notifications and unparseable input. */
   async handleLine(line: string): Promise<string | undefined> {
     let request: JsonRpcRequest;
     try {

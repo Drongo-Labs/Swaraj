@@ -1,8 +1,4 @@
-/**
- * JSON-RPC 2.0 message handling for the MCP stdio transport: one
- * newline-delimited UTF-8 JSON message per line, exactly as the MCP
- * specification requires (no embedded newlines).
- */
+/** MCP stdio framing: one newline-delimited JSON-RPC message per line. */
 
 export type RequestId = number | string;
 

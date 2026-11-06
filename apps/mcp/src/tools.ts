@@ -1,9 +1,6 @@
 import type { SwarajApiClient } from "./api-client.js";
 
-/**
- * The tool surface exposed over MCP. Tool names and argument shapes are
- * the contract documented in docs/integration.md and shared with the SDK.
- */
+/** MCP tool surface. Names and arguments are documented in docs/integration.md. */
 
 export interface ToolDefinition {
   name: string;

@@ -6,14 +6,8 @@ import { SwarajApiClient } from "./api-client.js";
 import { gatewayLine, type GatewayOptions } from "./gateway.js";
 
 /**
- * swaraj-mcp-gateway: point an agent's MCP config here instead of at the
- * upstream server.
- *
- *   SWARAJ_URL=… SWARAJ_DEV_TOKEN=… SWARAJ_APPLICATION_ID=app_demo \
- *   SWARAJ_UPSTREAM_NAME=github swaraj-mcp-gateway -- npx some-mcp-server
- *
- * Optional: SWARAJ_AGENT (default agent:mcp), SWARAJ_AGENT_KEY (secp256k1 hex,
- * required when the mandate names an agentSigner).
+ * Proxies an MCP server: SWARAJ_UPSTREAM_NAME=github swaraj-mcp-gateway -- npx some-mcp-server
+ * Also needs SWARAJ_URL, SWARAJ_DEV_TOKEN, SWARAJ_APPLICATION_ID. Optional: SWARAJ_AGENT, SWARAJ_AGENT_KEY.
  */
 
 function required(name: string): string {
