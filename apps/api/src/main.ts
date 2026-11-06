@@ -8,7 +8,7 @@ if (mode === "base") {
 }
 
 const app = await buildApp(process.env.SWARAJ_DEV_TOKEN ?? "");
-// Recurring proof worker (both queues + publication). SWARAJ_PROOF_SERVICE=external when it runs elsewhere.
+// Proof queue. SWARAJ_PROOF_SERVICE=external when it runs elsewhere, SWARAJ_AUTO_PROVE=0 to run it by hand.
 const stopProofService = embeddedProofServiceEnabled() ? startProofService() : undefined;
 app.addHook("onClose", async () => {
   await stopProofService?.();

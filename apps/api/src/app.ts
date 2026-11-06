@@ -82,7 +82,7 @@ import {
 } from "./pipeline/index.js";
 import { resolveBaseNetwork } from "@swaraj/evidence";
 import { createLiveStateOracle, type LiveStateOracle } from "./pipeline/live-state.js";
-import { proofStackStatus, scheduleAutoProve } from "./auto-prove.js";
+import { proofStackStatus } from "./auto-prove.js";
 
 export type ActivityItem = {
   id: string;
@@ -582,9 +582,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           decisionReceipt: decisionReceipt as Record<string, unknown>,
         };
         activityLog.push(activity);
-        if (pipelineMode === "base" && decisionReceipt && "id" in decisionReceipt && decisionReceipt.id) {
-          scheduleAutoProve("decision");
-        }
         return reply.code(200).send({
           decision: "BLOCK",
           violations: result.violations,
@@ -616,9 +613,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         ...(result.policyHash ? { policyHash: result.policyHash } : {}),
       };
       activityLog.push(activity);
-      if (pipelineMode === "base") {
-        scheduleAutoProve("trade");
-      }
       return reply.code(200).send({
         decision: "ALLOW",
         receiptId: result.receiptId,
