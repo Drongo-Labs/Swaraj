@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "swaraj-mcp": "./dist/main.js"
+    "swaraj-mcp": "./dist/main.js",
+    "swaraj-mcp-gateway": "./dist/gateway-main.js"
   },
   "exports": {
     ".": {
@@ -18,10 +19,12 @@
     "start": "pnpm build && node dist/main.js",
     "test": "pnpm --filter @swaraj/api... build && pnpm build && node --env-file-if-exists=../../.env --test --test-concurrency 1 test/*.test.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@swaraj/crypto": "workspace:*",
+    "@swaraj/schemas": "workspace:*"
+  },
   "devDependencies": {
     "@swaraj/api": "workspace:*",
-    "@swaraj/crypto": "workspace:*",
     "@types/node": "^22.19.0",
     "typescript": "^5.9.3"
   }

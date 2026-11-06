@@ -77,13 +77,17 @@ importers:
         version: link:../../packages/sdk
 
   apps/mcp:
+    dependencies:
+      '@swaraj/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@swaraj/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
     devDependencies:
       '@swaraj/api':
         specifier: workspace:*
         version: link:../api
-      '@swaraj/crypto':
-        specifier: workspace:*
-        version: link:../../packages/crypto
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.5

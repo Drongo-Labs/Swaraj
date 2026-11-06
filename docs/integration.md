@@ -86,14 +86,34 @@ as the SDK. Requires `SWARAJ_URL` and `SWARAJ_DEV_TOKEN`.
 
 | Tool | Arguments | Result |
 |---|---|---|
-| `swaraj_submit_action` | `applicationId`, `policyId`, `input` (decimal strings), optional `idempotencyKey` | Decision JSON; BLOCK carries `isError: true` with the violated rules |
-| `swaraj_get_receipt` | `receiptId` | Receipt state, `proofRef`, claim |
-| `swaraj_get_policy` | `policyId` | Revision, digest, rule ids |
+| `swaraj_submit_action` | `applicationId`, `action` (unified action) | Decision JSON; anything but ALLOW carries `isError: true` |
+| `swaraj_get_receipt` | `applicationId`, `receiptId` | Receipt status, product status, proof reference |
+| `swaraj_get_mandate` | `applicationId` | The active Agent Mandate |
 
 Invalid arguments are tool results with `isError: true`; unknown tools
 are JSON-RPC errors (-32602). Administration and credential provisioning
 stay outside the tool surface. Hosted transport (Streamable HTTP with
 the MCP authorization flow) remains planned.
+
+### MCP gateway
+
+`swaraj-mcp-gateway` sits between an agent and any stdio MCP server, so an
+agent's own tools go through Swaraj without the agent choosing to. Point the
+agent's MCP config at the gateway and pass the real server after `--`:
+
+```sh
+SWARAJ_URL=http://127.0.0.1:3000 SWARAJ_DEV_TOKEN=… \
+SWARAJ_APPLICATION_ID=app_demo SWARAJ_UPSTREAM_NAME=github \
+swaraj-mcp-gateway -- npx your-mcp-server
+```
+
+Each `tools/call` becomes an `APP_ACTION`: `resource.app` is the upstream name,
+`resource.target` the tool, and `context.params` holds scalar arguments plus an
+`argsDigest` over all of them. Anything but an explicit ALLOW, including Swaraj
+being unreachable, stops the call before it reaches the server. Set
+`SWARAJ_AGENT_KEY` when the mandate names an `agentSigner`.
+
+Only tool calls are gated; `resources/read` and other requests pass through.
 
 ## 6. Retries and configuration changes
 
