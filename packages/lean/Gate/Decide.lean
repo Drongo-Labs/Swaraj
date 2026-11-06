@@ -1,15 +1,6 @@
 import Gate.Basic
 
-/-!
-# Decisions and kernel-checked framework properties
-
-The formal model is deliberately fail-closed: a rule counts as
-violated unless its assertion definitively evaluates to `some true`
-under the binding. The TypeScript and Rust implementations surface an
-evaluation error for missing fields instead; on the complete bindings
-used by the shared vectors the two models coincide, and the theorems
-here fix the semantics every implementation must respect.
--/
+/-! # Decisions. Fail-closed: a rule counts as violated unless it evaluates to `some true`. -/
 
 namespace Gate
 

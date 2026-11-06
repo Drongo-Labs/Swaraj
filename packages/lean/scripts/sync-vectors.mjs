@@ -1,11 +1,5 @@
 #!/usr/bin/env node
-/**
- * Generates Gate/Vectors.lean from the shared gate vectors
- * (packages/proofs/vectors/gate-vectors.json), so the Lean suite checks
- * the same expectations the TypeScript gateway test checks.
- *
- * Run: node scripts/sync-vectors.mjs   (or: pnpm --filter @swaraj/lean sync:vectors)
- */
+/** Generates Gate/Vectors.lean from the shared gate vectors. Run: pnpm --filter @swaraj/lean sync:vectors */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,16 +1,5 @@
 #!/usr/bin/env node
-// Purity check for the Lean Gate suite.
-//
-// Fails if any source under Gate/ contains a proof-escape token
-// (sorry, axiom, native_decide, admit) in executable code. Comments
-// (block `/- ... -/`, including nested, and `--` line comments) are
-// stripped first, so the tokens can still be *discussed* in prose —
-// just never *used*.
-//
-// Runs as part of `check:lean` (after `lake build`): lake already rejects
-// `sorry` warnings under warningAsError, but a plain-text scan is the
-// belt to lake's braces — it covers generated files and catches tokens
-// that do not emit warnings (e.g. `axiom`).
+// Fails if Gate/ code uses sorry, axiom, native_decide or admit. Comments are stripped first.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

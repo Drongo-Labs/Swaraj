@@ -1,17 +1,6 @@
 import Gate.Mandate
 
-/-!
-# Human approval
-
-`REQUIRE_APPROVAL` adds a third outcome between FORBID and PERMIT:
-
-1. a matching FORBID blocks;
-2. otherwise a matching approval rule pauses the action for a person;
-3. otherwise the mandate decides as usual.
-
-Approval rules can only hold an action back, so adding one never allows
-anything the mandate would not.
--/
+/-! # Human approval: FORBID blocks, then an approval rule pauses, then the mandate decides. Approval rules never allow more. -/
 
 namespace Gate
 

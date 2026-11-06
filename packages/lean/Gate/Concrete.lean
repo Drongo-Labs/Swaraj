@@ -1,23 +1,6 @@
 import Gate.Mandate
 
-/-!
-# Concrete mandate refinement
-
-`Gate.Mandate` proves the decision characterization (default deny,
-forbid-wins, allow-iff-permit-without-forbid) over an ABSTRACT matching
-predicate (`isMatch : Bool` per rule). This file instantiates that model with
-the CONCRETE field/predicate language the TypeScript engine
-(`@swaraj/rules`) evaluates — APP_ACTION (app, name, numeric and string
-params) and PAYMENT (amount, currency, recipient) — so:
-
-- `decideConcrete` IS `decideMandate` under the concrete matcher, so every
-  theorem in `Gate.Mandate` transfers to the concrete decision function
-  (`concrete_allow_iff` below states the characterization directly in terms
-  of concrete rules and actions).
-- `Gate/Refinement.lean` (generated) kernel-checks `decideConcrete` against
-  the outputs of the real TypeScript engine over the ENTIRE bounded input
-  space — the machine-checked Lean ⇔ TS correspondence.
--/
+/-! # Concrete matcher for the TS field language. `decideConcrete` is `decideMandate`, checked in `Refinement.lean`. -/
 
 namespace Gate
 
@@ -44,10 +27,7 @@ structure CRule where
   preds : List CPred
   deriving DecidableEq, Repr
 
-/-- A concrete action in the bounded domain. `kind = true` is APP_ACTION
-(app/name/params in scope); `kind = false` is PAYMENT (amount/currency/
-recipient in scope). Out-of-scope fields never match, exactly as the
-TypeScript `fieldValue` returns undefined cross-action. -/
+/-- `kind = true` is APP_ACTION, `false` is PAYMENT. Out-of-scope fields never match, as in TS. -/
 structure CAction where
   kind : Bool
   app : String

@@ -1,31 +1,10 @@
 import Gate.Bridge
 
-/-!
-# Budgeted spending — the running-total bound
-
-Everything else in this suite proves per-decision soundness: ONE action is
-allowed only if it fits the mandate. Nothing yet constrained a SEQUENCE of
-spends. This file proves the sequence-level invariant of a governed spend
-run:
-
-  if the pipeline itself maintains the running used-total — each ALLOW
-  re-checked as `used + amount ≤ cap` against the gate's own accounting —
-  then the sum of everything executed stays within the cap.
-
-The hypothesis is the contract, and it is worth stating precisely: the
-bound holds when the used-total is threaded by the governed pipeline, not
-when it is an input supplied back by the agent. An agent-fed `used` value
-is a request, not an invariant; this file names the difference and proves
-what the gate-threaded version buys.
--/
+/-! # Running-total bound: holds when the pipeline threads `used`, not when the agent supplies it. -/
 
 namespace Gate
 
-/--
-A governed spend run. `allowStep` is an ALLOW that executed its amount;
-`blockStep` is a BLOCK that abstained (the amount was proposed, nothing
-was spent).
--/
+/-- `allowStep` executed its amount; `blockStep` abstained and spent nothing. -/
 inductive SpendRun : Type where
   | stop
   | allowStep (amount : Int) (rest : SpendRun)
@@ -39,20 +18,13 @@ def SpendRun.total : SpendRun → Int
   | allowStep amount rest => amount + rest.total
   | blockStep _ rest => rest.total
 
-/-- The budget rule of the mandate, evaluated against the gate-threaded
-running total: every step must satisfy `used + amount ≤ cap` at the
-moment it is decided, and the invariant `used ≤ cap` must hold whenever
-the run stops. -/
+/-- Budget rule: each step needs `used + amount ≤ cap`, and `used ≤ cap` must hold at the end. -/
 def SpendRun.budgetClean (cap used : Int) : SpendRun → Bool
   | stop => used ≤ cap
   | allowStep amount rest => (used + amount ≤ cap) && rest.budgetClean cap (used + amount)
   | blockStep _ rest => rest.budgetClean cap used
 
-/-- **The spending bound.** If the gate-threaded accounting keeps every
-ALLOW within `used + amount ≤ cap`, then the total executed value never
-exceeds the budget — no matter how many steps the agent proposes. This is
-the occasion-total theorem: per-purchase caps are one rule; this bounds
-the sum over the whole run. -/
+/-- **The spending bound.** If every ALLOW keeps `used + amount ≤ cap`, total executed stays within budget. -/
 theorem spend_total_bound (cap used : Int) (run : SpendRun)
     (h : run.budgetClean cap used = true) : used + run.total ≤ cap := by
   induction run generalizing used with
