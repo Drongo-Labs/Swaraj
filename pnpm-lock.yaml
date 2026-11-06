@@ -32,6 +32,9 @@ importers:
       '@swaraj/evidence':
         specifier: workspace:*
         version: link:../../packages/evidence
+      '@swaraj/near':
+        specifier: workspace:*
+        version: link:../../integrations/near
       '@swaraj/proofs':
         specifier: workspace:*
         version: link:../../packages/proofs
@@ -47,6 +50,9 @@ importers:
       '@swaraj/smt':
         specifier: workspace:*
         version: link:../../packages/smt
+      '@swaraj/verify':
+        specifier: workspace:*
+        version: link:../../packages/verify
       fastify:
         specifier: ^5.6.0
         version: 5.12.7
@@ -66,9 +72,6 @@ importers:
 
   apps/example:
     dependencies:
-      '@swaraj/capability':
-        specifier: workspace:*
-        version: link:../../packages/capability
       '@swaraj/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -83,16 +86,17 @@ importers:
         version: link:../../packages/sdk
 
   apps/mcp:
+    dependencies:
+      '@swaraj/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@swaraj/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
     devDependencies:
-      '@swaraj/database':
+      '@swaraj/api':
         specifier: workspace:*
-        version: link:../../packages/database
-      '@swaraj/proofs':
-        specifier: workspace:*
-        version: link:../../packages/proofs
-      '@swaraj/smt':
-        specifier: workspace:*
-        version: link:../../packages/smt
+        version: link:../api
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.5
@@ -119,6 +123,31 @@ importers:
         specifier: ^6.3.0
         version: 6.4.5(@types/node@22.20.5)
 
+  integrations/near:
+    dependencies:
+      '@swaraj/capability':
+        specifier: workspace:*
+        version: link:../../packages/capability
+      '@swaraj/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
+      '@swaraj/evidence':
+        specifier: workspace:*
+        version: link:../../packages/evidence
+      '@swaraj/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
+      near-api-js:
+        specifier: 7.4.0
+        version: 7.4.0
+    devDependencies:
+      '@swaraj/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/agent:
     devDependencies:
       typescript:
@@ -136,9 +165,6 @@ importers:
       '@swaraj/schemas':
         specifier: workspace:*
         version: link:../schemas
-      near-api-js:
-        specifier: 7.4.0
-        version: 7.4.0
       viem:
         specifier: ^2.21.0
         version: 2.57.7(typescript@5.9.3)(zod@4.6.7)
@@ -260,6 +286,28 @@ importers:
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.5
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/verify:
+    dependencies:
+      '@swaraj/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@swaraj/near':
+        specifier: workspace:*
+        version: link:../../integrations/near
+      '@swaraj/rules':
+        specifier: workspace:*
+        version: link:../rules
+      '@swaraj/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      viem:
+        specifier: ^2.21.0
+        version: 2.57.7(typescript@5.9.3)(zod@4.6.7)
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

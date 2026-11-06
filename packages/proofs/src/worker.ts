@@ -36,8 +36,8 @@ export interface MandateJobPayload {
   approvedBy?: string;
   /** Evidence root of the executed action; bound into the proved statement. */
   evidenceDigest?: string;
-  /** Live NEAR transaction reference, carried through to the receipt bundle. */
-  near?: unknown;
+  /** The on-chain transaction reference, carried through to the receipt bundle. */
+  chainExecution?: unknown;
 }
 
 /**

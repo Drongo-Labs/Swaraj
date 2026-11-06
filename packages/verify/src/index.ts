@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { hashObject } from "@swaraj/crypto";
-import { createNearVenueAdapter, type ExecutionRef, type NearExpectation } from "@swaraj/evidence";
+import { nearExecutionMatchesAction, nearFinality, type NearExecution } from "@swaraj/near";
 import { evaluateParsedMandate } from "@swaraj/rules";
 import { ObjectType, parseAgentMandate, parseUnifiedAction, serializeUnifiedAction } from "@swaraj/schemas";
 import { recoverAddress } from "viem";
@@ -10,8 +10,6 @@ import { recoverAddress } from "viem";
  * recomputed from the bundle; no Swaraj service is contacted, so this code is
  * deliberately independent of the API and the proof worker.
  */
-
-export type NearExecution = { hash: string; signerId: string; expect: NearExpectation };
 
 export type ReceiptBundle = {
   version: "swaraj/receipt-bundle/v1";
@@ -27,7 +25,7 @@ export type ReceiptBundle = {
   /** Who approved a NEEDS_APPROVAL decision; recorded, not cryptographically attested. */
   approvedBy?: string;
   evidenceDigest?: string;
-  near?: NearExecution;
+  chainExecution?: NearExecution;
   statementId: string;
   statementText: string;
   issuer: string;
@@ -56,19 +54,6 @@ export function statementText(bundle: Pick<ReceiptBundle, "intentHash" | "mandat
 export function bundleDigest(bundle: Pick<ReceiptBundle, "receiptId" | "statementId" | "state" | "proofRef">): `0x${string}` {
   const message = ["swaraj/receipt-bundle/v1", bundle.receiptId, bundle.statementId, bundle.state, bundle.proofRef].join("\n");
   return `0x${sha256(message)}`;
-}
-
-function nearMatchesAction(near: NearExecution, action: ReturnType<typeof parseUnifiedAction>): boolean {
-  const { expect } = near;
-  if (expect.kind === "ref_swap") {
-    return action.action === "SPOT_TRADE"
-      && expect.tokenIn === action.context.assetIn
-      && expect.tokenOut === action.context.assetOut
-      && expect.amount === action.context.amount.toString();
-  }
-  return action.action === "PAYMENT"
-    && expect.receiverId === action.context.recipient
-    && expect.amount === action.context.amount.toString();
 }
 
 export async function verifyReceiptBundle(
@@ -110,22 +95,15 @@ export async function verifyReceiptBundle(
     add("issuer signature", false);
   }
 
-  if (bundle.near) {
-    add("on-chain target matches the action", action !== undefined && nearMatchesAction(bundle.near, action));
+  if (bundle.chainExecution) {
+    add("on-chain target matches the action", action !== undefined && nearExecutionMatchesAction(bundle.chainExecution, action));
     if (options.nearRpcUrl) {
       try {
-        const ref: ExecutionRef = {
-          txHash: `0x${"00".repeat(32)}` as ExecutionRef["txHash"],
-          venue: bundle.near.expect.kind === "ref_swap" ? "REF_FINANCE_NEAR" : "NEAR_PAYMENT",
-          executedAt: Math.floor(Date.now() / 1000),
-          near: bundle.near,
-        };
-        const adapter = createNearVenueAdapter({
+        const finality = await nearFinality(bundle.chainExecution, {
           rpcUrl: options.nearRpcUrl,
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         });
-        const evidence = await adapter.collectEvidence(ref);
-        add("transaction is final on NEAR", evidence.finalityResult === "FINAL", evidence.finalityResult);
+        add("transaction is final on NEAR", finality === "FINAL", finality);
       } catch (error) {
         add("transaction is final on NEAR", false, error instanceof Error ? error.message.slice(0, 200) : undefined);
       }

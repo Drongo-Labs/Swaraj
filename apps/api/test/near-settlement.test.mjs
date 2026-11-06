@@ -34,13 +34,13 @@ function payment(overrides = {}) {
   };
 }
 
-async function harness(nearSettler) {
+async function harness(settler) {
   const applicationId = `app_${randomUUID().slice(0, 8)}`;
   const app = await buildApp(token, {
     pipelineMode: "mock",
     databaseUrl: url,
     signer: new LocalKeySigner("0x" + "11".repeat(32)),
-    ...(nearSettler ? { nearSettler } : {}),
+    ...(settler ? { settler } : {}),
   });
   const now = Date.now();
   const res = await app.inject({
@@ -67,18 +67,18 @@ async function harness(nearSettler) {
 
 const settler = (result) => {
   const calls = [];
-  return { calls, live: true, settle: async (...args) => { calls.push(args); return result; } };
+  return { calls, live: true, handles: () => true, settle: async (...args) => { calls.push(args); return result; } };
 };
 
 test("final evidence reaches proved, and the proof binds that evidence", { skip }, async () => {
-  const near = settler({ status: "FINAL", evidenceDigest: EVIDENCE, txHash: "0x01", nearTx: "Hash" });
+  const near = settler({ status: "FINAL", evidenceDigest: EVIDENCE, txHash: "0x01", chainTx: "Hash" });
   const { app, submit, receipt, applicationId } = await harness(near);
   const pool = db.openPool(url);
   const artifactRoot = await mkdtemp(join(tmpdir(), "swaraj-near-"));
   try {
     const res = await submit(payment());
     assert.equal(res.productStatus, "allowed", JSON.stringify(res));
-    assert.equal(res.execution.nearTx, "Hash");
+    assert.equal(res.execution.chainTx, "Hash");
     let outcome;
     // Jobs left by other tests can fail, so keep leasing until this receipt's job runs.
     for (let i = 0; i < 25 && outcome?.receiptId !== res.receiptId; i += 1) {

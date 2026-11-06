@@ -18,7 +18,6 @@
     "@swaraj/crypto": "workspace:*",
     "@swaraj/evidence": "workspace:*",
     "@swaraj/schemas": "workspace:*",
-    "near-api-js": "7.4.0",
     "viem": "^2.21.0"
   }
 }

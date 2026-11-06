@@ -50,3 +50,15 @@ export type IssueCapabilityInput = {
   budgetLimit: string;
   usedBudget?: string;
 };
+
+/** What became of a permitted action handed to an integration. */
+export type Settlement =
+  | { status: "FINAL"; evidenceDigest: string; txHash: string; chainTx?: string; chainExecution?: unknown }
+  | { status: "NOT_PROVABLE"; reason: string; txHash?: string; chainTx?: string };
+
+/** An integration that executes permitted actions and reports the evidence. */
+export type ActionSettler<Action> = {
+  live: boolean;
+  handles(action: Action): boolean;
+  settle(action: Action, ctx: { applicationId: string; intentHash: string; policyHash: string }): Promise<Settlement>;
+};

@@ -15,6 +15,7 @@
     "@swaraj/crypto": "workspace:*",
     "@swaraj/database": "workspace:*",
     "@swaraj/evidence": "workspace:*",
+    "@swaraj/near": "workspace:*",
     "@swaraj/proofs": "workspace:*",
     "@swaraj/receipts": "workspace:*",
     "@swaraj/rules": "workspace:*",

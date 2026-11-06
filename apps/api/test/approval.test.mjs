@@ -57,8 +57,9 @@ async function harness(options = {}) {
     databaseUrl: options.databaseUrl ?? "",
     signer: new LocalKeySigner("0x" + "11".repeat(32)),
     approverToken: options.approverToken ?? approverToken,
-    nearSettler: {
+    settler: {
       live: true,
+      handles: () => true,
       settle: async (...args) => {
         calls.push(args);
         return { status: "FINAL", evidenceDigest: "0x" + "cd".repeat(32), txHash: "0x01" };

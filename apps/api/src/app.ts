@@ -24,6 +24,8 @@ import {
 } from "@swaraj/schemas";
 import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
+import type { ActionSettler, Settlement } from "@swaraj/capability";
+import { createNearSettler } from "@swaraj/near";
 import { bundleDigest } from "@swaraj/verify";
 import {
   githubDeploymentMatches,
@@ -66,12 +68,8 @@ import {
   runPipeline,
   agentSignatureValid,
   certificateValid,
-  createNearSettler,
-  isNearAction,
   programAllowed,
   ProgramCertificateSchema,
-  type NearSettlement,
-  type NearSettler,
   type ProgramCertificate,
   unifiedActionHash,
   unifiedActionToActionRequest,
@@ -118,8 +116,8 @@ export type BuildAppOptions = {
   proofJobs?: Pick<ReturnType<typeof createProofJobQueue>, "getByReceipt">;
   /** Bearer token for approval decisions; defaults to SWARAJ_APPROVER_TOKEN. */
   approverToken?: string;
-  /** Overrides the env-selected NEAR settler (tests). */
-  nearSettler?: NearSettler;
+  /** The integration that executes permitted actions. Defaults to NEAR. */
+  settler?: ActionSettler<UnifiedAction>;
 };
 
 type StoredPolicy = {
@@ -206,7 +204,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
   const { evidence, capabilities, execution, labels } = stack;
-  const nearSettler = options.nearSettler ?? createNearSettler(capabilities, signer);
+  const settler = options.settler ?? createNearSettler(capabilities, signer);
   const liveState: LiveStateOracle | undefined =
     pipelineMode === "base"
       ? createLiveStateOracle({
@@ -671,11 +669,11 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     const at = Math.floor(Date.now() / 1000);
     const intentHash = unifiedActionHash(action);
     const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
-    // Permitted NEAR trade / payment / other non-Base actions: durable
+    // Permitted non-Base actions: durable
     // PENDING receipt + optional mandate proof job (pool mode). Fixture
     // execution adapters live in @swaraj/capability / @swaraj/evidence.
     let proofReceipt: { id: string; state: string } | undefined;
-    let settlement: NearSettlement | undefined;
+    let settlement: Settlement | undefined;
     if (pool) {
       const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
       try {
@@ -742,8 +740,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         proofReceipt = { id: receiptId, state: "PENDING" };
 
         // The receipt exists before anything moves on chain.
-        if (isNearAction(action)) {
-          settlement = await nearSettler.settle(action, { applicationId, intentHash, policyHash });
+        if (settler.handles(action)) {
+          settlement = await settler.settle(action, { applicationId, intentHash, policyHash });
         }
         if (signedRecordProvider(action) !== undefined) {
           // The provider does the work; its signed webhook settles this receipt.
@@ -771,7 +769,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
               mandateHash: policyHash,
               ...(approvedBy !== undefined ? { approvedBy } : {}),
               ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
-              ...(settlement?.near ? { near: settlement.near } : {}),
+              ...(settlement?.status === "FINAL" && settlement.chainExecution ? { chainExecution: settlement.chainExecution } : {}),
             },
           });
         }
@@ -810,9 +808,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       ...(settlement
         ? {
             execution: {
-              live: nearSettler.live,
+              live: settler.live,
               ...(settlement.txHash ? { txHash: settlement.txHash } : {}),
-              ...(settlement.nearTx ? { nearTx: settlement.nearTx } : {}),
+              ...(settlement.chainTx ? { chainTx: settlement.chainTx } : {}),
               ...(settlement.status === "NOT_PROVABLE" ? { reason: settlement.reason } : {}),
             },
           }
@@ -1212,7 +1210,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       }
 
       // Base SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,
-      // capability, Uniswap execution, receipts). NEAR SPOT_TRADE / PAYMENT use
+      // capability, Uniswap execution, receipts). Other actions use
       // the durable mandate-receipt path below (fixture adapters; Phase 2).
       if (
         evaluated.decision === "ALLOW" &&
@@ -1495,7 +1493,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         expected: { decision: string; matchedRuleIds: string[] };
         approvedBy?: string;
         evidenceDigest?: string;
-        near?: unknown;
+        chainExecution?: unknown;
       };
       const artifact = record.artifact as { statementId: string; canonicalText: string };
       const unsigned = {
@@ -1515,7 +1513,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         matchedRuleIds: job.expected.matchedRuleIds,
         ...(job.approvedBy !== undefined ? { approvedBy: job.approvedBy } : {}),
         ...(job.evidenceDigest !== undefined ? { evidenceDigest: job.evidenceDigest } : {}),
-        ...(job.near !== undefined ? { near: job.near } : {}),
+        ...(job.chainExecution !== undefined ? { chainExecution: job.chainExecution } : {}),
         statementText: artifact.canonicalText,
         issuer: signer.address,
         signature: await signer.signDigest(bundleDigest(unsigned)),

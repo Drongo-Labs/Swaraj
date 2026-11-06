@@ -3,7 +3,7 @@
  * token and Ref Finance contracts and wraps 0.1 NEAR. Spends real funds from
  * NEAR_ACCOUNT_ID, about 0.475 NEAR on testnet including storage deposits.
  */
-import { prepareNearSwapAccount } from "@swaraj/capability";
+import { prepareNearSwapAccount } from "../execution.js";
 
 const accountId = process.env.NEAR_ACCOUNT_ID;
 const privateKey = process.env.NEAR_PRIVATE_KEY;

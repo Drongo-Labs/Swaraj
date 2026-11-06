@@ -7,8 +7,8 @@ import {
   NEAR_KNOWN_TX_HASH,
   NEAR_FINAL_TX_HASH,
   NEAR_MISSING_TX_HASH,
-  EvidenceValidationError,
 } from "../dist/index.js";
+import { EvidenceValidationError } from "@swaraj/evidence";
 
 const adapter = createNearMockVenueAdapter();
 

@@ -54,5 +54,4 @@ export {
   unifiedActionHash,
   unifiedActionToActionRequest,
 } from "./unified.js";
-export { createNearSettler, isNearAction, nearExpectation, type NearSettlement, type NearSettler } from "./near.js";
 export { certificateDigest, certificateValid, programAllowed, programOf, ProgramCertificateSchema, type ProgramCertificate } from "./programs.js";

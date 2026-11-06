@@ -5,10 +5,12 @@ import {
   createCapabilityService,
   createMemoryCapabilityStore,
   createMemoryReservationStore,
+} from "@swaraj/capability";
+import {
   createNearMockExecutionAdapter,
   createNearPaymentExecutor,
+  NEAR_KNOWN_TX_HASH,
 } from "../dist/index.js";
-import { NEAR_KNOWN_TX_HASH } from "@swaraj/evidence";
 
 const HASH = (n) => "0x" + String(n).repeat(64);
 const KEY = "0x" + "11".repeat(32);

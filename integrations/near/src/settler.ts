@@ -1,18 +1,11 @@
 import { createHash } from "node:crypto";
-import {
-  createNearMockExecutionAdapter,
-  createNearPaymentExecutor,
-  type CapabilityService,
-} from "@swaraj/capability";
+import type { ActionSettler, CapabilityService, Settlement } from "@swaraj/capability";
 import type { Hex, Signer } from "@swaraj/crypto";
-import {
-  createNearMockVenueAdapter,
-  createNearVenueAdapter,
-  type EvidenceBundle,
-  type ExecutionRef,
-  type NearExpectation,
-} from "@swaraj/evidence";
+import type { EvidenceBundle } from "@swaraj/evidence";
 import type { UnifiedAction } from "@swaraj/schemas";
+import { createNearVenueAdapter, createNearMockVenueAdapter } from "./evidence.js";
+import { createNearMockExecutionAdapter, createNearPaymentExecutor } from "./execution.js";
+import type { NearExecutionRef, NearExpectation } from "./types.js";
 
 export const NEAR_TRANSFER_SERVICE = "near_transfer";
 export const NEAR_FT_TRANSFER_SERVICE = "near_ft_transfer";
@@ -20,15 +13,6 @@ const REF_FINANCE_VENUE = "REF_FINANCE_NEAR";
 const DEFAULT_RPC_URL = "https://test.rpc.fastnear.com";
 const DEFAULT_REF_CONTRACT = "ref-finance-101.testnet";
 const CAPABILITY_TTL_SECONDS = 120;
-
-export type NearSettlement =
-  | { status: "FINAL"; evidenceDigest: string; txHash: string; nearTx?: string; near?: ExecutionRef["near"] }
-  | { status: "NOT_PROVABLE"; reason: string; txHash?: string; nearTx?: string };
-
-export type NearSettler = {
-  live: boolean;
-  settle(action: UnifiedAction, ctx: { applicationId: string; intentHash: string; policyHash: string }): Promise<NearSettlement>;
-};
 
 export function isNearAction(action: UnifiedAction): boolean {
   if (action.action === "SPOT_TRADE") return action.resource.venue === REF_FINANCE_VENUE;
@@ -53,7 +37,7 @@ export function createNearSettler(
   capabilities: CapabilityService,
   signer: Signer,
   env: NodeJS.ProcessEnv = process.env,
-): NearSettler {
+): ActionSettler<UnifiedAction> {
   const accountId = env.NEAR_ACCOUNT_ID?.trim();
   const privateKey = env.NEAR_PRIVATE_KEY?.trim();
   const rpcUrl = env.NEAR_RPC_URL?.trim() || DEFAULT_RPC_URL;
@@ -68,12 +52,13 @@ export function createNearSettler(
 
   return {
     live,
-    async settle(action, { applicationId, intentHash, policyHash }) {
+    handles: isNearAction,
+    async settle(action, { applicationId, intentHash, policyHash }): Promise<Settlement> {
       if (action.action !== "PAYMENT" && action.action !== "SPOT_TRADE") {
         return { status: "NOT_PROVABLE", reason: "NOT_A_NEAR_ACTION" };
       }
 
-      let ref: ExecutionRef | undefined;
+      let ref: NearExecutionRef | undefined;
       try {
         let expect = nearExpectation(action, ftContract);
         if (liveExecutor && action.action === "SPOT_TRADE" && refPool !== undefined) {
@@ -113,15 +98,15 @@ export function createNearSettler(
               venue: action.action === "PAYMENT" ? "NEAR_PAYMENT" : "REF_FINANCE_NEAR",
             }).execute(params);
         const bundle: EvidenceBundle = await evidence.collectEvidence(ref);
-        const chain = { txHash: ref.txHash, ...(ref.near ? { nearTx: ref.near.hash } : {}) };
+        const chain = { txHash: ref.txHash, ...(ref.near ? { chainTx: ref.near.hash } : {}) };
         return bundle.finalityResult === "FINAL"
-          ? { status: "FINAL", evidenceDigest: bundle.evidenceRoot, ...chain, ...(ref.near ? { near: ref.near } : {}) }
+          ? { status: "FINAL", evidenceDigest: bundle.evidenceRoot, ...chain, ...(ref.near ? { chainExecution: ref.near } : {}) }
           : { status: "NOT_PROVABLE", reason: `EVIDENCE_${bundle.finalityResult}`, ...chain };
       } catch (error) {
         return {
           status: "NOT_PROVABLE",
           reason: error instanceof Error ? error.message.slice(0, 200) : "NEAR_EXECUTION_FAILED",
-          ...(ref ? { txHash: ref.txHash, ...(ref.near ? { nearTx: ref.near.hash } : {}) } : {}),
+          ...(ref ? { txHash: ref.txHash, ...(ref.near ? { chainTx: ref.near.hash } : {}) } : {}),
         };
       }
     },

@@ -2,7 +2,7 @@
  * NEAR demo: every scene goes through the running Swaraj API, so decisions,
  * capabilities, execution, evidence and receipts are all the real path.
  *
- *   pnpm --filter @swaraj/example near-demo -- --scene=all
+ *   pnpm --filter @swaraj/near near-demo -- --scene=all
  *
  * Needs a running API (SWARAJ_URL, SWARAJ_DEV_TOKEN) with DATABASE_URL set, or
  * no receipt is stored. Without NEAR credentials on the API the scenes use
@@ -20,7 +20,7 @@ const baseUrl = (process.env.SWARAJ_URL ?? "http://127.0.0.1:3000").replace(/\/$
 const token = process.env.SWARAJ_DEV_TOKEN ?? "";
 const recipient = process.env.NEAR_DEMO_RECIPIENT ?? "vendor.testnet";
 const proofWaitMs = Number(process.env.NEAR_DEMO_PROOF_WAIT_MS ?? 30_000);
-const fixtures = join(dirname(fileURLToPath(import.meta.url)), "../../../packages/contracts/fixtures");
+const mandates = join(dirname(fileURLToPath(import.meta.url)), "../../mandates");
 const scene = process.argv.find((a) => a.startsWith("--scene="))?.slice("--scene=".length) ?? "all";
 const ONE_MILLI_NEAR = "1000000000000000000000";
 const OVER_LIVE_CAP = "10000000000000000000001";
@@ -30,7 +30,7 @@ type Result = {
   productStatus?: string;
   receiptId?: string;
   mandate?: { reason?: string; matchedRuleIds?: string[]; matchedPermitRuleIds?: string[] };
-  execution?: { live?: boolean; nearTx?: string; reason?: string };
+  execution?: { live?: boolean; chainTx?: string; reason?: string };
   error?: string;
 };
 
@@ -85,7 +85,7 @@ const livePayment = (amount: string) => ({
 });
 
 async function registerMandate(applicationId: string, file: string): Promise<void> {
-  const mandate = JSON.parse(readFileSync(join(fixtures, file), "utf8")) as unknown;
+  const mandate = JSON.parse(readFileSync(join(mandates, file), "utf8")) as unknown;
   await api("POST", `/v1/applications/${applicationId}/mandates`, mandate);
 }
 
@@ -111,7 +111,7 @@ async function run(applicationId: string, label: string, action: unknown, expect
     rules: result.mandate?.matchedRuleIds ?? result.mandate?.matchedPermitRuleIds,
     receiptId: result.receiptId,
     live: result.execution?.live,
-    nearTx: result.execution?.nearTx,
+    nearTx: result.execution?.chainTx,
     executionNote: result.execution?.reason,
     productStatus,
   });
@@ -128,7 +128,7 @@ if (token.length === 0) throw new Error("SWARAJ_DEV_TOKEN must be set");
 console.log(`NEAR DEMO via ${baseUrl} — scene=${scene}`);
 
 if (isLive) {
-  await registerMandate("app_near_live", "near-mandate-live.json");
+  await registerMandate("app_near_live", "live.json");
   if (scene === "live.allow") {
     await run("app_near_live", `Send 0.001 NEAR to ${recipient}. Expect ALLOW.`, livePayment(ONE_MILLI_NEAR), "ALLOW");
   }
@@ -139,7 +139,7 @@ if (isLive) {
     await run("app_near_live", "Send just over the 0.01 NEAR cap. Expect BLOCK.", livePayment(OVER_LIVE_CAP), "BLOCK");
   }
 } else {
-  await registerMandate("app_near_demo", "near-mandate-combined.json");
+  await registerMandate("app_near_demo", "combined.json");
   if (wants("trade.allow")) await run("app_near_demo", "Within-policy trade (50e6). Expect ALLOW.", trade("50000000"), "ALLOW");
   if (wants("trade.block")) await run("app_near_demo", "Over-limit trade (100e6+1). Expect BLOCK.", trade("100000001"), "BLOCK");
   if (wants("payment.allow")) await run("app_near_demo", "Within-policy payment (1e6). Expect ALLOW.", payment("1000000"), "ALLOW");

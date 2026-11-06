@@ -1,11 +1,19 @@
 import { createHash } from "node:crypto";
-import { normalizeRawArtifacts } from "./normalize.js";
-import { buildEvidenceBundle } from "./bundle.js";
-import { EvidenceValidationError } from "./validate.js";
-import type { ExecutionRef, FinalityResult, HexHash, MockEvidenceFixture, NearExpectation, VenueAdapter } from "./types.js";
-import { NEAR_KNOWN_TX_HASH, NEAR_FINAL_TX_HASH, NEAR_MISSING_TX_HASH, DEFAULT_NEAR_MOCK_FIXTURES } from "./nearFixtures.js";
+import {
+  buildEvidenceBundle,
+  EvidenceValidationError,
+  normalizeRawArtifacts,
+  type EvidenceBundle,
+  type FinalityResult,
+  type HexHash,
+  type MockEvidenceFixture,
+} from "@swaraj/evidence";
+import { DEFAULT_NEAR_MOCK_FIXTURES } from "./fixtures.js";
+import type { NearExecutionRef, NearExpectation } from "./types.js";
 
-export { NEAR_KNOWN_TX_HASH, NEAR_FINAL_TX_HASH, NEAR_MISSING_TX_HASH, DEFAULT_NEAR_MOCK_FIXTURES };
+export type NearVenueAdapter = {
+  collectEvidence(ref: NearExecutionRef): Promise<EvidenceBundle>;
+};
 
 /**
  * Fixture NEAR venue adapter (Phase 2). Exact-input by txHash.
@@ -13,9 +21,9 @@ export { NEAR_KNOWN_TX_HASH, NEAR_FINAL_TX_HASH, NEAR_MISSING_TX_HASH, DEFAULT_N
  */
 export function createNearMockVenueAdapter(
   fixtures: Readonly<Record<string, MockEvidenceFixture>> = DEFAULT_NEAR_MOCK_FIXTURES,
-): VenueAdapter {
+): NearVenueAdapter {
   return {
-    async collectEvidence(ref: ExecutionRef) {
+    async collectEvidence(ref: NearExecutionRef) {
       if (ref.venue !== "REF_FINANCE_NEAR" && ref.venue !== "NEAR_PAYMENT") {
         throw new EvidenceValidationError(`unsupported venue for NEAR adapter: ${ref.venue}`);
       }
@@ -110,7 +118,7 @@ export function createNearVenueAdapter(options: {
   fetchImpl?: typeof fetch;
   /** First retry delay; doubles each attempt. */
   retryDelayMs?: number;
-}): VenueAdapter {
+}): NearVenueAdapter {
   const fetchImpl = options.fetchImpl ?? fetch;
   const retryDelayMs = options.retryDelayMs ?? 1000;
   const rpc = async <T>(method: string, params: unknown): Promise<T> => {
@@ -144,7 +152,7 @@ export function createNearVenueAdapter(options: {
   };
 
   return {
-    async collectEvidence(ref: ExecutionRef) {
+    async collectEvidence(ref: NearExecutionRef) {
       if (ref.near === undefined) throw new EvidenceValidationError("live NEAR evidence needs a NEAR transaction reference");
       const { hash, signerId, expect } = ref.near;
       const tx = await rpc<NearTxResult>("tx", { tx_hash: hash, sender_account_id: signerId, wait_until: "FINAL" });

@@ -1,20 +1,14 @@
-import {
-  NEAR_FINAL_TX_HASH,
-  NEAR_KNOWN_TX_HASH,
-  type EvidenceVenue,
-  type ExecutionRef,
-  type NearExpectation,
-} from "@swaraj/evidence";
+import type { CapabilityService, CapabilityToken, ExecutionAdapter } from "@swaraj/capability";
+import type { ExecutionRef } from "@swaraj/evidence";
 import { Account, JsonRpcProvider, KeyPairSigner, actions, baseDecode, type KeyPairString } from "near-api-js";
-import type { CapabilityService } from "./service.js";
-import type { CapabilityToken } from "./types.js";
-import type { ExecutionAdapter } from "./execution.js";
+import { NEAR_FINAL_TX_HASH, NEAR_KNOWN_TX_HASH } from "./fixtures.js";
+import type { NearExecutionRef, NearExpectation, NearVenue } from "./types.js";
 
 export type NearMockExecutionOptions = {
   /** When true (or SWARAJ_EVIDENCE_FINALITY=FINAL), return FINAL fixture hash. */
   declareFinal?: boolean;
   /** Venue the fixture reports. Default REF_FINANCE_NEAR. */
-  venue?: EvidenceVenue;
+  venue?: NearVenue;
 };
 
 /**
@@ -78,7 +72,7 @@ export type NearPaymentExecutor = {
     policyHash: string;
     accountRef: string;
     expect: NearExpectation;
-  }): Promise<ExecutionRef>;
+  }): Promise<NearExecutionRef>;
 };
 
 const FT_TRANSFER_GAS = 30_000_000_000_000n;
