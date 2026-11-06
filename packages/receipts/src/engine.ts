@@ -30,10 +30,7 @@ export type ReceiptEngine = {
   createPendingReceipt(params: CreatePendingParams): Promise<ReceiptRecord>;
   markNonProvable(applicationId: string, receiptId: string, reasonCode: ReasonCode, signer: Signer): Promise<ReceiptRecord>;
   markDevUnverified(applicationId: string, receiptId: string, signer: Signer): Promise<ReceiptRecord>;
-  /**
-   * Promote PENDING → PROVED only with complete SP1 proof metadata.
-   * `proofReference` is the zkVerify transaction hash or statement that verified the proof.
-   */
+  /** PENDING → PROVED only with complete SP1 proof metadata. */
   markProved(
     applicationId: string,
     receiptId: string,

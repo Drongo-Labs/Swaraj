@@ -3,10 +3,7 @@ import { buildEvidenceBundle } from "./bundle.js";
 import { EvidenceValidationError } from "./validate.js";
 import type { ExecutionRef, MockEvidenceFixture, VenueAdapter } from "./types.js";
 
-/**
- * Exact-input mock venue adapter: keyed by txHash.
- * Unknown txHash fails closed. Never claims FINAL finality.
- */
+/** Mock adapter keyed by txHash. Unknown txHash fails closed; never claims FINAL. */
 export function createMockVenueAdapter(
   fixtures: Readonly<Record<string, MockEvidenceFixture>>,
 ): VenueAdapter {

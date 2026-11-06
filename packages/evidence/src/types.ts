@@ -20,10 +20,7 @@ export type MockEvidenceFixture = {
   artifacts: readonly RawArtifact[];
   /** When true, buildEvidenceBundle sets finalityResult to CONFLICT. */
   conflict?: boolean;
-  /**
-   * Explicit finality override for demo/prove paths.
-   * Mock never invents FINAL unless this is set — SP1 guest requires FINAL for ALLOW.
-   */
+  /** Explicit finality for prove demos. The mock never invents FINAL without it. */
   finalityResult?: "PENDING" | "FINAL" | "NOT_FINAL" | "CONFLICT";
 };
 

@@ -12,19 +12,8 @@ import {
 import type { ReceiptRecord } from "./types.js";
 
 /**
- * Task 3.2 — verification of receipts bound to the unified action format.
- *
- * A unified-action receipt is valid when, together:
- * 1. its stored intent blob declares the `unified-action` format,
- * 2. the stored action parses against the strict UnifiedAction schema,
- * 3. the action's recomputed canonical hash matches the stored actionHash
- *    (the blob was not tampered with),
- * 4. the issuer signature verifies against the expected signer key, and
- * 5. the record and the signed receipt agree on intentHash and policyHash.
- *
- * Legacy receipts (pre-unified-format intents) are reported as format
- * "legacy": signature and binding are still checked, action checks are not
- * applicable.
+ * A unified-action receipt needs a valid format, schema, action hash, issuer signature and binding.
+ * Legacy receipts only get the signature and binding checks.
  */
 
 export type UnifiedActionReceiptVerification = {

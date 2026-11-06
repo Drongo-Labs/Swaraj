@@ -49,11 +49,7 @@ export async function enqueueProofJob(
   return toJob(result.rows[0]!);
 }
 
-/**
- * Atomically lease the oldest queued job. SKIP LOCKED keeps concurrent
- * workers from fighting over the same row; attempts increments on every
- * lease so max_attempts bounds total tries.
- */
+/** Leases the oldest queued job. SKIP LOCKED isolates workers, and attempts bounds retries. */
 export async function leaseNextProofJob(handle: PoolHandle): Promise<ProofJob | undefined> {
   const result = await handle.raw.query<RawProofJobRow>(
     `UPDATE proof_jobs SET phase = 'LEASED', leased_at = now(), attempts = attempts + 1
@@ -77,10 +73,7 @@ export async function finishProofJob(
   );
 }
 
-/**
- * Release a failed lease. Goes back to QUEUED while attempts remain,
- * otherwise the job is parked as FAILED with the error text recorded.
- */
+/** Requeues a failed lease, or parks it as FAILED when attempts run out. */
 export async function failProofJob(
   handle: PoolHandle,
   jobId: number,

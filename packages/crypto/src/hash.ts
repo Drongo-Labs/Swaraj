@@ -62,10 +62,8 @@ export function verifyObjectHash(type: ObjectType, obj: unknown, claimedHash: st
 }
 
 /**
- * Order-defined commitment to a list, used for the evidence root. Every item is hashed with hashObject(type, item), then
- *   root = keccak256( "swaraj.v1." + type + ".list" || 0x00 || uint32_be(count) || leaf_1 || ... || leaf_n )
- * where each leaf is the raw 32-byte hash. Order matters; callers sort first (Evidence Bundle: by itemId).
- * The ".list" tag keeps this domain separate from hashObject for the same type.
+ * Ordered list commitment; callers sort first. Its ".list" tag keeps it apart from hashObject.
+ * root = keccak256("swaraj.v1." + type + ".list" || 0x00 || uint32_be(count) || leaf_1 || ... || leaf_n)
  */
 export function hashList(type: ObjectType, items: readonly unknown[]): Hex {
   const leaves = items.map((item) => hexBytes(hashObject(type, item)));

@@ -1,10 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-/**
- * Web2 evidence: signed records from the provider that did the work. The
- * provider's signature stands in for chain data, so anything unsigned, stale
- * or different from the approved action does not count.
- */
+/** Signed provider records as evidence. Unsigned, stale or mismatched records do not count. */
 
 const STRIPE_TOLERANCE_SECONDS = 300;
 

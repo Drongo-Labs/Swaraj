@@ -1,9 +1,6 @@
 import type { CanonicalValue } from "./types.js";
 
-/**
- * Parses JSON text into a CanonicalValue, rejecting what JSON.parse silently accepts:
- * duplicate keys, floats/exponents, `null`, and integers outside the safe range.
- */
+/** JSON parser that rejects duplicate keys, floats, `null` and unsafe integers. */
 export function parseStrictJson(text: string): CanonicalValue {
   let i = 0;
   const err = (why: string): never => {

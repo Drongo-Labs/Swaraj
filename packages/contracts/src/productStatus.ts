@@ -1,9 +1,6 @@
 import { z } from "zod";
 
-/**
- * Product-facing receipt / decision status (Phase 2 feature 7).
- * Maps honest engine states — never claim "proved" without proof metadata.
- */
+/** Product status. Never claim "proved" without proof metadata. */
 export const ProductStatus = z.enum(["allowed", "blocked", "proved", "cant_prove", "needs_approval"]);
 export type ProductStatus = z.infer<typeof ProductStatus>;
 
