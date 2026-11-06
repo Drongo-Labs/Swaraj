@@ -4,15 +4,8 @@ import type { AgentMandate, UnifiedAction, MandateRule, MandatePredicate } from 
 import { evaluateParsedMandate, type MandateDecision } from "./index.js";
 
 /**
- * Z3 dual-engine cross-check: compile a mandate decision into SMT (the same
- * typed integer term AST the gateway renders) and let Z3 decide it
- * independently of the predicate engine. Disagreement (or solver failure)
- * must be treated as fail-closed by the caller.
- *
- * String fields (app, name, currency, recipient, string params) are encoded
- * as deterministic non-negative integer hashes of their values — equality
- * on the hash is equality on the string for the bounded domain. A hash
- * collision could only ever cause a disagreement, which fails closed.
+ * Compiles a decision to SMT so Z3 checks it independently. Callers must fail closed on disagreement.
+ * Strings hash to integers; a collision can only cause a disagreement.
  */
 
 type IntTerm = { kind: "const"; value: bigint } | { kind: "field"; name: string };
@@ -148,12 +141,7 @@ export async function z3MandateDecision(
   throw new Error(`z3 returned ${verdict}`);
 }
 
-/**
- * Batch sweep for verification harnesses: one Z3 session per action (fields
- * bound once), then each mandate's formula asserted in a push/check/pop
- * scope — the entire bounded space dual-checked without per-case session
- * cost. Verdict order matches `mandates`.
- */
+/** One Z3 session per action, with push/pop per mandate. Verdict order matches `mandates`. */
 export async function z3VerdictsForAction(
   action: UnifiedAction,
   mandates: AgentMandate[],

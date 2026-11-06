@@ -3,11 +3,7 @@ import test from "node:test";
 import { parseAgentMandate, parseUnifiedAction } from "@swaraj/schemas";
 import { evaluateParsedMandate, ruleMatches } from "../dist/index.js";
 
-/**
- * Random mandates and actions checked against the decision the Lean suite
- * proves (Gate/Mandate.lean, Gate/Approval.lean): ALLOW exactly when a permit
- * matches and no forbid or approval rule does. A failure prints the seed; set SWARAJ_RANDOM_SEED to replay it.
- */
+/** Random mandates checked against the Lean-proved rule. Replay a failure with SWARAJ_RANDOM_SEED. */
 
 const seed = Number(process.env.SWARAJ_RANDOM_SEED ?? Date.now() % 2147483647);
 const CASES = Number(process.env.SWARAJ_RANDOM_CASES ?? 20000);

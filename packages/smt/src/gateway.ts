@@ -32,17 +32,8 @@ export interface DecideOptions {
 }
 
 /**
- * Evaluate a ground action against a policy document.
- *
- * Semantics: the action is ALLOWed iff the conjunction of assumptions,
- * rules, and the ground binding is satisfiable. The binding is ground, so
- * satisfiability reduces to "every rule holds".
- *
- * Fail-closed: an invalid policy, a malformed or incomplete action, an
- * "unknown" solver verdict, or any solver error produces BLOCK. A
- * BLOCK-with-RULE_VIOLATION carries the exact rule ids that the action
- * contradicts, found by re-solving each rule's negation under the
- * binding; failures that cannot be attributed list no rule ids.
+ * ALLOW iff every rule holds for the ground action. Fail-closed: invalid input, "unknown" or a solver
+ * error is BLOCK. RULE_VIOLATION lists the contradicted rule ids.
  */
 export async function decide(
   doc: PolicyDoc,
@@ -137,11 +128,7 @@ function unsafeBlock(
   };
 }
 
-/**
- * Pure satisfiability query over a policy without a ground binding — used
- * by policy authoring tools to check that a rule set is not vacuous or
- * self-contradictory.
- */
+/** Policy-only satisfiability check, for catching vacuous or contradictory rule sets. */
 export async function checkPolicySatisfiable(doc: PolicyDoc): Promise<SatVerdictResult> {
   const problems = checkPolicy(doc);
   if (problems.length > 0) return { verdict: "invalid", problems };

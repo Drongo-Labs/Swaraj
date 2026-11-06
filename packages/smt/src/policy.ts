@@ -1,11 +1,6 @@
 import { createHash } from "node:crypto";
 
-/**
- * Constraint AST shared by the policy gateway, the SMT-LIB renderer, and
- * (as an identically-shaped JSON document) the SP1 guest's independent
- * re-evaluation. Everything is integer arithmetic — money and counts are
- * minor units, never floats.
- */
+/** Constraint AST shared by the gateway, renderer and SP1 guest. Integer arithmetic only, never floats. */
 
 export interface ConstTerm {
   kind: "const";
@@ -92,10 +87,7 @@ export interface BoundAction {
   values: Record<string, string>;
 }
 
-/**
- * Structural check of a policy document. The gateway refuses to compile a
- * document that fails this.
- */
+/** Structural policy check. The gateway refuses documents that fail it. */
 export function checkPolicy(doc: PolicyDoc): PolicyProblem[] {
   const problems: PolicyProblem[] = [];
   const declared = new Set(doc.fields);
@@ -187,11 +179,7 @@ export function policyDigest(doc: PolicyDoc): string {
   return `pol_${createHash("sha256").update(payload).digest("hex")}`;
 }
 
-/**
- * Validate and normalize an action's ground values. Accepts numbers or
- * decimal strings; rejects floats, non-numeric text, and unknown fields.
- * Every declared field must be present.
- */
+/** Normalizes ground values. Rejects floats, non-numeric text and unknown fields; all fields are required. */
 export function bindAction(doc: PolicyDoc, action: BoundAction): { binding: FieldBinding } | { reject: string } {
   const declared = new Set(doc.fields);
   for (const name of Object.keys(action.values)) {

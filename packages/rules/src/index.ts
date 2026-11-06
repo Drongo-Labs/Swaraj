@@ -121,11 +121,7 @@ export function ruleMatches(action: UnifiedAction, rule: MandateRule): boolean {
     && rule.predicates.every((predicate) => predicateMatches(action, predicate));
 }
 
-/**
- * Pure mandate evaluation. FORBID is checked globally first, then
- * REQUIRE_APPROVAL, then PERMIT; absence of a matching permit is always a
- * BLOCK (default deny).
- */
+/** FORBID first, then REQUIRE_APPROVAL, then PERMIT. No match is BLOCK (default deny). */
 export function evaluateParsedMandate(mandate: AgentMandate, action: UnifiedAction): MandateDecision {
   if (action.timestamp < mandate.validFrom || action.timestamp >= mandate.validUntil) {
     return blocked("MANDATE_INACTIVE");

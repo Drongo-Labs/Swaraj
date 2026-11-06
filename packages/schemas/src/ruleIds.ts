@@ -1,7 +1,4 @@
-/**
- * Stable numeric IDs for every policy constraint. Used by unsat cores (Phase 4) and Phase 9.
- * Never renumber or reuse an ID; append new rules at the end.
- */
+/** Stable rule ids. Never renumber or reuse one; append new rules at the end. */
 export const RuleId = {
   VENUE_ALLOWED: 1,
   ASSET_ALLOWED: 2,

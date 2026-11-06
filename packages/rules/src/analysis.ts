@@ -155,11 +155,7 @@ export type MandateDiff = {
 const MAX_PROBES_PER_ACTION = 20_000;
 const MAX_EXAMPLES = 5;
 
-/**
- * What a mandate edit changes. Each predicate splits its field at known
- * boundaries, so probing the boundaries of every field, plus a value no rule
- * mentions, covers all behaviour; `complete` is false if the cap cut that short.
- */
+/** Shows what an edit changes by probing every predicate boundary. `complete` is false if capped. */
 export function diffMandates(before: AgentMandate, after: AgentMandate): MandateDiff {
   const oldRules = new Map(before.rules.map((rule) => [rule.ruleId, jsonKey(rule)]));
   const newRules = new Map(after.rules.map((rule) => [rule.ruleId, jsonKey(rule)]));

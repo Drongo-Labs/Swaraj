@@ -4,21 +4,7 @@ import { parseAgentMandate, parseUnifiedAction } from "@swaraj/schemas";
 import { evaluateParsedMandate } from "../dist/index.js";
 import { RULE_POOL, ACTION_WIRES, ruleSubsets, mandateWindow } from "./helpers.mjs";
 
-/**
- * Bounded-exhaustive mandate harness.
- *
- * The Lean suite (packages/lean/Gate/Mandate.lean) proves the decision
- * characterization for the abstract model:
- *
- *   forbid_always_wins      — a matching FORBID blocks over every permit
- *   default_deny_sound      — no matching permit can ever ALLOW
- *   allow_iff_permit_without_forbid — ALLOW exactly when a permit matches
- *                                     and no forbid does
- *
- * This harness checks the TypeScript engine against that characterization
- * over the ENTIRE bounded input space (shared with the Z3 cross-check and
- * the Lean refinement vectors via test/helpers.mjs).
- */
+/** Checks the TS engine against the Lean characterization over the whole bounded space. */
 
 const ACTIONS = ACTION_WIRES.map((wire, i) => parseUnifiedAction({ ...wire, intentId: `ex_${i}`, idempotencyKey: `ex_${i}` }));
 

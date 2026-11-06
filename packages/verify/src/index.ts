@@ -5,11 +5,7 @@ import { evaluateParsedMandate } from "@swaraj/rules";
 import { ObjectType, parseAgentMandate, parseUnifiedAction, serializeUnifiedAction } from "@swaraj/schemas";
 import { recoverAddress } from "viem";
 
-/**
- * Standalone receipt verification (spec/receipt-v1.md). Everything is
- * recomputed from the bundle; no Swaraj service is contacted, so this code is
- * deliberately independent of the API and the proof worker.
- */
+/** Standalone verification (spec/receipt-v1.md). Independent of the API and worker by design. */
 
 export type ReceiptBundle = {
   version: "swaraj/receipt-bundle/v1";

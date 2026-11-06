@@ -4,11 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { decide, renderSmtScript, type PolicyDoc } from "../dist/index.js";
 
-/**
- * Contract test for examples/json-to-smt.md: the JSON blocks published in
- * the example must run against the real gateway and produce exactly the
- * documented results. If the example or the compiler drifts, this fails.
- */
+/** examples/json-to-smt.md must match the real gateway, so drift fails this test. */
 
 const examplePath = fileURLToPath(new URL("../../../examples/json-to-smt.md", import.meta.url));
 

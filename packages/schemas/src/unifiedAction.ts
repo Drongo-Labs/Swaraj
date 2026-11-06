@@ -10,11 +10,7 @@ import {
   parseWith,
 } from "./primitives.js";
 
-/**
- * Stable action vocabulary. New variants must add a typed resource/context
- * pair below. APP_ACTION is the generic escape hatch: any application can
- * namespace its own actions without a Swaraj core schema change.
- */
+/** Stable action vocabulary. APP_ACTION lets apps add actions without a schema change. */
 export const UnifiedActionType = z.enum([
   "SPOT_TRADE",
   "PAYMENT",
@@ -102,14 +98,7 @@ const RefundActionSchema = z.strictObject({
   }),
 });
 
-/**
- * Generic application action: `resource.app` namespaces the application
- * ("zunno", "payroll-ops", ...), `context.name` is the action within that
- * app ("play_card"), and `params` carries up to 16 typed values. Integer
- * values are atomic decimal strings (AtomicAmount, parsed to bigint) so the
- * hashable, no-floats rule holds; canonical serialization sorts record keys,
- * so params order never affects hashes.
- */
+/** Generic app action with up to 16 params. Integers are decimal strings, so hashes stay float-free. */
 const AppActionName = z.string().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 export const AppParamName = z.string().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 export const AppParamValue = z.union([AtomicAmount, z.string().min(1).max(256), z.boolean()]);
