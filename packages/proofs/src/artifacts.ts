@@ -1,11 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-/**
- * Filesystem artifact store. Each proven statement lands as one JSON file
- * under the artifact root, addressed by receipt and statement id, so a
- * proof artifact survives independently of the database.
- */
+/** Stores each proven statement as a JSON file, independent of the database. */
 
 export interface VerificationBundle {
   statementId: string;

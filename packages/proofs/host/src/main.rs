@@ -1,10 +1,6 @@
-//! Prover host: feeds a gate input JSON and the guest ELF to the local
-//! SP1 prover, executes (or proves) the guest, and prints the committed
-//! statement id so the caller can bind it to the receipt.
-//!
-//! Usage:
-//!   swaraj-gate-host <elf-path> <input-json> [--prove] [--groth16] [--proof-out <path>]
-//!   swaraj-gate-host <elf-path> --verify <proof-path>
+//! Prover host: runs the guest and prints the committed statement.
+//! Usage: swaraj-gate-host <elf> <input-json> [--prove] [--groth16] [--proof-out <path>]
+//!    or: swaraj-gate-host <elf> --verify <proof>
 
 use std::sync::Arc;
 

@@ -5,14 +5,7 @@ import { join } from "node:path";
 import type { PolicyDoc } from "@swaraj/smt";
 import type { GroundBinding } from "./verifier.js";
 
-/**
- * Drives the SP1 host binary to prove the guest over a committed gate
- * input. The guest recomputes the statement id from the same canonical
- * text the TypeScript worker computed; a mismatch aborts the proof, so
- * a successful proof is also a cross-language parity check. The proof
- * bytes are returned — the temporary work directory does not outlive
- * this call.
- */
+/** Drives the SP1 host. The guest recomputes the statement id, so a mismatch aborts the proof. */
 
 export interface Sp1ProverConfig {
   /** Path to the guest ELF produced by `pnpm build:sp1`. */

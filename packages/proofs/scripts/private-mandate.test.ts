@@ -3,11 +3,7 @@ import test from "node:test";
 import { evaluateMandate } from "@swaraj/rules";
 import { mandateCommitment, privateStatement, runPrivateMandate } from "../dist/private-mandate.js";
 
-/**
- * Holds the Rust guest and @swaraj/rules to the same decisions. Opt-in because
- * it takes minutes: build the host and guest, then set SWARAJ_SP1_HOST_BIN and
- * SWARAJ_SP1_PRIVATE_ELF.
- */
+/** Keeps the Rust guest and @swaraj/rules in agreement. Opt-in: set SWARAJ_SP1_HOST_BIN and SWARAJ_SP1_PRIVATE_ELF. */
 
 const hostBin = process.env.SWARAJ_SP1_HOST_BIN ?? "";
 const elfPath = process.env.SWARAJ_SP1_PRIVATE_ELF ?? "";

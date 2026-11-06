@@ -1,13 +1,7 @@
 import { createHash } from "node:crypto";
 import type { VerificationBundle } from "./artifacts.js";
 
-/**
- * Proof sink: wherever a statement's proof gets verified publicly. The
- * local sink is deterministic and offline — it references the bundle by
- * a content hash so tests and development runs are reproducible. The
- * zkVerify-backed sink is selected when the environment carries
- * credentials; its wire-up lands with the network integration pass.
- */
+/** Where proofs get verified. The local sink is offline and deterministic, and is not a ZK proof. */
 
 export interface SinkAttestation {
   /** Reference recorded on the receipt, e.g. a statement id on the verification network. */

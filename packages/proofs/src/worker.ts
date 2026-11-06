@@ -16,13 +16,7 @@ import { proveStatementViaSp1, type Sp1ProverConfig } from "./sp1-prover.js";
 import { reevaluateGround, fromWirePolicy, type GroundBinding, type GroundDecision } from "./verifier.js";
 import { selectProofSink, type ProofSink } from "./zkverify.js";
 
-/**
-/** Mandate-decision job: the worker re-derives the decision with the rules
- * engine (@swaraj/rules, deterministic) and refuses to bundle on any
- * disagreement with the recorded decision. SP1 zk proving of this statement
- * kind is future work (the guest is gate-scoped); the bundle + sink +
- * PENDING→PROVED lifecycle is the reused pipeline.
- */
+/** Mandate job: re-derives the decision and refuses to bundle on disagreement. Not SP1-proved yet. */
 export interface MandateJobPayload {
   kind: "MANDATE";
   /** Wire mandate document as registered (JSON-safe). */
@@ -36,11 +30,7 @@ export interface MandateJobPayload {
   evidenceDigest?: string;
 }
 
-/**
- * Proof job payload. `expected` is the decision the gateway recorded when
- * the action was submitted; the worker recomputes it from the committed
- * policy and action and refuses to produce a bundle on disagreement.
- */
+/** `expected` is the recorded decision. The worker refuses to bundle if it recomputes differently. */
 export interface GateJobPayload {
   /** Wire form of the policy: JSON-safe numbers, as stored in the queue. */
   policy: PolicyDoc;
@@ -123,11 +113,7 @@ async function runMandateJob(
   }
 }
 
-/**
- * Lease and fully process one proof job. On success the receipt advances
- * PENDING -> PROVED with the sink's reference; on any failure the job is
- * released for retry (or parked as FAILED once attempts are exhausted).
- */
+/** Processes one job: PENDING → PROVED on success. On failure it retries, or parks the job as FAILED. */
 export async function runOneProofJob(
   pool: PoolHandle,
   options: WorkerOptions,

@@ -2,13 +2,7 @@ import { createHash } from "node:crypto";
 import { policyDigest, type PolicyDoc } from "@swaraj/smt";
 import type { GroundBinding, GroundDecision } from "./verifier.js";
 
-/**
- * The statement is what proofs commit to. Its canonical text is byte
- * identical in TypeScript and in the Rust engine
- * (packages/proofs/engine/src/statement.rs); the statement id is the
- * SHA-256 of that text, so both languages derive the same id from the
- * same inputs.
- */
+/** What proofs commit to. The text must stay byte-identical to engine/src/statement.rs. */
 
 export interface GateStatement {
   policyId: string;

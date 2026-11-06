@@ -17,11 +17,7 @@ import {
 import { policyDigest, type PolicyDoc } from "@swaraj/smt";
 import { reevaluateGround, runOneProofJob, toWirePolicy, type GateJobPayload } from "../dist/index.js";
 
-/**
- * End-to-end proof pipeline: submission artifacts → statement →
- * verification bundle → (optional SP1 guest proof) → sink attestation →
- * PROVED receipt, with every artifact checked on disk and in the ledger.
- */
+/** End to end: statement → bundle → optional SP1 proof → attestation → PROVED. */
 
 let pool: PoolHandle;
 let artifactRoot: string;

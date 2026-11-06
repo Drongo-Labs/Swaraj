@@ -5,10 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Private Mandates: the rules stay secret, a salted commitment is public, and
- * an SP1 proof shows an action passed them. The guest
- * (packages/proofs/private-guest) aborts on anything but ALLOW, so a proof
- * cannot exist for a blocked action.
+ * Private Mandates: a public salted commitment, and a proof the action passed the hidden rules.
+ * The guest aborts on anything but ALLOW, so a blocked action has no proof.
  */
 
 export interface PrivateMandateInput {

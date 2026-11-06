@@ -17,10 +17,7 @@ import {
 import { buildStatement, canonicalStatementText, reevaluateGround, RemoteProofSink, statementId, toWirePolicy } from "../dist/index.js";
 import type { PolicyDoc } from "@swaraj/smt";
 
-/**
- * The zkVerify submission flow against a local relay: submit, poll
- * through pending, bind the finalized attestation. No network access.
- */
+/** zkVerify submission flow against a local relay. No network access. */
 
 interface RelayState {
   submissions: Array<{ statementId: string; evidenceDigest?: string }>;

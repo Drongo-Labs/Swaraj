@@ -1,10 +1,5 @@
-//! SP1 guest for Private Mandates. The mandate stays private: the guest
-//! evaluates it over the action and commits only a salted commitment to the
-//! mandate, the action's hash and the ALLOW outcome. If the mandate does not
-//! allow the action the guest aborts, so no proof can exist for it.
-//!
-//! The evaluation mirrors `evaluateParsedMandate` in @swaraj/rules; the
-//! vectors in packages/proofs/test/private-vectors hold the two together.
+//! Private Mandate guest: commits only a salted commitment, the action hash and ALLOW.
+//! Aborts otherwise, so a blocked action has no proof. Parity: scripts/private-mandate.test.ts.
 
 #![no_main]
 

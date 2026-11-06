@@ -1,11 +1,6 @@
 import { createHash } from "node:crypto";
 
-/**
- * The statement a mandate-decision proof commits to. Canonical text mirrors
- * the gate statement style (fixed line order, sorted ids); the statement id
- * is the SHA-256 of the text, so TypeScript and any future Rust/Lean port
- * derive the same id from the same inputs.
- */
+/** What a mandate proof commits to. The id is the SHA-256 of the canonical text. */
 
 export interface MandateStatement {
   intentHash: string;
