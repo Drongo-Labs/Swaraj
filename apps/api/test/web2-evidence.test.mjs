@@ -80,8 +80,10 @@ async function harness() {
 
 async function proveUntil(pool, artifactRoot, receiptId) {
   let outcome;
-  do outcome = await runOneProofJob(pool, { artifactRoot });
-  while (outcome && outcome.receiptId !== receiptId);
+  // Jobs left by other tests can fail, so keep leasing until this receipt's job runs.
+  for (let i = 0; i < 25 && outcome?.receiptId !== receiptId; i += 1) {
+    outcome = await runOneProofJob(pool, { artifactRoot });
+  }
   return outcome;
 }
 
@@ -98,7 +100,7 @@ test("a Stripe payment stays pending until a signed matching record proves it", 
 
     assert.equal((await stripe(stripeEvent(receiptId))).statusCode, 200);
     const outcome = await proveUntil(pool, artifactRoot, receiptId);
-    assert.ok(outcome, "the proof job ran");
+    assert.equal(outcome?.receiptId, receiptId, "the proof job ran");
     assert.equal((await receipt(receiptId)).productStatus, "proved");
   } finally {
     await rm(artifactRoot, { recursive: true, force: true });

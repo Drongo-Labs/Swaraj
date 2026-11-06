@@ -175,9 +175,11 @@ test("an approved action executes once and its bundle names the approver", { ski
     assert.equal(calls.length, 1);
 
     let outcome;
-    do outcome = await runOneProofJob(pool, { artifactRoot });
-    while (outcome && outcome.receiptId !== approved.receiptId);
-    assert.ok(outcome, "the proof job ran");
+    // Jobs left by other tests can fail, so keep leasing until this receipt's job runs.
+    for (let i = 0; i < 25 && outcome?.receiptId !== approved.receiptId; i += 1) {
+      outcome = await runOneProofJob(pool, { artifactRoot });
+    }
+    assert.equal(outcome?.receiptId, approved.receiptId, "the proof job ran");
     const bundle = (await app.inject({ method: "GET", url: `${base}/receipts/${approved.receiptId}/bundle`, headers: agent })).json();
     assert.equal(bundle.approvedBy, "alice@example.com");
     assert.match(bundle.statementText, /decision=NEEDS_APPROVAL/);

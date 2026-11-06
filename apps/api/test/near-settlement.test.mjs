@@ -80,9 +80,11 @@ test("final evidence reaches proved, and the proof binds that evidence", { skip 
     assert.equal(res.productStatus, "allowed", JSON.stringify(res));
     assert.equal(res.execution.nearTx, "Hash");
     let outcome;
-    do outcome = await runOneProofJob(pool, { artifactRoot });
-    while (outcome && outcome.receiptId !== res.receiptId);
-    assert.ok(outcome, "the proof job ran");
+    // Jobs left by other tests can fail, so keep leasing until this receipt's job runs.
+    for (let i = 0; i < 25 && outcome?.receiptId !== res.receiptId; i += 1) {
+      outcome = await runOneProofJob(pool, { artifactRoot });
+    }
+    assert.equal(outcome?.receiptId, res.receiptId, "the proof job ran");
     assert.equal((await receipt(res.receiptId)).productStatus, "proved");
     const bundle = JSON.parse(await readFile(outcome.artifactPath, "utf8"));
     assert.match(bundle.canonicalText, new RegExp(`evidence=${EVIDENCE}`));
