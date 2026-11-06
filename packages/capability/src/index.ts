@@ -31,6 +31,7 @@ export {
 export {
   createNearMockExecutionAdapter,
   createNearPaymentExecutor,
+  prepareNearSwapAccount,
   type NearLiveOptions,
   type NearMockExecutionOptions,
   type NearPaymentExecutor,

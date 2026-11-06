@@ -66,6 +66,9 @@ importers:
 
   apps/example:
     dependencies:
+      '@swaraj/capability':
+        specifier: workspace:*
+        version: link:../../packages/capability
       '@swaraj/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
