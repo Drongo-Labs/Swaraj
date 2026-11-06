@@ -211,7 +211,7 @@ cargo build --release --manifest-path packages/proofs/host/Cargo.toml
 
 `runPrivateMandate` in `@swaraj/proofs` runs the guest, and passing `proofPath` produces a proof.
 
-**Use Groth16 for real privacy.** SP1's default STARK proof is not guaranteed to be zero knowledge, so it should not be treated as hiding the rules. Pass `groth16: true`, or `--groth16` to the host, for the zero-knowledge wrap. Groth16 needs SP1's large circuit download on first use, and this repo has not yet confirmed a Groth16 run.
+**Use Groth16 for real privacy.** SP1's default STARK proof is not guaranteed to be zero knowledge, so it should not be treated as hiding the rules. Pass `groth16: true`, or `--groth16` to the host, for the zero-knowledge wrap. Groth16 needs SP1's large circuit download on first use. It has not worked yet: one attempt on an Apple Silicon Mac failed after 75 minutes with `artifact not found`, an internal SP1 error whose cause is unknown. Do not call a Private Mandate private until a Groth16 proof verifies.
 
 The rules stay hidden from the public, not from whoever runs the prover, because the prover reads them.
 
