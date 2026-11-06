@@ -181,9 +181,9 @@ Swaraj enforces strict honesty between cryptographic engine realities and user-f
 
 | Feature | Status | Limits |
 |---|---|---|
-| 6: NEAR adapter and templates | Native transfers and Ref Finance swaps verified on testnet | `near_ft_transfer` is built and unit tested but has not run live. Mainnet is untested. |
+| 6: NEAR adapter and templates | Transfers, `near_ft_transfer` and Ref Finance swaps verified on testnet | Mainnet is untested. |
 | 7: Receipt statuses | Done | `proved` means the local sink by default |
-| 8: Private Mandate | See section 8 | Standalone proof, not connected to the gateway |
+| 8: Private Mandate | Groth16 proof generated and verified, see section 8 | Standalone proof, not connected to the gateway |
 | 9: MCP gateway | `swaraj-mcp-gateway` is done | Gates `tools/call` only; other MCP requests pass through |
 | 10: Human approval | API, proofs and status badge | No approve button in the UI. Base trades that need approval are refused. |
 | 11: Verified programs only | Done | Certificates are signed by the certifier and not compared with on-chain code |
@@ -211,7 +211,13 @@ cargo build --release --manifest-path packages/proofs/host/Cargo.toml
 
 `runPrivateMandate` in `@swaraj/proofs` runs the guest, and passing `proofPath` produces a proof.
 
-**Use Groth16 for real privacy.** SP1's default STARK proof is not guaranteed to be zero knowledge, so it should not be treated as hiding the rules. Pass `groth16: true`, or `--groth16` to the host, for the zero-knowledge wrap. Groth16 needs SP1's large circuit download on first use. It has not worked yet: one attempt on an Apple Silicon Mac failed after 75 minutes with `artifact not found`, an internal SP1 error whose cause is unknown. Do not call a Private Mandate private until a Groth16 proof verifies.
+**Use Groth16 for real privacy.** SP1's default STARK proof is not guaranteed to be zero knowledge. Pass `groth16: true`, or `--groth16` to the host, for the zero-knowledge wrap. A Groth16 proof of a Private Mandate has been generated and verified: it is 1,846 bytes, and shows only the commitment, the action hash and ALLOW.
+
+Groth16 has three practical needs:
+
+- **Memory.** Docker needs more memory than the default, because the proving key alone is 5.8 GB. An 8.4 GB OrbStack limit failed. Building the host with `--features native-gnark` skips Docker, needs Go, and worked on a 24 GB Mac.
+- **Circuit files.** The 6.2 GB download cannot resume, and an interrupted one appears to surface later as `artifact not found`. Fetch `v6.1.0-groth16.tar.gz` with `curl -C -`, unpack it to `~/.sp1/circuits/groth16/v6.1.0`, and create an empty `.complete` file there.
+- **Time.** Expect it to take far longer than the default proof.
 
 The rules stay hidden from the public, not from whoever runs the prover, because the prover reads them.
 
