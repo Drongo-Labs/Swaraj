@@ -2,9 +2,8 @@ export {
   SwarajApiClient,
   ApiError,
   type ApiClientOptions,
-  type PolicyView,
+  type MandateView,
   type ReceiptView,
-  type SubmitActionRequest,
   type SubmitActionResponse,
 } from "./api-client.js";
 export {

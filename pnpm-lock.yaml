@@ -78,15 +78,12 @@ importers:
 
   apps/mcp:
     devDependencies:
-      '@swaraj/database':
+      '@swaraj/api':
         specifier: workspace:*
-        version: link:../../packages/database
-      '@swaraj/proofs':
+        version: link:../api
+      '@swaraj/crypto':
         specifier: workspace:*
-        version: link:../../packages/proofs
-      '@swaraj/smt':
-        specifier: workspace:*
-        version: link:../../packages/smt
+        version: link:../../packages/crypto
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.5
