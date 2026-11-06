@@ -113,7 +113,7 @@ Then export the receipt and check it with no Swaraj service running:
 ```bash
 curl -H "authorization: Bearer $SWARAJ_DEV_TOKEN" \
   http://127.0.0.1:3000/v1/applications/app_near_live/receipts/<receiptId>/bundle > bundle.json
-node packages/verify/dist/cli.js bundle.json --issuer <issuer address> --near-rpc https://rpc.testnet.near.org
+node packages/verify/dist/cli.js bundle.json --issuer <issuer address> --near-rpc https://test.rpc.fastnear.com
 ```
 
 Take the issuer address from the application owner. The format is in [`spec/receipt-v1.md`](spec/receipt-v1.md).

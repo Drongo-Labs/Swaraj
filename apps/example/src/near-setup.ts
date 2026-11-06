@@ -10,7 +10,7 @@ const privateKey = process.env.NEAR_PRIVATE_KEY;
 if (!accountId || !privateKey) throw new Error("NEAR_ACCOUNT_ID and NEAR_PRIVATE_KEY must be set");
 
 await prepareNearSwapAccount({
-  rpcUrl: process.env.NEAR_RPC_URL ?? "https://rpc.testnet.near.org",
+  rpcUrl: process.env.NEAR_RPC_URL ?? "https://test.rpc.fastnear.com",
   accountId,
   privateKey,
   tokens: ["wrap.testnet", "ref.fakes.testnet"],
