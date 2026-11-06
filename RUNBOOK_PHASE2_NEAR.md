@@ -209,7 +209,13 @@ pnpm --filter @swaraj/proofs build:sp1:private
 cargo build --release --manifest-path packages/proofs/host/Cargo.toml
 ```
 
-`runPrivateMandate` in `@swaraj/proofs` runs the guest, and passing `proofPath` produces a proof. Check a proof with:
+`runPrivateMandate` in `@swaraj/proofs` runs the guest, and passing `proofPath` produces a proof.
+
+**Use Groth16 for real privacy.** SP1's default STARK proof is not guaranteed to be zero knowledge, so it should not be treated as hiding the rules. Pass `groth16: true`, or `--groth16` to the host, for the zero-knowledge wrap. Groth16 needs SP1's large circuit download on first use, and this repo has not yet confirmed a Groth16 run.
+
+The rules stay hidden from the public, not from whoever runs the prover, because the prover reads them.
+
+Check a proof with:
 
 ```bash
 packages/proofs/host/target/release/swaraj-gate-host packages/proofs/artifacts/swaraj-private-guest --verify <proof>
