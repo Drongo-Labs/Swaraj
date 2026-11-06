@@ -132,3 +132,17 @@ export async function findProofRecord(
   const row = result.rows[0];
   return row ? { payload: row.payload, artifact: row.content } : undefined;
 }
+
+/** Queues a proof unless the receipt already has a job, so a redelivered event adds nothing. */
+export async function enqueueProofJobOnce(
+  handle: PoolHandle,
+  job: { receiptId: string; payload: unknown },
+): Promise<boolean> {
+  const result = await handle.raw.query(
+    `INSERT INTO proof_jobs (receipt_id, payload)
+     SELECT $1, $2::jsonb
+     WHERE NOT EXISTS (SELECT 1 FROM proof_jobs WHERE receipt_id = $1)`,
+    [job.receiptId, JSON.stringify(job.payload)],
+  );
+  return (result.rowCount ?? 0) > 0;
+}

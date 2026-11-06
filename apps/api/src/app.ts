@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyReply } from "fastify";
 import {
   ActionRequestSchema,
@@ -25,6 +25,14 @@ import {
 import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
 import { bundleDigest } from "@swaraj/verify";
+import {
+  githubDeploymentMatches,
+  githubReceiptId,
+  githubSignatureValid,
+  stripeEventMatches,
+  stripeReceiptId,
+  stripeSignatureValid,
+} from "@swaraj/evidence";
 import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
   createDatabase,
@@ -32,6 +40,7 @@ import {
   advanceReceipt,
   claimIdempotencyKey,
   enqueueProofJob,
+  enqueueProofJobOnce,
   findProofRecord,
   findReceipt,
   findReceiptByIdempotencyKey,
@@ -290,6 +299,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       return reply.code(204).send();
     }
     if (request.routeOptions.url === "/health") return;
+    // Webhooks carry the provider's signature instead of a bearer token.
+    if (request.routeOptions.url?.startsWith("/v1/webhooks/")) return;
     const supplied = Buffer.from(request.headers.authorization ?? "");
     if (request.routeOptions.url === APPROVAL_DECISION_ROUTE) {
       // Fails closed: with no approver token set, nothing can be approved.
@@ -638,6 +649,16 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return runActionRoute(request.params.applicationId, body, request.log, reply);
   });
 
+  const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || undefined;
+  const githubSecret = process.env.GITHUB_WEBHOOK_SECRET?.trim() || undefined;
+  const pendingJobKey = (receiptId: string) => `pending_job_${receiptId}`;
+  /** Which provider's signed record settles this action; undefined when none is configured. */
+  const signedRecordProvider = (action: UnifiedAction): "stripe" | "github" | undefined => {
+    if (stripeSecret && action.action === "PAYMENT" && action.resource.service === "stripe") return "stripe";
+    if (githubSecret && action.action === "DEPLOY") return "github";
+    return undefined;
+  };
+
   /** Records, executes and queues proof for an action cleared to run, automatically or by a person. */
   const settleAllowed = async (ctx: {
     applicationId: string;
@@ -730,7 +751,18 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         if (isNearAction(action)) {
           settlement = await nearSettler.settle(action, { applicationId, intentHash, policyHash });
         }
-        if (settlement?.status === "NOT_PROVABLE") {
+        if (signedRecordProvider(action) !== undefined) {
+          // The provider does the work; its signed webhook settles this receipt.
+          await saveActiveDefinition(applicationId, pendingJobKey(receiptId), 1, {
+            kind: "MANDATE",
+            mandate: mandateDefinition,
+            action: wireAction,
+            expected: { decision, matchedRuleIds },
+            intentHash,
+            mandateHash: policyHash,
+            ...(approvedBy !== undefined ? { approvedBy } : {}),
+          });
+        } else if (settlement?.status === "NOT_PROVABLE") {
           await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
           proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
         } else {
@@ -843,6 +875,70 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       return record;
     },
   );
+
+  /** Applies a provider's signed record to the receipt it names. */
+  const settleFromRecord = async (
+    receiptId: string | undefined,
+    rawBody: string,
+    matches: (action: UnifiedAction) => boolean,
+    reply: FastifyReply,
+  ) => {
+    if (!pool || receiptId === undefined || !Identifier.safeParse(receiptId).success) {
+      return reply.code(200).send({ ignored: true });
+    }
+    const handle = { raw: pool, close: async () => {} };
+    const ledger = await findReceipt(handle, receiptId);
+    const job = ledger ? await loadActivePolicy(ledger.appId, pendingJobKey(receiptId)) : undefined;
+    if (!ledger || !job) return reply.code(200).send({ ignored: true });
+    // Providers redeliver webhooks; only the first one can settle a receipt.
+    if (ledger.state !== "PENDING") return reply.code(200).send({ state: ledger.state });
+    const action = UnifiedActionSchema.parse(job.action);
+    if (!matches(action)) {
+      await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: "SIGNED_RECORD_MISMATCH" });
+      return reply.code(200).send({ state: "NON_PROVABLE" });
+    }
+    const evidenceDigest = `0x${createHash("sha256").update(rawBody).digest("hex")}`;
+    await enqueueProofJobOnce(handle, { receiptId, payload: { ...job, evidenceDigest } });
+    return reply.code(200).send({ state: "PENDING", evidenceDigest });
+  };
+
+  // Webhooks are signed over the exact bytes, so this scope keeps the raw body.
+  await app.register(async (scope) => {
+    scope.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => done(null, body));
+
+    scope.post<{ Body: string }>("/v1/webhooks/stripe", async (request, reply) => {
+      const header = request.headers["stripe-signature"];
+      const now = Math.floor(Date.now() / 1000);
+      if (!stripeSecret || typeof header !== "string" || !stripeSignatureValid(request.body, header, stripeSecret, now)) {
+        return reply.code(401).send({ error: "invalid_signature" });
+      }
+      const event = JSON.parse(request.body) as unknown;
+      return settleFromRecord(stripeReceiptId(event), request.body, (action) =>
+        action.action === "PAYMENT" && stripeEventMatches(event, {
+          amount: action.context.amount.toString(),
+          currency: action.context.currency,
+          recipient: action.context.recipient,
+        }), reply);
+    });
+
+    scope.post<{ Body: string }>("/v1/webhooks/github", async (request, reply) => {
+      const header = request.headers["x-hub-signature-256"];
+      if (!githubSecret || typeof header !== "string" || !githubSignatureValid(request.body, header, githubSecret)) {
+        return reply.code(401).send({ error: "invalid_signature" });
+      }
+      const event = JSON.parse(request.body) as unknown;
+      // Other deployment states are progress updates, not outcomes.
+      if ((event as { deployment_status?: { state?: string } }).deployment_status?.state === "in_progress") {
+        return reply.code(200).send({ ignored: true });
+      }
+      return settleFromRecord(githubReceiptId(event), request.body, (action) =>
+        action.action === "DEPLOY" && githubDeploymentMatches(event, {
+          repo: action.resource.repo,
+          commitHash: action.context.commitHash,
+          environment: action.context.environment,
+        }), reply);
+    });
+  });
 
   const CERTIFICATES_ID = "program_certificates";
   const loadCertificates = async (applicationId: string) => {

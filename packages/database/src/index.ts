@@ -28,6 +28,7 @@ export {
 } from "./receipts.js";
 export {
   enqueueProofJob,
+  enqueueProofJobOnce,
   failProofJob,
   finishProofJob,
   findProofRecord,
