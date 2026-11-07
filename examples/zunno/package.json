@@ -1,0 +1,26 @@
+{
+  "name": "swaraj-zunno",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Swaraj-governed AI agent for Zunno (Inco/Base): every agent move is checked against an Agent Mandate before it executes.",
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "e2e": "tsx src/e2e/gatedStake.ts",
+    "play": "tsx src/play.ts",
+    "vectors": "tsx scripts/gen-vectors.ts",
+    "lean:sync": "node lean/scripts/sync-vectors.mjs",
+    "check:lean": "cd lean && $HOME/.elan/bin/lake build"
+  },
+  "dependencies": {
+    "@inco/lightning-js": "^1.1.0",
+    "viem": "^2.57.13",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

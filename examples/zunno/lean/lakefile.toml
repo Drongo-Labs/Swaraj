@@ -1,0 +1,10 @@
+name = "zunno-lean"
+version = "0.1.0"
+defaultTargets = ["Zunno"]
+warnLevenshtein = false
+
+[leanOptions]
+warningAsError = true
+
+[[lean_lib]]
+name = "Zunno"
