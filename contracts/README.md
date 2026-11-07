@@ -1,6 +1,15 @@
 # NEAR contracts
 
-## `verifier`
+Rust workspace under `contracts/` (`verifier`, `receipts`). Build with
+`cargo near` from each crate; run unit tests from the workspace root:
+
+```bash
+cargo test --manifest-path contracts/Cargo.toml
+```
+
+Use a **separate testnet account per person**. Never commit private keys.
+
+## `verifier` (Ayush)
 
 Verifies SP1 Groth16 proofs with NEAR's `alt_bn128` host functions, following
 SP1's own `SP1VerifierGroth16.sol`. Only program keys pinned at deployment are
@@ -19,7 +28,7 @@ the 300 Tgas transaction limit
 [tampered proof rejected](https://testnet.nearblocks.io/txns/6KgLm4rzD3piB7NiNHZpi98CW3Vm7LJDBeAcnL5d9ufU)).
 
 ```bash
-cargo test --manifest-path contracts/Cargo.toml   # real proof + tampered variants
+cargo test --manifest-path contracts/Cargo.toml -p swaraj-verifier
 cd contracts/verifier && cargo near build non-reproducible-wasm
 ```
 
@@ -29,3 +38,34 @@ public values and proof as hex.
 
 `src/vk.rs` is generated from SP1's verifier by `scripts/gen-vk.py`. Rerun it
 after an SP1 version bump.
+
+## `receipts` (Kushagra — Nov 7 start)
+
+On-chain receipt lifecycle mirroring
+`packages/database/migrations/0002-receipts.sql`:
+
+| From | Allowed next |
+|---|---|
+| `PENDING` | `PROVED`, `NON_PROVABLE`, `INVALIDATED` |
+| `PROVED` | `INVALIDATED` |
+
+Illegal moves panic. `PROVED` requires a non-empty `proof_ref` (verifier
+cross-contract call lands Nov 8).
+
+| Method | Does |
+|---|---|
+| `new(verifier?)` | Init; optional verifier account for Nov 8 |
+| `create_pending(receipt_id, app_id, intent_digest, claim_hash)` | Inserts `PENDING` |
+| `mark_proved(receipt_id, proof_ref)` | `PENDING → PROVED` |
+| `mark_non_provable(receipt_id, note?)` | `PENDING → NON_PROVABLE` |
+| `invalidate(receipt_id, note?)` | `PENDING\|PROVED → INVALIDATED` |
+| `get(receipt_id)` | View the record |
+| `event_count` / `get_event` | Append-only transition log |
+
+```bash
+cargo test --manifest-path contracts/Cargo.toml -p swaraj-receipts
+cd contracts/receipts && cargo near build non-reproducible-wasm
+```
+
+Deployed account (Kushagra testnet): see `contracts/receipts/DEPLOYMENT.md`
+after first deploy (filled by the deploy script; never commit keys).
