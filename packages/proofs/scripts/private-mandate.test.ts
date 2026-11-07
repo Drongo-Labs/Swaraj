@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { evaluateMandate } from "@swaraj/rules";
 import { mandateCommitment, privateStatement, runPrivateMandate } from "../dist/private-mandate.js";
@@ -79,4 +80,12 @@ test("the commitment hides the mandate behind the salt", () => {
   const mandateJson = JSON.stringify(mandate([]));
   assert.notEqual(mandateCommitment({ mandateJson, salt: "a" }), mandateCommitment({ mandateJson, salt: "b" }));
   assert.equal(mandateCommitment({ mandateJson, salt: "a" }), mandateCommitment({ mandateJson, salt: "a" }));
+});
+
+test("the Groth16 fixture proves the input's statement and carries nothing private", () => {
+  const dir = new URL("../fixtures/", import.meta.url);
+  const input = JSON.parse(readFileSync(new URL("private-mandate-input.json", dir), "utf8"));
+  const proof = readFileSync(new URL("private-mandate-groth16.proof", dir)).toString("latin1");
+  assert.ok(proof.includes(privateStatement(input)));
+  for (const secret of [input.salt, "mandateJson", "forbid_cap"]) assert.ok(!proof.includes(secret), secret);
 });
