@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { AgentMandateSchema, UnifiedActionSchema, type AgentMandate } from "../vendor/schemas/index.js";
-import { evaluateParsedMandate } from "../vendor/rules/index.js";
+import { AgentMandateSchema, UnifiedActionSchema, type AgentMandate } from "@swaraj/schemas";
+import { evaluateParsedMandate } from "@swaraj/rules";
 import type { GatewayDecision } from "./client.js";
 
 /**

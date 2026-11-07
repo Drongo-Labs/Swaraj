@@ -1,5 +1,5 @@
-import { GovernedAgent, type ActResult, type GovernedActionSpec } from "../vendor/agent/index.js";
-import type { GatewayDecision } from "../vendor/agent/index.js";
+import { GovernedAgent, type ActResult, type GovernedActionSpec } from "@swaraj/agent";
+import type { GatewayDecision } from "@swaraj/agent";
 import { buildIntent, toWire, type ZunnoProposal } from "../actions/intents.js";
 import { firstLegalCard, isPlayable } from "../zunno/cards.js";
 import type { ZunnoAgentConfig } from "../config.js";

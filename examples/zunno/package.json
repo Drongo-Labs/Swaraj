@@ -15,8 +15,11 @@
   },
   "dependencies": {
     "@inco/lightning-js": "^1.1.0",
+    "@swaraj/agent": "workspace:*",
+    "@swaraj/rules": "workspace:*",
+    "@swaraj/schemas": "workspace:*",
     "viem": "^2.57.13",
-    "zod": "^3.24.0"
+    "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

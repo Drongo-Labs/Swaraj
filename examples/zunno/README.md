@@ -18,9 +18,9 @@ pnpm install
 pnpm play          # → http://127.0.0.1:3002
 ```
 
-Fully standalone: the Swaraj mandate engine (`src/vendor/`, vendored from
-swaraj-new) evaluates every agent move **in-process** — default deny,
-forbid-wins, fail-closed. No other checkout, no database, no chain needed.
+A demo of Swaraj: the mandate engine from this monorepo (`@swaraj/rules`,
+`@swaraj/schemas`, `@swaraj/agent`) evaluates every agent move **in-process** —
+default deny, forbid-wins, fail-closed. No database or chain needed.
 
 - You play UNO normally; your moves are checked for game legality only.
 - The agent's every move is checked against its mandate first. The mandate
@@ -46,7 +46,7 @@ flowchart TD
     I["Typed intent — APP_ACTION"]
     B["Bridge over @swaraj/agent"]
   end
-  subgraph SW["src/vendor — Swaraj mandate engine (in-process)"]
+  subgraph SW["@swaraj/rules — Swaraj mandate engine (in-process)"]
     M["zunno-mandate.json"]
     G["default deny · forbid-wins · fail-closed"]
   end
