@@ -1,12 +1,7 @@
 import type { SinkAttestation, ProofSink } from "./zkverify.js";
 import type { VerificationBundle } from "./artifacts.js";
 
-/**
- * Remote proof sink: submits a bundle to a verification endpoint and
- * polls the attestation endpoint until the statement is finalized. The
- * same flow drives zkVerify behind an HTTP gateway (direct or relayed
- * via Kurier); test deployments point it at a local relay.
- */
+/** Submits a bundle to a verification endpoint and polls until it is finalized. */
 
 export interface RemoteSinkConfig {
   submitUrl: string;

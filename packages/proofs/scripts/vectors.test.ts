@@ -11,12 +11,7 @@ import {
   toWirePolicy,
 } from "../dist/index.js";
 
-/**
- * The shared gate vectors are the consistency contract between the SMT
- * gateway, the TypeScript ground evaluator, the Rust engine, and the
- * Lean assurance suite (packages/lean consumes the same file via
- * scripts/sync-vectors.mjs).
- */
+/** Shared vectors keep the SMT gateway, TS evaluator, Rust engine and Lean suite consistent. */
 
 interface VectorCase {
   name: string;

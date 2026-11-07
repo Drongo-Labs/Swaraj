@@ -2,9 +2,8 @@ export {
   SwarajApiClient,
   ApiError,
   type ApiClientOptions,
-  type PolicyView,
+  type MandateView,
   type ReceiptView,
-  type SubmitActionRequest,
   type SubmitActionResponse,
 } from "./api-client.js";
 export {
@@ -20,3 +19,4 @@ export {
   type ToolCallResult,
   type ToolDefinition,
 } from "./tools.js";
+export { authorizeToolCall, gatewayLine, toolCallAction, type GatewayOptions } from "./gateway.js";

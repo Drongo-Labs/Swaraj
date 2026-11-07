@@ -39,3 +39,4 @@ export {
   type Sp1ProverConfig,
 } from "./sp1-prover.js";
 export * from "./mandate-statement.js";
+export * from "./private-mandate.js";

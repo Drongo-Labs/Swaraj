@@ -1,17 +1,4 @@
-/-!
-# The governed-turn bridge — no execution without ALLOW
-
-This is the framework-level model mirrored by `@swaraj/agent`
-(GovernedAgent) and every application bridge built on it:
-
-- `moveRun`   — RETRY policy: each BLOCK falls back to the next gated
-  attempt; a run that never sees ALLOW forfeits the turn.
-- `stakeStep` — ABSTAIN policy: a blocked action abstains. Never
-  retried, never executed.
-
-The theorems are the security property of every Swaraj-governed agent,
-kernel-checked: nothing executes without an ALLOW.
--/
+/-! # No execution without ALLOW, mirrored by `@swaraj/agent`. RETRY and ABSTAIN both keep this. -/
 namespace Gate
 
 inductive Gate : Type where

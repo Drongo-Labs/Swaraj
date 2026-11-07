@@ -1,12 +1,4 @@
-/-!
-# Gate terms and evaluation
-
-The integer rule AST shared with the TypeScript policy compiler
-(`packages/smt`) and the Rust engine (`packages/proofs/engine`).
-Evaluation is a total function into `Option`: a missing field value
-surfaces as `none` instead of an exception, so the kernel can reduce
-every expression.
--/
+/-! # Gate terms: the rule AST shared with TS and Rust. Evaluation is total; a missing field gives `none`. -/
 
 namespace Gate
 

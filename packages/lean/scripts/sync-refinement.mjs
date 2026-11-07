@@ -1,14 +1,5 @@
 #!/usr/bin/env node
-/**
- * Generates Gate/Refinement.lean from proofs/vectors/mandate-refinement.json:
- * one kernel-checked example per mandate, evaluating the Lean model
- * (Gate.decideConcrete) over the ENTIRE bounded action domain and asserting
- * equality with the outcomes the real TypeScript engine produced. Every
- * case in the space is checked by the Lean kernel — the machine-checked
- * Lean <=> TS correspondence.
- *
- * Run: node scripts/sync-refinement.mjs
- */
+/** Generates Gate/Refinement.lean from those outcomes. Run: node scripts/sync-refinement.mjs */
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

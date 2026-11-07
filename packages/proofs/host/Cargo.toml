@@ -9,3 +9,7 @@ sp1-sdk = { version = "=6.9.0", features = ["blocking"] }
 bincode = { version = "2", features = ["serde"] }
 serde = "1"
 serde_json = "1"
+
+[features]
+# Groth16 without Docker; needs Go and roughly 16 GB of free memory.
+native-gnark = ["sp1-sdk/native-gnark"]

@@ -3,25 +3,7 @@ import Gate.Mandate
 import Gate.Concrete
 import Gate.Budget
 
-/-!
-# Purity guard
-
-The security theorems of the suite are kernel-checked, and this file makes
-that claim enforced by the build rather than by review:
-
-- each `#guard_msgs` block below pins the exact output of the kernel's
-  dependency query for a security theorem. The pinned axioms are Lean's
-  standard logical foundation — `propext` (propositional extensionality)
-  and `Quot.sound` (quotient elimination), trusted in every Lean
-  development. If a theorem ever picks up ANY other dependency (a planted
-  escape shows up here as `sorryAx`), the pinned message no longer matches
-  and the build FAILS;
-- `scripts/check-purity.mjs` (run by `check:lean`) additionally rejects
-  any source under `Gate/` that contains a proof escape token, planted or
-  accidental, after comments are stripped.
-
-Together: no entry into the suite can weaken the guarantees silently.
--/
+/-! # Build-enforced purity: `#guard_msgs` pins each theorem's axioms, and `check-purity.mjs` rejects escapes. -/
 
 /--
 info: 'Gate.exec_needs_allow' depends on axioms: [propext]

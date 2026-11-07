@@ -1,36 +1,24 @@
-/**
- * HTTP client for the Swaraj application API. This is the same contract the
- * TypeScript SDK will wrap: submit an action, inspect a receipt, read a
- * policy. Only the three operations the MCP tools need are implemented.
- */
+/** HTTP client for the Swaraj gateway API. */
 
-export interface SubmitActionRequest {
-  applicationId: string;
-  policyId: string;
-  input: Record<string, string>;
-  idempotencyKey?: string;
-}
-
-export interface SubmitActionResponse {
-  decision: "ALLOW" | "BLOCK";
+export type SubmitActionResponse = {
+  decision?: "ALLOW" | "BLOCK";
+  productStatus?: string;
   receiptId?: string;
-  violatedRuleIds: string[];
-  policyDigest: string;
-}
+  mandate?: { reason?: string; matchedRuleIds?: string[]; matchedPermitRuleIds?: string[] };
+  [key: string]: unknown;
+};
 
-export interface ReceiptView {
+export type ReceiptView = {
   receiptId: string;
-  state: "PENDING" | "PROVED" | "NON_PROVABLE" | "INVALIDATED";
-  proofRef?: string;
-  claim: unknown;
-}
+  status: string;
+  productStatus: string;
+  [key: string]: unknown;
+};
 
-export interface PolicyView {
-  policyId: string;
-  revision: number;
-  digest: string;
-  ruleIds: string[];
-}
+export type MandateView = {
+  mandate: Record<string, unknown>;
+  [key: string]: unknown;
+};
 
 export class ApiError extends Error {
   constructor(
@@ -59,35 +47,29 @@ export class SwarajApiClient {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async submitAction(request: SubmitActionRequest): Promise<SubmitActionResponse> {
-    const body: Record<string, unknown> = {
-      applicationId: request.applicationId,
-      policyId: request.policyId,
-      input: request.input,
-    };
-    if (request.idempotencyKey !== undefined) body.idempotencyKey = request.idempotencyKey;
-    return this.call<SubmitActionResponse>("POST", "/actions", body);
+  submitAction(applicationId: string, action: unknown): Promise<SubmitActionResponse> {
+    return this.call("POST", `${app(applicationId)}/unified-actions`, { action });
   }
 
-  async getReceipt(receiptId: string): Promise<ReceiptView> {
-    return this.call<ReceiptView>("GET", `/receipts/${encodeURIComponent(receiptId)}`);
+  getReceipt(applicationId: string, receiptId: string): Promise<ReceiptView> {
+    return this.call("GET", `${app(applicationId)}/receipts/${encodeURIComponent(receiptId)}`);
   }
 
-  async getPolicy(policyId: string): Promise<PolicyView> {
-    return this.call<PolicyView>("GET", `/policies/${encodeURIComponent(policyId)}`);
+  getMandate(applicationId: string): Promise<MandateView> {
+    return this.call("GET", `${app(applicationId)}/mandates`);
   }
 
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {
-      "content-type": "application/json",
-      authorization: `Bearer ${this.token}`,
-    };
+    const headers: Record<string, string> = { authorization: `Bearer ${this.token}` };
+    if (body !== undefined) headers["content-type"] = "application/json";
     const init: RequestInit =
-      body === undefined
-        ? { method, headers }
-        : { method, headers, body: JSON.stringify(body) };
+      body === undefined ? { method, headers } : { method, headers, body: JSON.stringify(body) };
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, init);
     if (!response.ok) throw new ApiError(response.status, await response.text());
     return (await response.json()) as T;
   }
+}
+
+function app(applicationId: string): string {
+  return `/v1/applications/${encodeURIComponent(applicationId)}`;
 }

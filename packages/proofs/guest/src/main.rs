@@ -1,7 +1,4 @@
-//! SP1 guest: proves that the deterministic gate re-evaluation of a
-//! committed policy over a committed action produced the recorded
-//! decision, and commits to the resulting statement id. Every input is
-//! a commitment provided by the host; the guest recomputes everything.
+//! SP1 guest: re-evaluates the gate over committed inputs and commits the statement id.
 
 #![no_main]
 

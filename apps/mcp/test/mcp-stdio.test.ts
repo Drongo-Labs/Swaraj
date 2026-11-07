@@ -6,16 +6,10 @@ import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { runOneProofJob } from "@swaraj/proofs";
-import { registerPolicy, startPipelineFixture, type FixtureHandle } from "./pipeline-fixture.ts";
-import type { PolicyDoc } from "@swaraj/smt";
+import { LocalKeySigner } from "@swaraj/crypto";
+import { buildApp } from "../../api/dist/app.js";
 
-/**
- * End-to-end over real stdio: an MCP host process talks to swaraj-mcp,
- * which submits actions to the pipeline API. Covers the handshake, tool
- * discovery, submission, proof promotion, receipt lookup, and the
- * blocked path with rule attribution.
- */
+/** End to end over real stdio against the real API. */
 
 interface JsonRpcMessage {
   jsonrpc?: string;
@@ -94,51 +88,68 @@ async function spawnHost(port: number, token: string): Promise<McpHostSession> {
   return new McpHostSession(child);
 }
 
-const wirePolicy: PolicyDoc = {
-  policyId: "pol_mcp_demo",
-  revision: 2,
-  fields: ["amountCents", "limitCents"],
-  assumptions: [
-    {
-      ruleId: "limit.fixed",
-      assertion: {
-        kind: "compare",
-        op: "eq",
-        left: { kind: "field", name: "limitCents" },
-        right: { kind: "const", value: 100000 },
-      },
-    },
-  ],
-  rules: [
-    {
-      ruleId: "amount.positive",
-      assertion: {
-        kind: "compare",
-        op: "gt",
-        left: { kind: "field", name: "amountCents" },
-        right: { kind: "const", value: 0 },
-      },
-    },
-    {
-      ruleId: "amount.cap",
-      assertion: {
-        kind: "compare",
-        op: "le",
-        left: { kind: "field", name: "amountCents" },
-        right: { kind: "field", name: "limitCents" },
-      },
-    },
-  ],
-};
+const token = "development-test-token-at-least-32-characters";
+const applicationId = "app_mcp";
 
-let fixture: FixtureHandle;
+type Api = Awaited<ReturnType<typeof buildApp>>;
+let api: Api;
 let host: McpHostSession;
 
+function payment(amount: string): Record<string, unknown> {
+  const now = Date.now();
+  return {
+    intentId: "intent_mcp",
+    agent: "agent:mcp",
+    action: "PAYMENT",
+    resource: { service: "stripe" },
+    context: { amount, currency: "USD", recipient: "acct_vendor" },
+    policyHash: `0x${"9".repeat(64)}`,
+    timestamp: now,
+    expiry: now + 300_000,
+    idempotencyKey: `mcp-${randomUUID()}`,
+    signature: `0x${"00".repeat(65)}`,
+  };
+}
+
+const callTool = async (name: string, args: Record<string, unknown>) => {
+  const response = await host.request("tools/call", { name, arguments: args });
+  return response.result as { isError?: boolean; content: Array<{ text: string }> };
+};
+
 test.before(async () => {
-  fixture = await startPipelineFixture();
-  await registerPolicy(fixture, wirePolicy);
-  await fixture.pool.raw.query("DELETE FROM proof_jobs");
-  host = await spawnHost(fixture.port, fixture.token);
+  api = await buildApp(token, {
+    pipelineMode: "mock",
+    databaseUrl: "",
+    signer: new LocalKeySigner(`0x${"11".repeat(32)}`),
+  });
+  const now = Date.now();
+  const registered = await api.inject({
+    method: "POST",
+    url: `/v1/applications/${applicationId}/mandates`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      mandateId: "mandate_mcp",
+      version: 1,
+      agent: "*",
+      defaultEffect: "DENY",
+      validFrom: now - 1000,
+      validUntil: now + 3_600_000,
+      rules: [
+        {
+          ruleId: "forbid_large",
+          effect: "FORBID",
+          action: "PAYMENT",
+          predicates: [{ field: "context.amount", operator: "GT", value: "1000" }],
+        },
+        { ruleId: "permit_pay", effect: "PERMIT", action: "PAYMENT", predicates: [] },
+      ],
+    },
+  });
+  assert.equal(registered.statusCode, 201, registered.body);
+  await api.listen({ port: 0, host: "127.0.0.1" });
+  const address = api.server.address();
+  assert.ok(address !== null && typeof address === "object");
+  host = await spawnHost(address.port, token);
 
   const init = await host.request("initialize", {
     protocolVersion: "2025-06-18",
@@ -152,7 +163,7 @@ test.before(async () => {
 
 test.after(async () => {
   await host?.close();
-  await fixture?.close();
+  await api?.close();
 });
 
 test("host handshake and tool discovery", async () => {
@@ -163,104 +174,40 @@ test("host handshake and tool discovery", async () => {
   const result = tools.result as { tools: Array<{ name: string; inputSchema: { type: string } }> };
   assert.deepEqual(
     result.tools.map((tool) => tool.name),
-    ["swaraj_submit_action", "swaraj_get_receipt", "swaraj_get_policy"],
+    ["swaraj_submit_action", "swaraj_get_receipt", "swaraj_get_mandate"],
   );
   for (const tool of result.tools) {
     assert.equal(tool.inputSchema.type, "object");
   }
 });
 
-test("policy tool returns digest and rules", async () => {
-  const call = await host.request("tools/call", {
-    name: "swaraj_get_policy",
-    arguments: { policyId: wirePolicy.policyId },
-  });
-  const result = call.result as { content: Array<{ type: string; text: string }> };
-  assert.equal(result.content[0]?.type, "text");
-  const policy = JSON.parse(result.content[0]!.text) as { policyId: string; ruleIds: string[] };
-  assert.equal(policy.policyId, wirePolicy.policyId);
-  assert.deepEqual(policy.ruleIds, ["amount.positive", "amount.cap"]);
+test("mandate tool reads the active mandate from the real API", async () => {
+  const result = await callTool("swaraj_get_mandate", { applicationId });
+  assert.equal(JSON.parse(result.content[0]!.text).mandate.mandateId, "mandate_mcp");
 });
 
-test("submission tool: ALLOW returns a receipt, BLOCK carries the violated rule", async () => {
-  const allowed = await host.request("tools/call", {
-    name: "swaraj_submit_action",
-    arguments: {
-      applicationId: fixture.appId,
-      policyId: wirePolicy.policyId,
-      input: { amountCents: "25000", limitCents: "100000" },
-    },
-  });
-  const allowedResult = allowed.result as { isError?: boolean; content: Array<{ text: string }> };
-  assert.equal(allowedResult.isError, undefined);
-  const allowedBody = JSON.parse(allowedResult.content[0]!.text) as {
-    decision: string;
-    receiptId: string;
-    violatedRuleIds: string[];
-  };
-  assert.equal(allowedBody.decision, "ALLOW");
-  assert.ok(allowedBody.receiptId.startsWith("rcpt_"));
+test("submission tool: the real gateway allows and blocks with rule attribution", async () => {
+  const allowed = await callTool("swaraj_submit_action", { applicationId, action: payment("1000") });
+  assert.notEqual(allowed.isError, true, allowed.content[0]?.text);
+  assert.equal(JSON.parse(allowed.content[0]!.text).decision, "ALLOW");
 
-  const blocked = await host.request("tools/call", {
-    name: "swaraj_submit_action",
-    arguments: {
-      applicationId: fixture.appId,
-      policyId: wirePolicy.policyId,
-      input: { amountCents: "250000", limitCents: "100000" },
-    },
-  });
-  const blockedResult = blocked.result as { isError: boolean; content: Array<{ text: string }> };
-  assert.equal(blockedResult.isError, true);
-  const blockedBody = JSON.parse(blockedResult.content[0]!.text) as {
-    decision: string;
-    violatedRuleIds: string[];
-  };
-  assert.equal(blockedBody.decision, "BLOCK");
-  assert.deepEqual(blockedBody.violatedRuleIds, ["amount.cap"]);
+  const blocked = await callTool("swaraj_submit_action", { applicationId, action: payment("1001") });
+  assert.equal(blocked.isError, true);
+  const body = JSON.parse(blocked.content[0]!.text);
+  assert.equal(body.decision, "BLOCK");
+  assert.deepEqual(body.mandate.matchedRuleIds, ["forbid_large"]);
 });
 
-test("full pipeline through MCP: submit, prove, read the PROVED receipt", async () => {
-  await fixture.pool.raw.query("DELETE FROM proof_jobs");
-  const submitted = await host.request("tools/call", {
-    name: "swaraj_submit_action",
-    arguments: {
-      applicationId: fixture.appId,
-      policyId: wirePolicy.policyId,
-      input: { amountCents: "40000", limitCents: "100000" },
-      idempotencyKey: `mcp_${randomUUID().slice(0, 8)}`,
-    },
-  });
-  const submittedBody = JSON.parse(
-    (submitted.result as { content: Array<{ text: string }> }).content[0]!.text,
-  ) as { receiptId: string };
-  const receiptId = submittedBody.receiptId;
-
-  // The proof worker drains the queue the submission filled.
-  const outcome = await runOneProofJob(fixture.pool, {
-    artifactRoot: `/tmp/swaraj-mcp-artifacts-${randomUUID().slice(0, 8)}`,
-  });
-  assert.ok(outcome, "worker processed the job");
-  assert.equal(outcome.receiptId, receiptId);
-
-  const fetched = await host.request("tools/call", {
-    name: "swaraj_get_receipt",
-    arguments: { receiptId },
-  });
-  const receipt = JSON.parse(
-    (fetched.result as { content: Array<{ text: string }> }).content[0]!.text,
-  ) as { state: string; proofRef?: string };
-  assert.equal(receipt.state, "PROVED");
-  assert.match(receipt.proofRef ?? "", /^zkv_local_[0-9a-f]{32}$/);
+test("an action the API rejects comes back as a tool error, not an allow", async () => {
+  const result = await callTool("swaraj_submit_action", { applicationId, action: { action: "PAYMENT" } });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0]?.text ?? "", /400/);
 });
 
 test("invalid tool arguments come back as tool errors, unknown tools as JSON-RPC errors", async () => {
-  const invalid = await host.request("tools/call", {
-    name: "swaraj_get_receipt",
-    arguments: { receiptId: "" },
-  });
-  const invalidResult = invalid.result as { isError: boolean; content: Array<{ text: string }> };
-  assert.equal(invalidResult.isError, true);
-  assert.match(invalidResult.content[0]?.text ?? "", /receiptId/);
+  const invalid = await callTool("swaraj_get_receipt", { applicationId, receiptId: "" });
+  assert.equal(invalid.isError, true);
+  assert.match(invalid.content[0]?.text ?? "", /receiptId/);
 
   const unknown = await host.request("tools/call", {
     name: "swaraj_no_such_tool",

@@ -1,11 +1,6 @@
 import type { BoolTerm, IntTerm, PolicyDoc } from "@swaraj/smt";
 
-/**
- * Ground re-evaluation of a policy over a bound action — the deterministic
- * counterpart of the SMT gateway. The SP1 guest runs the identical
- * algorithm (packages/proofs/engine, Rust), so any disagreement between
- * the gateway and the guest is a parity failure, not a policy question.
- */
+/** Deterministic counterpart of the SMT gateway. The Rust guest must match it exactly. */
 
 export interface GroundDecision {
   outcome: "ALLOW" | "BLOCK";
@@ -72,11 +67,7 @@ function evalBool(term: BoolTerm, values: Record<string, bigint>): boolean {
   }
 }
 
-/**
- * Evaluate assumptions and rules over a fully bound action. Missing or
- * non-integer values raise EvaluationError — callers must treat that as
- * a proof failure, never as an allow.
- */
+/** Evaluates a bound action. EvaluationError must be treated as a proof failure, never an allow. */
 export function reevaluateGround(policy: PolicyDoc, action: GroundBinding): GroundDecision {
   const values: Record<string, bigint> = {};
   for (const name of policy.fields) {
@@ -100,11 +91,7 @@ export function reevaluateGround(policy: PolicyDoc, action: GroundBinding): Grou
   return { outcome: violatedRuleIds.length === 0 ? "ALLOW" : "BLOCK", violatedRuleIds };
 }
 
-/**
- * Wire form of a policy for JSON transports (job queue, SP1 host): the
- * bigint constants of the in-memory AST become JSON numbers, which is
- * exactly the shape the Rust engine deserializes (i64).
- */
+/** JSON form of a policy: bigint constants become numbers, as the Rust engine expects (i64). */
 export function toWirePolicy(policy: PolicyDoc): PolicyDoc {
   return JSON.parse(
     JSON.stringify(policy, (_key, value: unknown) =>

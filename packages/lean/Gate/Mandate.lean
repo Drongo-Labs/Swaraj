@@ -1,17 +1,6 @@
 import Gate.Decide
 
-/-!
-# Agent Mandate precedence
-
-This is the framework-level model mirrored by `@swaraj/rules`:
-
-1. a matching FORBID blocks;
-2. otherwise a matching PERMIT allows;
-3. otherwise the result is BLOCK (default deny).
-
-The matching predicate is abstract here because the precedence theorems do
-not depend on a particular action domain or field language.
--/
+/-! # Mandate precedence, mirrored by `@swaraj/rules`: FORBID blocks, then PERMIT allows, else BLOCK. -/
 
 namespace Gate
 

@@ -1,16 +1,5 @@
 #!/usr/bin/env node
-/**
- * Generates the mandate refinement vectors: enumerates the bounded space
- * (every well-formed mandate from subsets of the 14-rule pool, size <= 3,
- * crossed with the bounded action domain), evaluates EVERY case with the
- * REAL TypeScript engine (@swaraj/rules evaluateParsedMandate), and emits
- * the space + expectations. The sync script (sync-refinement.mjs) turns
- * this into Gate/Refinement.lean, where the Lean kernel checks
- * Gate.decideConcrete against every recorded outcome — the machine-checked
- * Lean <=> TS correspondence over the entire bounded space.
- *
- * Run: node scripts/gen-refinement-vectors.mjs
- */
+/** Records the TS engine's outcome for every bounded case. Run: node scripts/gen-refinement-vectors.mjs */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
