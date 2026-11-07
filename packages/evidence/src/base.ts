@@ -96,10 +96,7 @@ async function waitForConfirmations(params: {
   }
 }
 
-/**
- * Live Base venue adapter: loads tx receipt/logs over RPC and sets FINAL only after N confirmations.
- * Fail-closed on missing/reverted txs and finality timeout. Does not invent FINAL.
- */
+/** Live Base adapter. FINAL only after N confirmations; fails closed on missing or reverted txs. */
 export function createBaseVenueAdapter(options: BaseVenueAdapterOptions = {}): VenueAdapter {
   const network = resolveBaseNetwork(process.env);
   const chain = options.chain ?? network.chain;

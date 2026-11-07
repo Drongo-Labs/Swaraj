@@ -25,7 +25,7 @@ async function bundle(overrides = {}) {
     version: "swaraj/receipt-bundle/v1", receiptId: "r1", state: "PROVED", proofRef: "ref", action, mandate,
     intentHash: `0x${sha(serializeUnifiedAction(parseUnifiedAction(action)))}`,
     mandateHash: hashObject(ObjectType.POLICY_PROFILE, mandate),
-    decision: "ALLOW", matchedRuleIds: ["permit_pay"], evidenceDigest: "0x" + "ab".repeat(32), near,
+    decision: "ALLOW", matchedRuleIds: ["permit_pay"], evidenceDigest: "0x" + "ab".repeat(32), chainExecution: near,
     issuer: issuer.address,
     ...overrides,
   };
@@ -61,7 +61,7 @@ test("a signature from anyone else fails", async () => {
 });
 
 test("a NEAR transaction to someone other than the action's recipient fails", async () => {
-  const redirected = await bundle({ near: { ...near, expect: { ...near.expect, receiverId: "evil.testnet" } } });
+  const redirected = await bundle({ chainExecution: { ...near, expect: { ...near.expect, receiverId: "evil.testnet" } } });
   assert.deepEqual(failed(await verify(redirected)), ["on-chain target matches the action"]);
 });
 

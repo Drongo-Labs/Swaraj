@@ -16,12 +16,7 @@ function parseOrdinal(fileName: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-/**
- * Apply every pending migration in ordinal order. Each file is applied in
- * its own transaction and self-registers in applied_migrations, so this is
- * safe to call repeatedly — including right after the container's first
- * boot already executed the same files via initdb.
- */
+/** Applies pending migrations in order, one transaction each. Safe to call repeatedly. */
 export async function applyMigrations(
   handle: PoolHandle,
   dir: string = MIGRATIONS_DIR,

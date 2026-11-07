@@ -12,7 +12,7 @@ export const ActionResultSchema = z.discriminatedUnion("decision", [
     receiptId: Identifier,
     status: z.enum(["PENDING", "NON_PROVABLE", "DEV_UNVERIFIED"]),
     /** Phase 2 product status — honest mapping of engine state. */
-    productStatus: z.enum(["allowed", "blocked", "proved", "cant_prove"]).optional(),
+    productStatus: z.enum(["allowed", "blocked", "proved", "cant_prove", "needs_approval"]).optional(),
     capabilityId: z.string().optional(),
     intentHash: z.string().optional(),
     policyHash: z.string().optional(),
@@ -30,7 +30,7 @@ export const ActionResultSchema = z.discriminatedUnion("decision", [
 export const ReceiptSchema = z.object({
   receiptId: Identifier,
   status: z.enum(["PENDING", "PROVED", "NON_PROVABLE", "INVALIDATED", "DEV_UNVERIFIED"]),
-  productStatus: z.enum(["allowed", "blocked", "proved", "cant_prove"]).optional(),
+  productStatus: z.enum(["allowed", "blocked", "proved", "cant_prove", "needs_approval"]).optional(),
   claim: z.string().optional(),
   reason: z.string().optional(),
   reasonCode: z.string().optional(),

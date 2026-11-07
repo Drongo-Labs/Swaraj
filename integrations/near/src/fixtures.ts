@@ -1,4 +1,4 @@
-import type { MockEvidenceFixture } from "./types.js";
+import type { MockEvidenceFixture } from "@swaraj/evidence";
 
 /** Fixture NEAR execution ids (not live chain hashes). */
 export const NEAR_KNOWN_TX_HASH =

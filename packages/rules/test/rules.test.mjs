@@ -109,3 +109,18 @@ test("param predicate of the wrong type or absent param fails closed", () => {
     }),
   );
 });
+
+test("REQUIRE_APPROVAL sits between FORBID and PERMIT", () => {
+  const mandate = (rules) => parseAgentMandate({ mandateId: "m", version: 1, agent: "*", defaultEffect: "DENY", validFrom: 0, validUntil: 4102444800000, rules });
+  const rule = (ruleId, effect) => ({ ruleId, effect, action: "PAYMENT", predicates: [] });
+  const action = parseUnifiedAction({
+    intentId: "i", agent: "agent:a", action: "PAYMENT", resource: { service: "s" },
+    context: { amount: "1", currency: "USD", recipient: "r" }, policyHash: `0x${"9".repeat(64)}`,
+    timestamp: 1790000000000, expiry: 1790000300000, idempotencyKey: "k", signature: `0x${"00".repeat(65)}`,
+  });
+  const review = evaluateParsedMandate(mandate([rule("a", "REQUIRE_APPROVAL"), rule("b", "PERMIT")]), action);
+  assert.equal(review.decision, "NEEDS_APPROVAL");
+  assert.deepEqual(review.matchedApprovalRuleIds, ["a"]);
+  assert.equal(evaluateParsedMandate(mandate([rule("a", "REQUIRE_APPROVAL")]), action).decision, "NEEDS_APPROVAL");
+  assert.equal(evaluateParsedMandate(mandate([rule("a", "REQUIRE_APPROVAL"), rule("b", "FORBID")]), action).decision, "BLOCK");
+});

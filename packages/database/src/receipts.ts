@@ -140,12 +140,7 @@ export async function listReceiptEvents(
   }));
 }
 
-/**
- * Advance a receipt to the next lifecycle state. The database trigger
- * guards legality; a P0004 SQLSTATE is translated into
- * IllegalReceiptTransition. The transition and its event-log entry are
- * written in one transaction.
- */
+/** Advances a receipt and logs the event in one transaction. The trigger rejects illegal moves (P0004). */
 export async function advanceReceipt(
   handle: PoolHandle,
   receiptId: string,

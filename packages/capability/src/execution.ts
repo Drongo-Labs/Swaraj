@@ -27,18 +27,11 @@ export type ExecutionAdapter = {
 };
 
 export type MockExecutionOptions = {
-  /**
-   * When true (or SWARAJ_EVIDENCE_FINALITY=FINAL), return FINAL_TX_HASH so the evidence
-   * mock can declare FINAL for Phase 7 prove demos. Still not real Base finality.
-   */
+  /** Returns FINAL_TX_HASH for prove demos. Still not real Base finality. */
   declareFinal?: boolean;
 };
 
-/**
- * Mock Base/Uniswap execution adapter.
- * Only a verified, unused, unexpired capability can produce an ExecutionRef.
- * Never talks to chain RPC — returns a fixture tx hash.
- */
+/** Mock Base adapter: needs a valid capability, returns a fixture hash, never calls RPC. */
 export function createMockExecutionAdapter(
   capabilities: CapabilityService,
   options: MockExecutionOptions = {},

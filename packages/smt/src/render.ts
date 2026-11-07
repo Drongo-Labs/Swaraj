@@ -1,9 +1,6 @@
 import type { BoolTerm, CompareOp, FieldBinding, IntTerm, NamedAssertion, PolicyDoc } from "./policy.js";
 
-/**
- * Renders the exact SMT-LIB script the gateway asked Z3 to check, so every
- * decision can be stored and replayed later against any SMT solver.
- */
+/** Renders the exact SMT-LIB script, so each decision can be replayed on any solver. */
 
 function renderInt(term: IntTerm): string {
   switch (term.kind) {

@@ -10,21 +10,28 @@ import {
 export type MandateDecisionReason =
   | "PERMIT_MATCH"
   | "FORBID_MATCH"
+  | "APPROVAL_REQUIRED"
   | "DEFAULT_DENY"
   | "MANDATE_INACTIVE"
   | "SUBJECT_MISMATCH"
   | "INVALID_MANDATE"
   | "INVALID_ACTION"
+  /** The mandate names an agentSigner and the action's signature does not verify. */
+  | "INVALID_SIGNATURE"
+  /** The mandate names a programCertifier and the target has no valid certificate. */
+  | "UNVERIFIED_PROGRAM"
   /** Dual-engine cross-check failed: the predicate engine and Z3 disagree,
    * or the solver could not settle. Fail closed. */
   | "ENGINE_DISAGREEMENT";
 
 export interface MandateDecision {
-  decision: "ALLOW" | "BLOCK";
+  decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
   reason: MandateDecisionReason;
   matchedRuleIds: string[];
   matchedPermitRuleIds: string[];
   matchedForbidRuleIds: string[];
+  /** Present only on NEEDS_APPROVAL. */
+  matchedApprovalRuleIds?: string[];
 }
 
 function blocked(reason: MandateDecisionReason): MandateDecision {
@@ -114,10 +121,7 @@ export function ruleMatches(action: UnifiedAction, rule: MandateRule): boolean {
     && rule.predicates.every((predicate) => predicateMatches(action, predicate));
 }
 
-/**
- * Pure mandate evaluation. FORBID is checked globally before PERMIT;
- * absence of a matching permit is always a BLOCK (default deny).
- */
+/** FORBID first, then REQUIRE_APPROVAL, then PERMIT. No match is BLOCK (default deny). */
 export function evaluateParsedMandate(mandate: AgentMandate, action: UnifiedAction): MandateDecision {
   if (action.timestamp < mandate.validFrom || action.timestamp >= mandate.validUntil) {
     return blocked("MANDATE_INACTIVE");
@@ -143,6 +147,19 @@ export function evaluateParsedMandate(mandate: AgentMandate, action: UnifiedActi
       matchedForbidRuleIds,
     };
   }
+  const matchedApprovalRuleIds = matching
+    .filter((rule) => rule.effect === "REQUIRE_APPROVAL")
+    .map((rule) => rule.ruleId);
+  if (matchedApprovalRuleIds.length > 0) {
+    return {
+      decision: "NEEDS_APPROVAL",
+      reason: "APPROVAL_REQUIRED",
+      matchedRuleIds: matchedApprovalRuleIds,
+      matchedPermitRuleIds,
+      matchedForbidRuleIds,
+      matchedApprovalRuleIds,
+    };
+  }
   if (matchedPermitRuleIds.length > 0) {
     return {
       decision: "ALLOW",
@@ -164,3 +181,4 @@ export function evaluateMandate(mandateInput: unknown, actionInput: unknown): Ma
   return evaluateParsedMandate(mandate.data, action.data);
 }
 export * from "./crosscheck.js";
+export { diffMandates, lintMandate, ruleCanNeverMatch, type MandateDiff, type MandateIssue } from "./analysis.js";

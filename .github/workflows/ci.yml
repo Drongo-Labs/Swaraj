@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: swaraj
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: swaraj
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U swaraj -d swaraj"
+          --health-interval 3s
+          --health-timeout 2s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://swaraj:ci-only@127.0.0.1:5432/swaraj
+      SWARAJ_TEST_DATABASE_URL: postgresql://swaraj:ci-only@127.0.0.1:5432/swaraj
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply database migrations
+        run: |
+          for f in packages/database/migrations/*.sql; do
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm -r --workspace-concurrency=1 --if-present test
+
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install elan
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -o elan-init.sh
+          sh elan-init.sh -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - run: pnpm check:lean

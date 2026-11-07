@@ -49,11 +49,7 @@ export async function enqueueProofJob(
   return toJob(result.rows[0]!);
 }
 
-/**
- * Atomically lease the oldest queued job. SKIP LOCKED keeps concurrent
- * workers from fighting over the same row; attempts increments on every
- * lease so max_attempts bounds total tries.
- */
+/** Leases the oldest queued job. SKIP LOCKED isolates workers, and attempts bounds retries. */
 export async function leaseNextProofJob(handle: PoolHandle): Promise<ProofJob | undefined> {
   const result = await handle.raw.query<RawProofJobRow>(
     `UPDATE proof_jobs SET phase = 'LEASED', leased_at = now(), attempts = attempts + 1
@@ -77,10 +73,7 @@ export async function finishProofJob(
   );
 }
 
-/**
- * Release a failed lease. Goes back to QUEUED while attempts remain,
- * otherwise the job is parked as FAILED with the error text recorded.
- */
+/** Requeues a failed lease, or parks it as FAILED when attempts run out. */
 export async function failProofJob(
   handle: PoolHandle,
   jobId: number,
@@ -113,4 +106,36 @@ export async function insertProofArtifact(
     [artifact.jobId, artifact.receiptId, artifact.kind, JSON.stringify(artifact.content)],
   );
   return Number(result.rows[0]!.artifact_id);
+}
+
+/** The proof job payload and verification bundle behind a receipt, if it was proved. */
+export async function findProofRecord(
+  handle: PoolHandle,
+  receiptId: string,
+): Promise<{ payload: unknown; artifact: unknown } | undefined> {
+  const result = await handle.raw.query<{ payload: unknown; content: unknown }>(
+    `SELECT j.payload, a.content
+     FROM proof_artifacts a
+     JOIN proof_jobs j ON j.job_id = a.job_id
+     WHERE a.receipt_id = $1 AND a.kind = 'VERIFICATION_BUNDLE'
+     ORDER BY a.artifact_id DESC
+     LIMIT 1`,
+    [receiptId],
+  );
+  const row = result.rows[0];
+  return row ? { payload: row.payload, artifact: row.content } : undefined;
+}
+
+/** Queues a proof unless the receipt already has a job, so a redelivered event adds nothing. */
+export async function enqueueProofJobOnce(
+  handle: PoolHandle,
+  job: { receiptId: string; payload: unknown },
+): Promise<boolean> {
+  const result = await handle.raw.query(
+    `INSERT INTO proof_jobs (receipt_id, payload)
+     SELECT $1, $2::jsonb
+     WHERE NOT EXISTS (SELECT 1 FROM proof_jobs WHERE receipt_id = $1)`,
+    [job.receiptId, JSON.stringify(job.payload)],
+  );
+  return (result.rowCount ?? 0) > 0;
 }

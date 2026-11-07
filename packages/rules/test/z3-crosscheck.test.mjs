@@ -4,12 +4,7 @@ import { parseAgentMandate, parseUnifiedAction } from "@swaraj/schemas";
 import { evaluateParsedMandate, z3VerdictsForAction, crossCheckMandateDecision } from "../dist/index.js";
 import { RULE_POOL, ACTION_WIRES, ruleSubsets, mandateWindow } from "./helpers.mjs";
 
-/**
- * Z3 dual-engine cross-check over the bounded space: every decision the
- * predicate engine makes must be independently confirmed by Z3 (the same
- * SMT machinery the gateway uses), via one incremental session per action.
- * Any disagreement — or solver failure — fails this test.
- */
+/** Every bounded decision must be confirmed by Z3. Disagreement or solver failure fails the test. */
 
 const ACTIONS = ACTION_WIRES.map((wire, i) => parseUnifiedAction({ ...wire, intentId: `z3_${i}`, idempotencyKey: `z3_${i}` }));
 const MANDATES = [...ruleSubsets(3)].map((rules, i) => parseAgentMandate({

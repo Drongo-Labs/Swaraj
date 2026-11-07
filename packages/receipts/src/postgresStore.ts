@@ -26,10 +26,7 @@ function rowToRecord(row: Record<string, unknown>): ReceiptRecord {
   return record;
 }
 
-/**
- * Postgres-backed receipt store. Ensures stub application/policy/action rows exist so the
- * receipts FK can be satisfied without a full Phase 5 capability path.
- */
+/** Creates stub rows so receipt foreign keys hold without a full capability path. */
 export function createPostgresReceiptStore(pool: Pool): ReceiptStore {
   return {
     async create(input: CreateReceiptInput) {

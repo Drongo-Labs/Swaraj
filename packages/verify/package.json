@@ -3,8 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "swaraj-verify": "./dist/cli.js" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "bin": {
+    "swaraj-verify": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -12,7 +19,7 @@
   },
   "dependencies": {
     "@swaraj/crypto": "workspace:*",
-    "@swaraj/evidence": "workspace:*",
+    "@swaraj/near": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",
     "viem": "^2.21.0"

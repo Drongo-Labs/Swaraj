@@ -6,8 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node dist/index.js",
-    "near-demo": "node dist/near-demo.js"
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@swaraj/contracts": "workspace:*",

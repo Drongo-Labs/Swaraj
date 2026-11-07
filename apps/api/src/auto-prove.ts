@@ -1,109 +1,56 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { openPool } from "@swaraj/database";
+import { runOneProofJob } from "@swaraj/proofs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-
+/** Off with SWARAJ_AUTO_PROVE=0; it needs Postgres, where the proof queue lives. */
 function autoProveEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  void env;
-  // The merged proof package exposes the generic runOneProofJob worker. The
-  // older receipt-specific prover/service scripts were never present in either
-  // branch, so spawning them would fail after an otherwise healthy API start.
-  return false;
+  return env.SWARAJ_AUTO_PROVE !== "0" && Boolean(env.DATABASE_URL?.trim());
 }
 
-function spawnProofs(script: string, label: string) {
-  const child = spawn("pnpm", ["--filter", "@swaraj/proofs", script], {
-    cwd: root,
-    env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
-    detached: false,
-  });
-  const prefix = `[auto-prove:${label}]`;
-  child.stdout?.on("data", (chunk: Buffer) => {
-    process.stdout.write(`${prefix} ${chunk}`);
-  });
-  child.stderr?.on("data", (chunk: Buffer) => {
-    process.stderr.write(`${prefix} ${chunk}`);
-  });
-  return child;
-}
-
-function runScript(script: string, label: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const child = spawnProofs(script, label);
-    child.on("exit", (code) => {
-      const exitCode = code ?? 1;
-      console.log(`[auto-prove:${label}] exited with code ${exitCode}`);
-      resolve(exitCode);
-    });
-    child.on("error", (err) => {
-      console.error(`[auto-prove:${label}] failed to start:`, err);
-      reject(err);
-    });
-  });
-}
-
-/**
- * Fire-and-forget SP1 prove after ALLOW / BLOCK. The prover enqueues the artifact; the recurring proof
- * service (startProofService, or `pnpm --filter @swaraj/proofs worker:service`) submits it and keeps
- * polling finality, provider status and publication without further API traffic.
- * Disabled when SWARAJ_AUTO_PROVE=0 or SP1 binaries are not configured.
- */
-export function scheduleAutoProve(kind: "trade" | "decision"): void {
-  if (!autoProveEnabled()) {
-    console.log("[auto-prove] skipped (set SWARAJ_SP1_* and leave SWARAJ_AUTO_PROVE unset/1)");
-    return;
-  }
-  void runScript("prover:once", `prover-${kind}`)
-    .then((code) => {
-      if (code !== 0) console.error(`[auto-prove] prover failed (code ${code}); the ${kind} proof was not enqueued`);
-    })
-    .catch((err: unknown) => console.error("[auto-prove] prover error:", err));
-}
-
-/** Whether the API should supervise the recurring proof service itself. */
+/** Whether the API should run the proof queue itself. */
 export function embeddedProofServiceEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return autoProveEnabled(env) && env.SWARAJ_PROOF_SERVICE !== "external";
 }
 
-/**
- * Run the recurring proof service as a supervised child process, restarting it with backoff if it
- * exits. Persisted jobs resume from Postgres on every (re)start. Returns a stop function.
- */
-export function startProofService(): () => Promise<void> {
-  let child: ChildProcess | undefined;
+/** Drains jobs, then waits. Errors only delay the next pass, because leased jobs retry from Postgres. */
+export function startProofLoop(runOne: () => Promise<unknown>, idleMs = 2000): () => Promise<void> {
   let stopped = false;
-  let restartDelayMs = 2000;
-  let restartTimer: NodeJS.Timeout | undefined;
-  const launch = () => {
-    const started = Date.now();
-    child = spawnProofs("worker:service", "proof-service");
-    child.on("error", (err) => console.error("[auto-prove:proof-service] failed to start:", err));
-    child.on("exit", (code) => {
-      child = undefined;
-      if (stopped) return;
-      // A service that stayed up for a while restarts quickly; a crash loop backs off up to a minute.
-      restartDelayMs = Date.now() - started > 60_000 ? 2000 : Math.min(restartDelayMs * 2, 60_000);
-      console.error(`[auto-prove:proof-service] exited with code ${code ?? "null"}; restarting in ${restartDelayMs}ms`);
-      restartTimer = setTimeout(launch, restartDelayMs);
-    });
-  };
-  launch();
+  let wake: (() => void) | undefined;
+  const done = (async () => {
+    while (!stopped) {
+      const worked = await runOne().catch((error: unknown) => {
+        console.error("[proof-service]", error);
+        return undefined;
+      });
+      if (worked === undefined && !stopped) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, idleMs);
+          wake = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        });
+      }
+    }
+  })();
   return async () => {
     stopped = true;
-    clearTimeout(restartTimer);
-    const running = child;
-    if (!running) return;
-    await new Promise<void>((resolve) => {
-      const force = setTimeout(() => running.kill("SIGKILL"), 30_000);
-      running.once("exit", () => {
-        clearTimeout(force);
-        resolve();
-      });
-      // The service finishes its in-flight tick before exiting.
-      running.kill("SIGTERM");
-    });
+    wake?.();
+    await done;
+  };
+}
+
+export function startProofService(): () => Promise<void> {
+  const pool = openPool();
+  const { SWARAJ_SP1_ELF: elfPath, SWARAJ_SP1_HOST_BIN: hostBin } = process.env;
+  const stop = startProofLoop(() =>
+    runOneProofJob(pool, {
+      artifactRoot: process.env.SWARAJ_PROOF_ARTIFACT_ROOT ?? "./artifacts",
+      ...(elfPath && hostBin ? { sp1: { elfPath, hostBin } } : {}),
+    }),
+  );
+  return async () => {
+    await stop();
+    await pool.close();
   };
 }
 

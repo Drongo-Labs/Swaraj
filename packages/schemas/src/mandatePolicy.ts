@@ -2,11 +2,8 @@ import { z } from "zod";
 import { Address, AtomicAmount, Bps, FinalityRule, HexHash, SafeUint, UnixSeconds, Venue, compareStrings, requireStrictlyAscending, parseWith } from "./primitives.js";
 
 /**
- * Mandate policy (formerly "Policy Profile"): the typed trade limits an Agent
- * Mandate is derived from and the SMT gateway evaluates. The hash domain
- * stays `ObjectType.POLICY_PROFILE` — it is pinned by the guest ELF and the
- * committed golden vectors, and it is also the hash domain used for Agent
- * Mandate commitments.
+ * Typed trade limits behind a mandate. The `POLICY_PROFILE` hash domain is pinned by the guest ELF
+ * and golden vectors, so it must not change.
  */
 
 export const MandatePolicySchema = z

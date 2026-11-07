@@ -51,11 +51,7 @@ async function loadZ3(): Promise<{ Context: (name: string) => Z3Context }> {
   return bootstrap;
 }
 
-/**
- * One Z3 session: declared fields, accumulated assertions, and a checker
- * with a hard timeout. Anything the solver cannot settle comes back as
- * "unknown" — callers must treat that as unsafe, never as satisfied.
- */
+/** One Z3 session with a hard timeout. "unknown" must be treated as unsafe, never as satisfied. */
 export class SatSession {
   private readonly fields = new Map<string, Z3Int>();
 

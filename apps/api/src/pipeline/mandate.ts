@@ -15,18 +15,7 @@ import type {
   PolicyViolation,
 } from "@swaraj/smt";
 
-/**
- * Task 2.2 — connect the permit/forbid rules engine (`@swaraj/rules`) to the
- * gateway decision path. Every action must survive BOTH gates: the mandate
- * engine contributes FORBID_MATCH / DEFAULT_DENY (fail-closed) decisions on
- * top of the SMT policy gateway, which keeps the existing provable
- * decision/receipt pipeline intact.
- *
- * Adapter seam: until the gateway accepts the unified action format directly
- * (task 2.1), the legacy trade intent is converted to a SPOT_TRADE
- * `UnifiedAction` and the mandate is derived from the same ACTIVE policy
- * definition the SMT gateway evaluates, so the two gates stay consistent.
- */
+/** Gates every action on both the mandate engine and the SMT gateway. Legacy intents become SPOT_TRADE actions. */
 
 /** Agent the adapter signs converted intents for; task 2.1 binds the real agent. */
 export const DEMO_AGENT = "agent:demo";
@@ -71,12 +60,7 @@ function sanitizeId(raw: string, fallback: string): string {
   return cleaned.length > 0 ? cleaned : fallback;
 }
 
-/**
- * Derive an Agent Mandate from the ACTIVE policy-profile definition the SMT
- * gateway evaluates: permit known venues, forbid over the per-action amount
- * and slippage caps, deny everything else. Fail closed on a malformed policy:
- * a mandate with no permit rule default-denies every action.
- */
+/** Derives a mandate from the active policy. A malformed policy yields no permit, so everything is denied. */
 export function agentMandateFromMandatePolicy(policy: Record<string, unknown>): Record<string, unknown> {
   const version = safeInt(policy.policyVersion) ?? 1;
   const rules: Array<Record<string, unknown>> = [];
@@ -179,11 +163,8 @@ function mandateViolations(decision: MandateDecision): PolicyViolation[] {
 
 export type MandatePolicyGateway = {
   /**
-   * @param input SMT gateway input (policy/state/intent)
-   * @param unifiedAction when the request was a unified action, evaluate it
-   *   directly instead of converting the legacy intent (task 2.1 path)
-   * @param mandateDefinition when the application has a registered Agent
-   *   Mandate, evaluate against it instead of deriving one from the policy
+   * @param unifiedAction evaluated directly when set, instead of the converted intent
+   * @param mandateDefinition used when set, instead of deriving one from the policy
    */
   check(
     input: PolicyGatewayInput,
@@ -198,13 +179,8 @@ export type MandatePolicyGateOptions = {
 };
 
 /**
- * Mandate-first semantics over the SMT gateway: every action must survive BOTH
- * gates. The SMT gateway still anchors its decision in the decision log and
- * keeps the Phase 9 provable Decision Receipt path (solverStatus, violated
- * rule ids); a mandate BLOCK is layered on top, so FORBID_MATCH and
- * DEFAULT_DENY reasons surface in the violations alongside the SMT reasons.
- * A mandate-only block (SMT ALLOW) stays honest: the guest bundle cannot
- * reproduce it, so it records as a NON_PROVABLE Decision Receipt.
+ * Mandate BLOCKs layer on top of the SMT gateway. A mandate-only block records as a NON_PROVABLE
+ * Decision Receipt, because the guest cannot reproduce it.
  */
 export function createMandatePolicyGate(options: MandatePolicyGateOptions): MandatePolicyGateway {
   return {

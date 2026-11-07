@@ -41,12 +41,7 @@ export const BASE_NETWORKS: Record<BaseNetworkId, BaseNetworkConfig> = {
   },
 };
 
-/**
- * Resolve network from env:
- * - `SWARAJ_BASE_NETWORK=base|base-sepolia|sepolia`
- * - else infer from `BASE_RPC_URL` containing "sepolia"
- * - default: base (mainnet)
- */
+/** Network from `SWARAJ_BASE_NETWORK`, else from `BASE_RPC_URL`, else Base mainnet. */
 export function resolveBaseNetwork(
   env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
 ): BaseNetworkConfig {

@@ -1,18 +1,8 @@
 import type { GatewayDecision } from "./index.js";
 
 /**
- * The generic governed-turn core: an agent proposes an action, the mandate
- * gateway answers ALLOW or BLOCK, and only ALLOW executes.
- *
- * Policies (mirroring the proven trace semantics in packages/lean/Gate/Bridge.lean):
- * - RETRY   — a blocked action retries with the next compliant proposal
- *   (each still gated); exhausted retries forfeit the turn.
- * - ABSTAIN — a blocked action abstains. Never retried, never executed
- *   (money actions).
- *
- * Fail-closed: a gateway error or unreachable gateway is treated exactly like
- * BLOCK — nothing executes without an ALLOW. This is the security property
- * `Gate.exec_needs_allow` kernel-checks.
+ * Only ALLOW executes. RETRY tries the next gated proposal; ABSTAIN never retries (money actions).
+ * A gateway error counts as BLOCK. See `Gate.exec_needs_allow`.
  */
 
 export type ActResult =

@@ -1,4 +1,5 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyReply } from "fastify";
 import {
   ActionRequestSchema,
@@ -18,15 +19,33 @@ import {
   MandatePolicySchema,
   UnifiedActionSchema,
   normalizeMandatePolicy,
+  type AgentMandate,
   type UnifiedAction,
 } from "@swaraj/schemas";
-import { crossCheckMandateDecision, evaluateParsedMandate, type MandateDecision } from "@swaraj/rules";
+import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMandate, type MandateDecision } from "@swaraj/rules";
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
+import type { ActionSettler, Settlement } from "@swaraj/capability";
+import { createNearSettler } from "@swaraj/near";
+import { bundleDigest } from "@swaraj/verify";
+import {
+  githubDeploymentMatches,
+  githubReceiptId,
+  githubSignatureValid,
+  stripeEventMatches,
+  stripeReceiptId,
+  stripeSignatureValid,
+} from "@swaraj/evidence";
 import { createMemoryReceiptStore, createPostgresReceiptStore, createReceiptEngine, verifyUnifiedActionReceipt, type ReceiptStore } from "@swaraj/receipts";
 import {
   createDatabase,
   createProofJobQueue,
+  advanceReceipt,
+  claimIdempotencyKey,
   enqueueProofJob,
+  enqueueProofJobOnce,
+  findProofRecord,
+  findReceipt,
+  findReceiptByIdempotencyKey,
   insertDecision,
   insertReceipt,
   ensureApplication,
@@ -47,6 +66,11 @@ import {
   MANDATE_POLICY_ID,
   resolvePipelineMode,
   runPipeline,
+  agentSignatureValid,
+  certificateValid,
+  programAllowed,
+  ProgramCertificateSchema,
+  type ProgramCertificate,
   unifiedActionHash,
   unifiedActionToActionRequest,
   type AuditEntry,
@@ -56,7 +80,7 @@ import {
 } from "./pipeline/index.js";
 import { resolveBaseNetwork } from "@swaraj/evidence";
 import { createLiveStateOracle, type LiveStateOracle } from "./pipeline/live-state.js";
-import { proofStackStatus, scheduleAutoProve } from "./auto-prove.js";
+import { proofStackStatus } from "./auto-prove.js";
 
 export type ActivityItem = {
   id: string;
@@ -64,7 +88,8 @@ export type ActivityItem = {
   applicationId: string;
   action: string;
   idempotencyKey: string;
-  decision: "ALLOW" | "BLOCK";
+  decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
+  approvalId?: string;
   intentHash?: string;
   policyHash?: string;
   violations?: Array<{ ruleId: string; reason: string }>;
@@ -89,6 +114,10 @@ export type BuildAppOptions = {
   databaseUrl?: string;
   /** Phase 8 proof queue lookup; defaults to the Postgres queue when DATABASE_URL is set. */
   proofJobs?: Pick<ReturnType<typeof createProofJobQueue>, "getByReceipt">;
+  /** Bearer token for approval decisions; defaults to SWARAJ_APPROVER_TOKEN. */
+  approverToken?: string;
+  /** The integration that executes permitted actions. Defaults to NEAR. */
+  settler?: ActionSettler<UnifiedAction>;
 };
 
 type StoredPolicy = {
@@ -99,6 +128,24 @@ type StoredPolicy = {
   definition: Record<string, unknown>;
   policyHash: string;
 };
+
+type ApprovalRecord = {
+  approvalId: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "STALE";
+  revision: number;
+  action: unknown;
+  mandateHash: string;
+  matchedRuleIds: string[];
+  requestedAt: number;
+  decidedBy?: string;
+  decidedAt?: number;
+};
+
+const APPROVAL_DECISION_ROUTE = "/v1/applications/:applicationId/approvals/:approvalId/decision";
+const ApprovalDecisionSchema = z.strictObject({
+  decision: z.enum(["APPROVE", "REJECT"]),
+  approver: z.string().regex(/^[A-Za-z0-9._:@-]{1,128}$/),
+});
 
 const DEV_SIGNER_KEY = "0x" + "11".repeat(32);
 
@@ -112,6 +159,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const app = Fastify({ bodyLimit: 65536 });
   const amountSolver = await createAmountSolver();
   const expected = Buffer.from(`Bearer ${token}`);
+  const approverToken = options.approverToken ?? process.env.SWARAJ_APPROVER_TOKEN ?? "";
+  if (approverToken.length > 0 && approverToken.length < 32) {
+    throw new Error("SWARAJ_APPROVER_TOKEN must contain at least 32 characters");
+  }
+  if (approverToken === token) throw new Error("SWARAJ_APPROVER_TOKEN must differ from SWARAJ_DEV_TOKEN");
+  const approverExpected = approverToken ? Buffer.from(`Bearer ${approverToken}`) : undefined;
 
   let pool: Pool | undefined;
   let proofJobs = options.proofJobs;
@@ -151,6 +204,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
   const { evidence, capabilities, execution, labels } = stack;
+  const settler = options.settler ?? createNearSettler(capabilities, signer);
   const liveState: LiveStateOracle | undefined =
     pipelineMode === "base"
       ? createLiveStateOracle({
@@ -243,7 +297,17 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       return reply.code(204).send();
     }
     if (request.routeOptions.url === "/health") return;
+    // Webhooks carry the provider's signature instead of a bearer token.
+    if (request.routeOptions.url?.startsWith("/v1/webhooks/")) return;
     const supplied = Buffer.from(request.headers.authorization ?? "");
+    if (request.routeOptions.url === APPROVAL_DECISION_ROUTE) {
+      // Fails closed: with no approver token set, nothing can be approved.
+      if (!approverExpected) return reply.code(403).send({ error: "approvals_not_configured" });
+      if (supplied.length !== approverExpected.length || !timingSafeEqual(supplied, approverExpected)) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      return;
+    }
     if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
       return reply.code(401).send({ error: "unauthorized" });
     }
@@ -482,11 +546,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /**
-   * Shared action handling: run the pipeline (SMT + mandate gates) and
-   * respond with the Phase 8/9 receipt/decision-receipt bookkeeping.
-   * Used by the legacy actions route and the unified-actions route (task 2.1).
-   */
+  /** Shared action handling: runs both gates and records receipts for the action routes. */
   const runActionRoute = async (
     applicationId: string,
     actionRequest: ActionRequest,
@@ -516,9 +576,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           decisionReceipt: decisionReceipt as Record<string, unknown>,
         };
         activityLog.push(activity);
-        if (pipelineMode === "base" && decisionReceipt && "id" in decisionReceipt && decisionReceipt.id) {
-          scheduleAutoProve("decision");
-        }
         return reply.code(200).send({
           decision: "BLOCK",
           violations: result.violations,
@@ -550,9 +607,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         ...(result.policyHash ? { policyHash: result.policyHash } : {}),
       };
       activityLog.push(activity);
-      if (pipelineMode === "base") {
-        scheduleAutoProve("trade");
-      }
       return reply.code(200).send({
         decision: "ALLOW",
         receiptId: result.receiptId,
@@ -583,6 +637,445 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return runActionRoute(request.params.applicationId, body, request.log, reply);
   });
 
+  const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || undefined;
+  const githubSecret = process.env.GITHUB_WEBHOOK_SECRET?.trim() || undefined;
+  const pendingJobKey = (receiptId: string) => `pending_job_${receiptId}`;
+  /** Which provider's signed record settles this action; undefined when none is configured. */
+  const signedRecordProvider = (action: UnifiedAction): "stripe" | "github" | undefined => {
+    if (stripeSecret && action.action === "PAYMENT" && action.resource.service === "stripe") return "stripe";
+    if (githubSecret && action.action === "DEPLOY") return "github";
+    return undefined;
+  };
+
+  /** Records, executes and queues proof for an action cleared to run, automatically or by a person. */
+  const settleAllowed = async (ctx: {
+    applicationId: string;
+    action: UnifiedAction;
+    wireAction: unknown;
+    mandateDefinition: unknown;
+    mandateVersion: number;
+    decision: "ALLOW" | "NEEDS_APPROVAL";
+    matchedRuleIds: string[];
+    reason: string;
+    approvedBy?: string;
+    log: { error: (message: unknown) => void };
+    reply: FastifyReply;
+  }) => {
+    const { applicationId, action, wireAction, mandateDefinition, mandateVersion, decision, matchedRuleIds, reason, approvedBy, log, reply } = ctx;
+    const at = Math.floor(Date.now() / 1000);
+    const intentHash = unifiedActionHash(action);
+    const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+    // Permitted non-Base actions: durable
+    // PENDING receipt + optional mandate proof job (pool mode). Fixture
+    // execution adapters live in @swaraj/capability / @swaraj/evidence.
+    let proofReceipt: { id: string; state: string } | undefined;
+    let settlement: Settlement | undefined;
+    if (pool) {
+      const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
+      try {
+        // A replay returns the original outcome and must never execute again.
+        const replay = await findReceiptByIdempotencyKey(handle, applicationId, action.idempotencyKey);
+        if (replay) {
+          if (replay.intentDigest !== intentHash) {
+            return reply.code(409).send({ error: "idempotency_conflict" });
+          }
+          return reply.code(200).send({
+            decision: "ALLOW",
+            productStatus: productStatusFromReceipt(replay.state),
+            status: replay.state,
+            replayed: true,
+            intentHash,
+            policyHash,
+            receipt: { id: replay.receiptId, state: replay.state },
+            receiptId: replay.receiptId,
+          });
+        }
+        const receiptId = randomUUID();
+        // The receipts table references the applications registry — make
+        // sure the application row exists (idempotent).
+        await handle.raw.query(
+          "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
+          [applicationId],
+        );
+        // Log the decision (authz_decisions) — the receipt's decision_id
+        // references it.
+        const logged = await insertDecision(handle, {
+          appId: applicationId,
+          intentDigest: intentHash,
+          policyId: MANDATE_POLICY_ID,
+          policyRevision: mandateVersion,
+          outcome: "ALLOW",
+          violatedRules: matchedRuleIds,
+          smtScript: "",
+        });
+        await insertReceipt(handle, {
+          receiptId,
+          appId: applicationId,
+          intentDigest: intentHash,
+          decisionId: Number(logged.decisionId),
+          claim: {
+            kind: "MANDATE_DECISION_V1",
+            action: wireAction,
+            decision,
+            matchedRuleIds,
+            intentHash,
+            mandateHash: policyHash,
+            ...(approvedBy !== undefined ? { approvedBy } : {}),
+          },
+        });
+        const claimed = await claimIdempotencyKey(handle, {
+          appId: applicationId,
+          idemKey: action.idempotencyKey,
+          intentDigest: intentHash,
+          receiptId,
+        });
+        if (!claimed) {
+          await advanceReceipt(handle, receiptId, "INVALIDATED", { note: "lost the idempotency race" });
+          return reply.code(409).send({ error: "idempotency_conflict" });
+        }
+        proofReceipt = { id: receiptId, state: "PENDING" };
+
+        // The receipt exists before anything moves on chain.
+        if (settler.handles(action)) {
+          settlement = await settler.settle(action, { applicationId, intentHash, policyHash });
+        }
+        if (signedRecordProvider(action) !== undefined) {
+          // The provider does the work; its signed webhook settles this receipt.
+          await saveActiveDefinition(applicationId, pendingJobKey(receiptId), 1, {
+            kind: "MANDATE",
+            mandate: mandateDefinition,
+            action: wireAction,
+            expected: { decision, matchedRuleIds },
+            intentHash,
+            mandateHash: policyHash,
+            ...(approvedBy !== undefined ? { approvedBy } : {}),
+          });
+        } else if (settlement?.status === "NOT_PROVABLE") {
+          await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
+          proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
+        } else {
+          await enqueueProofJob(handle, {
+            receiptId,
+            payload: {
+              kind: "MANDATE",
+              mandate: mandateDefinition,
+              action: wireAction,
+              expected: { decision, matchedRuleIds },
+              intentHash,
+              mandateHash: policyHash,
+              ...(approvedBy !== undefined ? { approvedBy } : {}),
+              ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
+              ...(settlement?.status === "FINAL" && settlement.chainExecution ? { chainExecution: settlement.chainExecution } : {}),
+            },
+          });
+        }
+      } catch (error) {
+        log.error(error);
+      }
+    }
+    const engineStatus: EngineReceiptStatus = proofReceipt
+      ? (proofReceipt.state as EngineReceiptStatus)
+      : "NOT_EXECUTABLE";
+    const productStatus = productStatusFromDecision("ALLOW", engineStatus);
+    const activity: ActivityItem = {
+      id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+      at,
+      applicationId,
+      action: action.action,
+      idempotencyKey: action.idempotencyKey,
+      decision: "ALLOW",
+      status: engineStatus,
+      productStatus,
+      intentHash,
+      policyHash,
+      ...(proofReceipt ? { receiptId: proofReceipt.id } : {}),
+    };
+    activityLog.push(activity);
+    return reply.code(200).send({
+      decision: "ALLOW",
+      ...(approvedBy !== undefined ? { approvedBy } : {}),
+      productStatus,
+      mandate: { reason, matchedPermitRuleIds: matchedRuleIds },
+      status: engineStatus,
+      intentHash,
+      policyHash,
+      activityId: activity.id,
+      ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
+      ...(settlement
+        ? {
+            execution: {
+              live: settler.live,
+              ...(settlement.txHash ? { txHash: settlement.txHash } : {}),
+              ...(settlement.chainTx ? { chainTx: settlement.chainTx } : {}),
+              ...(settlement.status === "NOT_PROVABLE" ? { reason: settlement.reason } : {}),
+            },
+          }
+        : {}),
+    });
+
+  };
+
+  const saveActiveDefinition = async (
+    applicationId: string,
+    policyId: string,
+    version: number,
+    definition: Record<string, unknown>,
+  ): Promise<string> => {
+    const policyHash = hashObject(ObjectType.POLICY_PROFILE, definition);
+    if (pool) {
+      await ensureApplication(pool, applicationId, applicationId);
+      await upsertActivePolicy(pool, { applicationId, policyId, version, definition, policyHash });
+      return policyHash;
+    }
+    for (const [key, existing] of policiesMemory) {
+      if (existing.applicationId === applicationId && existing.policyId === policyId && existing.status === "ACTIVE") {
+        policiesMemory.set(key, { ...existing, status: "RETIRED" });
+      }
+    }
+    policiesMemory.set(`${applicationId}:${policyId}:${version}`, {
+      applicationId,
+      policyId,
+      version,
+      status: "ACTIVE",
+      definition,
+      policyHash,
+    });
+    return policyHash;
+  };
+
+  // ponytail: approvals reuse the versioned policy store, one row per approval;
+  // give them a table when they need listing or querying.
+  const approvalKey = (approvalId: string) => `approval_${approvalId}`;
+  const saveApproval = (applicationId: string, record: ApprovalRecord) =>
+    saveActiveDefinition(applicationId, approvalKey(record.approvalId), record.revision, record);
+  const loadApproval = async (applicationId: string, approvalId: string) =>
+    (await loadActivePolicy(applicationId, approvalKey(approvalId))) as ApprovalRecord | undefined;
+
+  app.get<{ Params: { applicationId: string; approvalId: string } }>(
+    "/v1/applications/:applicationId/approvals/:approvalId",
+    async (request, reply) => {
+      const { applicationId, approvalId } = request.params;
+      if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(approvalId).success) {
+        return reply.code(400).send({ error: "invalid_approval_id" });
+      }
+      const record = await loadApproval(applicationId, approvalId);
+      if (!record) return reply.code(404).send({ error: "approval_not_found" });
+      return record;
+    },
+  );
+
+  /** Applies a provider's signed record to the receipt it names. */
+  const settleFromRecord = async (
+    receiptId: string | undefined,
+    rawBody: string,
+    matches: (action: UnifiedAction) => boolean,
+    reply: FastifyReply,
+  ) => {
+    if (!pool || receiptId === undefined || !Identifier.safeParse(receiptId).success) {
+      return reply.code(200).send({ ignored: true });
+    }
+    const handle = { raw: pool, close: async () => {} };
+    const ledger = await findReceipt(handle, receiptId);
+    const job = ledger ? await loadActivePolicy(ledger.appId, pendingJobKey(receiptId)) : undefined;
+    if (!ledger || !job) return reply.code(200).send({ ignored: true });
+    // Providers redeliver webhooks; only the first one can settle a receipt.
+    if (ledger.state !== "PENDING") return reply.code(200).send({ state: ledger.state });
+    const action = UnifiedActionSchema.parse(job.action);
+    if (!matches(action)) {
+      await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: "SIGNED_RECORD_MISMATCH" });
+      return reply.code(200).send({ state: "NON_PROVABLE" });
+    }
+    const evidenceDigest = `0x${createHash("sha256").update(rawBody).digest("hex")}`;
+    await enqueueProofJobOnce(handle, { receiptId, payload: { ...job, evidenceDigest } });
+    return reply.code(200).send({ state: "PENDING", evidenceDigest });
+  };
+
+  // Webhooks are signed over the exact bytes, so this scope keeps the raw body.
+  await app.register(async (scope) => {
+    scope.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => done(null, body));
+
+    scope.post<{ Body: string }>("/v1/webhooks/stripe", async (request, reply) => {
+      const header = request.headers["stripe-signature"];
+      const now = Math.floor(Date.now() / 1000);
+      if (!stripeSecret || typeof header !== "string" || !stripeSignatureValid(request.body, header, stripeSecret, now)) {
+        return reply.code(401).send({ error: "invalid_signature" });
+      }
+      const event = JSON.parse(request.body) as unknown;
+      return settleFromRecord(stripeReceiptId(event), request.body, (action) =>
+        action.action === "PAYMENT" && stripeEventMatches(event, {
+          amount: action.context.amount.toString(),
+          currency: action.context.currency,
+          recipient: action.context.recipient,
+        }), reply);
+    });
+
+    scope.post<{ Body: string }>("/v1/webhooks/github", async (request, reply) => {
+      const header = request.headers["x-hub-signature-256"];
+      if (!githubSecret || typeof header !== "string" || !githubSignatureValid(request.body, header, githubSecret)) {
+        return reply.code(401).send({ error: "invalid_signature" });
+      }
+      const event = JSON.parse(request.body) as unknown;
+      // Other deployment states are progress updates, not outcomes.
+      if ((event as { deployment_status?: { state?: string } }).deployment_status?.state === "in_progress") {
+        return reply.code(200).send({ ignored: true });
+      }
+      return settleFromRecord(githubReceiptId(event), request.body, (action) =>
+        action.action === "DEPLOY" && githubDeploymentMatches(event, {
+          repo: action.resource.repo,
+          commitHash: action.context.commitHash,
+          environment: action.context.environment,
+        }), reply);
+    });
+  });
+
+  const CERTIFICATES_ID = "program_certificates";
+  const loadCertificates = async (applicationId: string) => {
+    const stored = (await loadActivePolicy(applicationId, CERTIFICATES_ID)) as
+      | { revision: number; certificates: ProgramCertificate[] }
+      | undefined;
+    return stored ?? { revision: 0, certificates: [] };
+  };
+
+  /** Mandate-level checks outside the rule engine. Returns why the action may not proceed. */
+  const mandateGateFailure = async (
+    applicationId: string,
+    mandate: AgentMandate,
+    action: UnifiedAction,
+  ): Promise<"INVALID_SIGNATURE" | "UNVERIFIED_PROGRAM" | undefined> => {
+    if (mandate.agentSigner !== undefined && !(await agentSignatureValid(action, mandate.agentSigner))) {
+      return "INVALID_SIGNATURE";
+    }
+    if (mandate.programCertifier !== undefined) {
+      const { certificates } = await loadCertificates(applicationId);
+      if (!(await programAllowed(action, mandate.programCertifier, certificates, Date.now()))) {
+        return "UNVERIFIED_PROGRAM";
+      }
+    }
+    return undefined;
+  };
+
+  /** Adds a certificate. Only one signed by the active mandate's certifier is accepted. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/program-certificates",
+    async (request, reply) => {
+      const { applicationId } = request.params;
+      const certificate = ProgramCertificateSchema.safeParse(request.body);
+      if (!Identifier.safeParse(applicationId).success || !certificate.success) {
+        return reply.code(400).send({ error: "invalid_certificate" });
+      }
+      const mandate = AgentMandateSchema.safeParse(await loadActivePolicy(applicationId, MANDATE_POLICY_ID));
+      const certifier = mandate.success ? mandate.data.programCertifier : undefined;
+      if (certifier === undefined || !(await certificateValid(certificate.data, certifier, Date.now()))) {
+        return reply.code(422).send({ error: "certificate_rejected" });
+      }
+      const stored = await loadCertificates(applicationId);
+      const certificates = [
+        ...stored.certificates.filter((c) => c.program !== certificate.data.program),
+        certificate.data,
+      ];
+      const revision = stored.revision + 1;
+      await saveActiveDefinition(applicationId, CERTIFICATES_ID, revision, { revision, certificates });
+      return reply.code(201).send({ program: certificate.data.program, codeHash: certificate.data.codeHash });
+    },
+  );
+
+  /** A person's decision. Needs the approver token: the agent's token cannot reach this route. */
+  app.post<{ Params: { applicationId: string; approvalId: string } }>(
+    APPROVAL_DECISION_ROUTE,
+    async (request, reply) => {
+      const { applicationId, approvalId } = request.params;
+      const body = ApprovalDecisionSchema.safeParse(request.body);
+      if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(approvalId).success || !body.success) {
+        return reply.code(400).send({ error: "invalid_approval_decision" });
+      }
+      const record = await loadApproval(applicationId, approvalId);
+      if (!record) return reply.code(404).send({ error: "approval_not_found" });
+      if (record.status !== "PENDING") {
+        return reply.code(409).send({ error: "approval_already_decided", status: record.status });
+      }
+      const close = async (status: ApprovalRecord["status"]) => {
+        await saveApproval(applicationId, {
+          ...record,
+          status,
+          revision: record.revision + 1,
+          decidedBy: body.data.approver,
+          decidedAt: Date.now(),
+        });
+      };
+      if (body.data.decision === "REJECT") {
+        await close("REJECTED");
+        return reply.code(200).send({ decision: "BLOCK", productStatus: "blocked", approvalId, status: "REJECTED" });
+      }
+
+      const action = UnifiedActionSchema.parse(record.action);
+      if (Date.now() >= action.expiry) {
+        await close("EXPIRED");
+        return reply.code(409).send({ error: "approval_expired" });
+      }
+      // The approval covers the mandate it was requested under, never a later one.
+      const mandateDefinition = await loadActivePolicy(applicationId, MANDATE_POLICY_ID);
+      const mandate = AgentMandateSchema.safeParse(mandateDefinition);
+      const current = mandate.success ? evaluateParsedMandate(mandate.data, action) : undefined;
+      if (
+        !mandate.success ||
+        !current ||
+        hashObject(ObjectType.POLICY_PROFILE, mandateDefinition) !== record.mandateHash ||
+        current.decision !== "NEEDS_APPROVAL"
+      ) {
+        await close("STALE");
+        return reply.code(409).send({ error: "mandate_changed" });
+      }
+      const gateFailure = await mandateGateFailure(applicationId, mandate.data, action);
+      if (gateFailure !== undefined) {
+        await close("STALE");
+        return reply.code(409).send({ error: "gate_failed", reason: gateFailure });
+      }
+      // ponytail: the Base pipeline re-gates on ALLOW only, so it cannot run an approved action yet.
+      if (action.action === "SPOT_TRADE" && isBaseSpotVenue(action.resource.venue)) {
+        return reply.code(409).send({ error: "approval_unsupported_for_venue" });
+      }
+      await close("APPROVED");
+      return settleAllowed({
+        applicationId,
+        action,
+        wireAction: record.action,
+        mandateDefinition,
+        mandateVersion: mandate.data.version,
+        decision: "NEEDS_APPROVAL",
+        matchedRuleIds: current.matchedRuleIds,
+        reason: current.reason,
+        approvedBy: body.data.approver,
+        log: request.log,
+        reply,
+      });
+    },
+  );
+
+  /** Dry run: what is wrong with a candidate mandate, and what it would change. Nothing is saved. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/mandates/check",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application" });
+      }
+      const parsed = AgentMandateSchema.safeParse(request.body);
+      if (!parsed.success) {
+        const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
+          path: issue.path.join(".") || "(root)",
+          message: issue.message,
+        }));
+        return reply.code(400).send({ error: "invalid_mandate", issues });
+      }
+      const active = AgentMandateSchema.safeParse(
+        await loadActivePolicy(request.params.applicationId, MANDATE_POLICY_ID),
+      );
+      return {
+        issues: lintMandate(parsed.data),
+        ...(active.success ? { diff: diffMandates(active.data, parsed.data) } : {}),
+      };
+    },
+  );
+
   /** Task 2.1 (Agent Mandate): register the application's ACTIVE mandate. */
   app.post<{ Params: { applicationId: string } }>(
     "/v1/applications/:applicationId/mandates",
@@ -603,44 +1096,17 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       const definition = normalizeAgentMandate(
         request.body as { rules: Array<{ ruleId: string }> },
       ) as Record<string, unknown>;
-      const mandateHash = hashObject(ObjectType.POLICY_PROFILE, definition);
       const version =
         typeof (definition as { version?: unknown }).version === "number"
           ? ((definition as { version: number }).version)
           : 1;
-      if (pool) {
-        await ensureApplication(pool, applicationId, applicationId);
-        await upsertActivePolicy(pool, {
-          applicationId,
-          policyId: MANDATE_POLICY_ID,
-          version,
-          definition,
-          policyHash: mandateHash,
-        });
-      } else {
-        for (const [key, existing] of policiesMemory) {
-          if (
-            existing.applicationId === applicationId &&
-            existing.policyId === MANDATE_POLICY_ID &&
-            existing.status === "ACTIVE"
-          ) {
-            policiesMemory.set(key, { ...existing, status: "RETIRED" });
-          }
-        }
-        policiesMemory.set(`${applicationId}:${MANDATE_POLICY_ID}:${version}`, {
-          applicationId,
-          policyId: MANDATE_POLICY_ID,
-          version,
-          status: "ACTIVE",
-          definition,
-          policyHash: mandateHash,
-        });
-      }
+      const mandateHash = await saveActiveDefinition(applicationId, MANDATE_POLICY_ID, version, definition);
       return reply.code(201).send({
         mandateId: String(definition.mandateId),
         version,
         policyHash: mandateHash,
         ruleCount: Array.isArray(definition.rules) ? definition.rules.length : 0,
+        issues: lintMandate(parsed.data),
       });
     },
   );
@@ -658,12 +1124,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /**
-   * Task 2.1: gateway input for the unified action format. The action is
-   * strictly validated, evaluated against the application's ACTIVE Agent
-   * Mandate (registered mandate, else derived from the active policy), and
-   * SPOT_TRADE allows feed the existing execution/receipt pipeline.
-   */
+  /** Gateway for unified actions: checks the active mandate, then settles what it allows. */
   app.post<{ Params: { applicationId: string } }>(
     "/v1/applications/:applicationId/unified-actions",
     async (request, reply) => {
@@ -728,8 +1189,19 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         }
       }
 
+      const gateFailure = mandateParsed.success ? await mandateGateFailure(applicationId, mandateParsed.data, action) : undefined;
+      if (gateFailure !== undefined) {
+        evaluated = {
+          decision: "BLOCK",
+          reason: gateFailure,
+          matchedRuleIds: [],
+          matchedPermitRuleIds: [],
+          matchedForbidRuleIds: [],
+        };
+      }
+
       // Base SPOT_TRADE survives the mandate: run the full pipeline (SMT gate,
-      // capability, Uniswap execution, receipts). NEAR SPOT_TRADE / PAYMENT use
+      // capability, Uniswap execution, receipts). Other actions use
       // the durable mandate-receipt path below (fixture adapters; Phase 2).
       if (
         evaluated.decision === "ALLOW" &&
@@ -752,6 +1224,43 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       const at = Math.floor(Date.now() / 1000);
       const intentHash = unifiedActionHash(action);
       const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+
+      if (evaluated.decision === "NEEDS_APPROVAL") {
+        const approvalId = `appr_${intentHash.slice(2, 34)}`;
+        const existing = await loadApproval(applicationId, approvalId);
+        const record: ApprovalRecord = existing ?? {
+          approvalId,
+          status: "PENDING",
+          revision: 1,
+          action: (request.body as { action?: unknown })?.action,
+          mandateHash: policyHash,
+          matchedRuleIds: evaluated.matchedRuleIds,
+          requestedAt: Date.now(),
+        };
+        if (!existing) await saveApproval(applicationId, record);
+        const productStatus = productStatusFromDecision("NEEDS_APPROVAL");
+        activityLog.push({
+          id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+          at,
+          applicationId,
+          action: action.action,
+          idempotencyKey: action.idempotencyKey,
+          decision: "NEEDS_APPROVAL",
+          intentHash,
+          policyHash,
+          productStatus,
+          approvalId,
+        });
+        return reply.code(202).send({
+          decision: "NEEDS_APPROVAL",
+          productStatus,
+          mandate: { reason: evaluated.reason, matchedRuleIds: evaluated.matchedRuleIds },
+          intentHash,
+          policyHash,
+          approvalId,
+          approvalStatus: record.status,
+        });
+      }
 
       if (evaluated.decision === "BLOCK") {
         const matched = [...evaluated.matchedForbidRuleIds, ...evaluated.matchedPermitRuleIds];
@@ -801,86 +1310,17 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         });
       }
 
-      // Permitted NEAR trade / payment / other non-Base actions: durable
-      // PENDING receipt + optional mandate proof job (pool mode). Fixture
-      // execution adapters live in @swaraj/capability / @swaraj/evidence.
-      let proofReceipt: { id: string; state: string } | undefined;
-      if (pool) {
-        try {
-          const receiptId = randomUUID();
-          const handle = { raw: pool, close: async () => {} }; // PoolHandle adapter over the pg pool
-          // The receipts table references the applications registry — make
-          // sure the application row exists (idempotent).
-          await handle.raw.query(
-            "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
-            [applicationId],
-          );
-          // Log the decision (authz_decisions) — the receipt's decision_id
-          // references it.
-          const logged = await insertDecision(handle, {
-            appId: applicationId,
-            intentDigest: intentHash,
-            policyId: MANDATE_POLICY_ID,
-            policyRevision: mandateParsed.success ? mandateParsed.data.version : 1,
-            outcome: "ALLOW",
-            violatedRules: evaluated.matchedPermitRuleIds,
-            smtScript: "",
-          });
-          await insertReceipt(handle, {
-            receiptId,
-            appId: applicationId,
-            intentDigest: intentHash,
-            decisionId: Number(logged.decisionId),
-            claim: {
-              kind: "MANDATE_DECISION_V1",
-              action: (request.body as { action?: unknown })?.action,
-              decision: "ALLOW",
-              matchedRuleIds: evaluated.matchedPermitRuleIds,
-              intentHash,
-              mandateHash: policyHash,
-            },
-          });
-          await enqueueProofJob(handle, {
-            receiptId,
-            payload: {
-              kind: "MANDATE",
-              mandate: mandateDefinition,
-              action: (request.body as { action?: unknown })?.action,
-              expected: { decision: "ALLOW", matchedRuleIds: evaluated.matchedPermitRuleIds },
-              intentHash,
-              mandateHash: policyHash,
-            },
-          });
-          proofReceipt = { id: receiptId, state: "PENDING" };
-        } catch (error) {
-          request.log.error(error);
-        }
-      }
-      const engineStatus: EngineReceiptStatus = proofReceipt ? "PENDING" : "NOT_EXECUTABLE";
-      const productStatus = productStatusFromDecision("ALLOW", engineStatus);
-      const activity: ActivityItem = {
-        id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
-        at,
+      return settleAllowed({
         applicationId,
-        action: action.action,
-        idempotencyKey: action.idempotencyKey,
+        action,
+        wireAction: (request.body as { action?: unknown })?.action,
+        mandateDefinition,
+        mandateVersion: mandateParsed.success ? mandateParsed.data.version : 1,
         decision: "ALLOW",
-        status: engineStatus,
-        productStatus,
-        intentHash,
-        policyHash,
-        ...(proofReceipt ? { receiptId: proofReceipt.id } : {}),
-      };
-      activityLog.push(activity);
-      return reply.code(200).send({
-        decision: "ALLOW",
-        productStatus,
-        mandate: { reason: evaluated.reason, matchedPermitRuleIds: evaluated.matchedPermitRuleIds },
-        status: engineStatus,
-        intentHash,
-        policyHash,
-        activityId: activity.id,
-        ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
+        matchedRuleIds: evaluated.matchedPermitRuleIds,
+        reason: evaluated.reason,
+        log: request.log,
+        reply,
       });
     },
   );
@@ -926,11 +1366,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /**
-   * Task 3.2: verify a receipt against the unified action format. Checks the
-   * stored action against the strict schema, recomputes its canonical hash,
-   * verifies the issuer signature and the record↔signed-receipt binding.
-   */
+  /** Verifies a receipt's action, hash, issuer signature and binding. */
   app.get<{ Params: { applicationId: string; receiptId: string } }>(
     "/v1/applications/:applicationId/receipts/:receiptId/verify",
     async (request, reply) => {
@@ -970,7 +1406,23 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         return reply.code(400).send({ error: "invalid_receipt_id" });
       }
       const record = await receipts.getReceipt(request.params.applicationId, request.params.receiptId);
-      if (!record) return reply.code(404).send({ error: "receipt_not_found" });
+      if (!record) {
+        // Mandate receipts (non-Base actions) live in the proof ledger, not the trade store.
+        const ledger = pool
+          ? await findReceipt({ raw: pool, close: async () => {} }, request.params.receiptId)
+          : undefined;
+        if (!ledger || ledger.appId !== request.params.applicationId) {
+          return reply.code(404).send({ error: "receipt_not_found" });
+        }
+        return {
+          receiptId: ledger.receiptId,
+          status: ledger.state,
+          productStatus: productStatusFromReceipt(ledger.state),
+          claim: ledger.claim,
+          intentHash: ledger.intentDigest,
+          proof: { ...(ledger.proofRef ? { reference: ledger.proofRef } : {}) },
+        };
+      }
       const key = `${request.params.applicationId}:${request.params.receiptId}`;
       const proofJob = await proofJobs?.getByReceipt(request.params.applicationId, request.params.receiptId);
       const storedBundle = await proofs.getTradeBundle(request.params.applicationId, request.params.receiptId);
@@ -998,6 +1450,60 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           proofs: storedBundle || proveContexts.has(key) ? "guest_bundle_ready" : "not_configured",
           claimScope: "TRADE_RECEIPT_V1",
         },
+      };
+    },
+  );
+
+  /** Portable proof of a mandate receipt; `swaraj-verify` checks it with no Swaraj service. */
+  app.get<{ Params: { applicationId: string; receiptId: string } }>(
+    "/v1/applications/:applicationId/receipts/:receiptId/bundle",
+    async (request, reply) => {
+      const { applicationId, receiptId } = request.params;
+      if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(receiptId).success) {
+        return reply.code(400).send({ error: "invalid_receipt_id" });
+      }
+      if (!pool) return reply.code(404).send({ error: "receipt_not_found" });
+      const handle = { raw: pool, close: async () => {} };
+      const ledger = await findReceipt(handle, receiptId);
+      if (!ledger || ledger.appId !== applicationId) {
+        return reply.code(404).send({ error: "receipt_not_found" });
+      }
+      const record = await findProofRecord(handle, receiptId);
+      if (ledger.state !== "PROVED" || !ledger.proofRef || !record) {
+        return reply.code(409).send({ error: "receipt_not_proved", state: ledger.state });
+      }
+      const job = record.payload as {
+        action: unknown;
+        mandate: unknown;
+        intentHash: string;
+        mandateHash: string;
+        expected: { decision: string; matchedRuleIds: string[] };
+        approvedBy?: string;
+        evidenceDigest?: string;
+        chainExecution?: unknown;
+      };
+      const artifact = record.artifact as { statementId: string; canonicalText: string };
+      const unsigned = {
+        receiptId,
+        state: ledger.state,
+        proofRef: ledger.proofRef,
+        statementId: artifact.statementId,
+      };
+      return {
+        version: "swaraj/receipt-bundle/v1",
+        ...unsigned,
+        action: job.action,
+        mandate: job.mandate,
+        intentHash: job.intentHash,
+        mandateHash: job.mandateHash,
+        decision: job.expected.decision,
+        matchedRuleIds: job.expected.matchedRuleIds,
+        ...(job.approvedBy !== undefined ? { approvedBy: job.approvedBy } : {}),
+        ...(job.evidenceDigest !== undefined ? { evidenceDigest: job.evidenceDigest } : {}),
+        ...(job.chainExecution !== undefined ? { chainExecution: job.chainExecution } : {}),
+        statementText: artifact.canonicalText,
+        issuer: signer.address,
+        signature: await signer.signDigest(bundleDigest(unsigned)),
       };
     },
   );

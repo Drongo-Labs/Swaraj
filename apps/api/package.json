@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test --test-concurrency 1 test/*.test.mjs",
     "start": "node --env-file-if-exists=../../.env dist/main.js"
   },
   "dependencies": {
@@ -15,14 +15,17 @@
     "@swaraj/crypto": "workspace:*",
     "@swaraj/database": "workspace:*",
     "@swaraj/evidence": "workspace:*",
+    "@swaraj/near": "workspace:*",
     "@swaraj/proofs": "workspace:*",
     "@swaraj/receipts": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",
     "@swaraj/smt": "workspace:*",
+    "@swaraj/verify": "workspace:*",
     "fastify": "^5.6.0",
     "pg": "^8.16.0",
-    "viem": "^2.21.0"
+    "viem": "^2.21.0",
+    "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/pg": "^8.15.0"

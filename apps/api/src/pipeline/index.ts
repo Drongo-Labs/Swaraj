@@ -50,6 +50,8 @@ export {
 } from "./mandate.js";
 export {
   MANDATE_POLICY_ID,
+  agentSignatureValid,
   unifiedActionHash,
   unifiedActionToActionRequest,
 } from "./unified.js";
+export { certificateDigest, certificateValid, programAllowed, programOf, ProgramCertificateSchema, type ProgramCertificate } from "./programs.js";

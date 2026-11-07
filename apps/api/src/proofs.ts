@@ -118,10 +118,7 @@ function postgresBackend(pool: Pool): Backend {
   };
 }
 
-/**
- * Records what the Phase 8/9 provers need: the receipt-bound trade bundle for a provable ALLOW, and a
- * Decision Receipt plus its decision bundle for a provable BLOCK. Nothing here marks anything PROVED.
- */
+/** Records what provers need for provable ALLOWs and BLOCKs. Never marks anything PROVED. */
 export function createProofRecorder(options: { pool?: Pool; decisionLog: DecisionLog }) {
   const backend = options.pool ? postgresBackend(options.pool) : memoryBackend();
   const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

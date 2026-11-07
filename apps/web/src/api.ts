@@ -67,7 +67,7 @@ export type PolicyView = {
 };
 
 /** Phase 2 product-facing status (honest mapping of engine state). */
-export type ProductStatus = "allowed" | "blocked" | "proved" | "cant_prove";
+export type ProductStatus = "allowed" | "blocked" | "proved" | "cant_prove" | "needs_approval";
 
 export type ActionResult =
   | {
@@ -101,7 +101,7 @@ export type ActivityItem = {
   at: number;
   action: string;
   idempotencyKey: string;
-  decision: "ALLOW" | "BLOCK";
+  decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
   intentHash?: string;
   policyHash?: string;
   violations?: Array<{ ruleId: string; reason: string }>;

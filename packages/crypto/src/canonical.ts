@@ -57,8 +57,7 @@ function serialize(value: unknown, path: string, depth: number): string {
 }
 
 /**
- * UTF-8 JSON, keys sorted by code point, no whitespace. Strings use JSON.stringify escaping
- * (`\"`, `\\`, `\b\f\n\r\t`, other control chars as lowercase `\u00xx`, everything else literal UTF-8).
+ * UTF-8 JSON, keys sorted by code point, no whitespace, JSON.stringify escaping.
  * Throws on floats, NaN/Infinity, undefined, null, bigint, unsafe integers and non-plain objects.
  */
 export function canonicalize(value: CanonicalValue): Uint8Array {

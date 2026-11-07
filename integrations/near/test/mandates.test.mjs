@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { evaluateParsedMandate } from "../dist/index.js";
+import { evaluateParsedMandate } from "@swaraj/rules";
 import { parseAgentMandate, parseUnifiedAction } from "@swaraj/schemas";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "../../contracts/fixtures");
-const tradingMandate = parseAgentMandate(JSON.parse(readFileSync(join(root, "near-mandate-trading.json"), "utf8")));
-const paymentMandate = parseAgentMandate(JSON.parse(readFileSync(join(root, "near-mandate-payment.json"), "utf8")));
-const combinedMandate = parseAgentMandate(JSON.parse(readFileSync(join(root, "near-mandate-combined.json"), "utf8")));
+const root = join(dirname(fileURLToPath(import.meta.url)), "../mandates");
+const tradingMandate = parseAgentMandate(JSON.parse(readFileSync(join(root, "trading.json"), "utf8")));
+const paymentMandate = parseAgentMandate(JSON.parse(readFileSync(join(root, "payment.json"), "utf8")));
+const combinedMandate = parseAgentMandate(JSON.parse(readFileSync(join(root, "combined.json"), "utf8")));
 
 const ZERO_SIG =
   "0x2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222";

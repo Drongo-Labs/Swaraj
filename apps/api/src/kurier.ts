@@ -1,7 +1,4 @@
-/**
- * Proof status and explorer links for the receipt endpoints, built from the durable proof-job row.
- * zkVerify and destination (Base Sepolia) links are separate and each uses its own chain's hash.
- */
+/** Proof status and explorer links for receipts, built from the proof-job row. */
 
 export type ProofJobView = {
   state: string;
@@ -52,10 +49,7 @@ export function sanitizeProofError(message: string | undefined): string | undefi
   return text.slice(0, 500);
 }
 
-/**
- * Proof fields for a receipt view. Existing fields (status, attempts, network, transactionHash,
- * aggregationId, statement, kurierUrl) keep their meaning; new fields are additive.
- */
+/** Proof fields for a receipt view. New fields are additive. */
 export function proofJobFields(job: ProofJobView | undefined): Record<string, unknown> {
   if (!job) return {};
   const zkVerifyUrl = zkVerifyExplorerUrl(job.zkverifyNetwork, job.zkverifyTxHash);

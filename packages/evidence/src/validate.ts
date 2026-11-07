@@ -9,10 +9,7 @@ export class EvidenceValidationError extends Error {
   }
 }
 
-/**
- * Fail-closed validation for TRADE_EXECUTED evidence:
- * required chain-state tags, no agent-local-only bundles, integrity methods present.
- */
+/** Fail-closed checks: chain-state tags, no agent-local-only bundles, integrity present. */
 export function validateEvidenceItems(items: readonly EvidenceItem[]): void {
   if (items.length === 0) {
     throw new EvidenceValidationError("evidence items required");

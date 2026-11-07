@@ -113,10 +113,7 @@ function requireTrade(trade: ExecutionTrade | undefined): ExecutionTrade {
   return trade;
 }
 
-/**
- * Live Uniswap v3 execution on Base behind a verified capability.
- * verify → approve → exactInputSingle → consume/commit → ExecutionRef.
- */
+/** Live Uniswap v3 execution: verify → approve → exactInputSingle → consume/commit. */
 export function createBaseUniswapExecutionAdapter(
   capabilities: CapabilityService,
   options: BaseUniswapExecutionOptions = {},
