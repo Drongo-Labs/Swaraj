@@ -109,11 +109,17 @@ mod tests {
     use super::*;
 
     const FIXTURE: &str = include_str!("../../../packages/proofs/fixtures/private-mandate-groth16.json");
+    const ALLOW: &str = include_str!("../../../packages/proofs/fixtures/decision-allow-groth16.json");
+    const BLOCK: &str = include_str!("../../../packages/proofs/fixtures/decision-block-groth16.json");
 
-    fn fixture() -> (String, Vec<u8>, Vec<u8>) {
-        let json: serde_json::Value = serde_json::from_str(FIXTURE).unwrap();
+    fn load(text: &str) -> (String, Vec<u8>, Vec<u8>) {
+        let json: serde_json::Value = serde_json::from_str(text).unwrap();
         let field = |name: &str| json[name].as_str().unwrap().to_string();
         (field("program"), hex::decode(field("public_values")).unwrap(), hex::decode(field("proof")).unwrap())
+    }
+
+    fn fixture() -> (String, Vec<u8>, Vec<u8>) {
+        load(FIXTURE)
     }
 
     fn verify(program: &str, public_values: Vec<u8>, proof: Vec<u8>) -> String {
@@ -127,6 +133,27 @@ mod tests {
         let statement = verify(&program, public_values, proof);
         assert!(statement.starts_with("swaraj/statement/private-mandate/v1\nmandate_commitment="));
         assert!(statement.ends_with("\ndecision=ALLOW"));
+    }
+
+    #[test]
+    fn decision_proofs_verify_for_allow_and_block() {
+        let (allow_program, allow_values, allow_proof) = load(ALLOW);
+        let (block_program, block_values, block_proof) = load(BLOCK);
+        assert_eq!(allow_program, block_program);
+        let verifier = Verifier::new(vec![fixture().0, allow_program.clone()]);
+        let allowed = verifier.verify(allow_program.clone(), allow_values.into(), allow_proof.into());
+        let blocked = verifier.verify(block_program, block_values.into(), block_proof.into());
+        assert!(allowed.starts_with("swaraj/statement/mandate-decision/v1\n"));
+        assert!(allowed.contains("\ndecision=ALLOW\nmatched=permit_pay"), "{allowed}");
+        assert!(blocked.contains("\ndecision=BLOCK\nmatched=forbid_cap"), "{blocked}");
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid proof")]
+    fn a_block_proof_cannot_pass_as_allow() {
+        let (program, _, block_proof) = load(BLOCK);
+        let (_, allow_values, _) = load(ALLOW);
+        Verifier::new(vec![program.clone()]).verify(program, allow_values.into(), block_proof.into());
     }
 
     #[test]
