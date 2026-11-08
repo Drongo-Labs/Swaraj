@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { UnoEngine, buildDeck, cardLabel, type EngineState } from "../src/game/engine.js";
 import { GameSession } from "../src/game/session.js";
+import { localTable } from "../src/game/table.js";
 
 const config = {
   swarajApiUrl: "http://localhost:3000",
@@ -81,7 +82,7 @@ test("governed play: a forbidden Wild+4 is blocked by the mandate and the agent 
     winner: null,
     log: [],
   });
-  const session = new GameSession(config, engine);
+  const session = new GameSession(config, localTable(engine));
   assert.equal(cardLabel(105), "Wild+4");
   await session.agentTick();
   const blocked = engine.state.log.filter((entry) => entry.blocked);
@@ -101,7 +102,7 @@ test("governed play: a legal non-wild card passes the mandate and plays", async 
     winner: null,
     log: [],
   });
-  const session = new GameSession(config, engine);
+  const session = new GameSession(config, localTable(engine));
   await session.agentTick();
   const blocked = engine.state.log.filter((entry) => entry.blocked);
   assert.equal(blocked.length, 0); // first legal card (red 5 via number match) is permitted
@@ -119,11 +120,12 @@ test("human moves flow through the engine; the human is never mandate-checked", 
     winner: null,
     log: [],
   });
-  const session = new GameSession(config, engine);
+  const session = new GameSession(config, localTable(engine));
   // human plays a Wild+4 — no gateway block, only game legality applies
-  const error = await session.humanPlay(0, 2);
+  const error = engine.play("human", 0, 2);
   assert.equal(error, null);
   assert.equal(engine.state.discard.at(-1), 105);
   // the agent then takes its turn under the mandate
+  await session.agentTick();
   assert.ok(engine.state.log.some((entry) => entry.seat !== "human"));
 });
