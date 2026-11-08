@@ -29,6 +29,26 @@ default deny, forbid-wins, fail-closed. No database or chain needed.
   game log.
 - Local mode keeps hands in process memory (not TEE-private, not on-chain).
 
+## Rules engine as an enclave
+
+`pnpm play` starts the rules engine as its own process. It owns the deck and
+both hands. The player's page sees only the player's seat, and the agent
+process reaches `/agent/*` with its token and sees only its own hand.
+
+`GET /attestation?nonce=<64 hex>` says where the engine runs. Locally it
+answers `tee: "none"`, and the game log says so. On an Intel TDX VM it returns
+a hardware quote whose report data binds the nonce and the engine's code hash.
+That path is written but not yet run on a TDX VM, and the quote is not yet
+checked against Intel's collateral.
+
+| Env | Does |
+|---|---|
+| `ZUNNO_ENCLAVE_URL`, `ZUNNO_AGENT_TOKEN` | Use an engine running elsewhere, such as a TDX VM, instead of starting one |
+| `ZUNNO_REQUIRE_TEE=1` | Refuse to play unless the engine reports a TEE |
+| `ZUNNO_HOST` | Address the engine listens on (default `127.0.0.1`) |
+
+Until it runs on TDX hardware, don't claim the hands are protected by a TEE.
+
 ## How it works
 
 ```mermaid

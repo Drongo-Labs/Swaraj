@@ -1,12 +1,50 @@
-import { GameSession } from "./game/session.js";
-import { startServer } from "./server/http.js";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { checkEnclave, runAgent } from "./agent/run.js";
+import { loadConfig } from "./config.js";
+import { remoteTable } from "./game/table.js";
 
-/** `pnpm play` — standalone Zunno with the Swaraj-governed AI opponent. */
+/**
+ * `pnpm play` — Zunno with the Swaraj-governed AI opponent. The rules engine
+ * runs as its own process holding both hands, and this process plays the
+ * agent's seat through its token only.
+ *
+ * ZUNNO_ENCLAVE_URL + ZUNNO_AGENT_TOKEN: use a rules engine running elsewhere
+ * (e.g. a TDX VM) instead of starting one. ZUNNO_REQUIRE_TEE=1: refuse to play
+ * unless the engine reports a TEE.
+ */
 
-const port = Number(process.env.PORT ?? 3002);
-const session = new GameSession();
-const url = await startServer(session, port);
+const requireTee = process.env.ZUNNO_REQUIRE_TEE === "1";
+let enclave: URL;
+let token = process.env.ZUNNO_AGENT_TOKEN ?? "";
 
-console.log(`Zunno × Swaraj — playing at ${url}`);
-console.log("The agent's every move goes through its Agent Mandate (default deny).");
-console.log("Blocked moves are marked in red in the game log.");
+if (process.env.ZUNNO_ENCLAVE_URL) {
+  enclave = new URL(process.env.ZUNNO_ENCLAVE_URL);
+} else {
+  token = randomBytes(32).toString("hex");
+  const child = spawn(process.execPath, ["--import", "tsx", fileURLToPath(new URL("./enclave/main.ts", import.meta.url))], {
+    env: { ...process.env, ZUNNO_AGENT_TOKEN: token, PORT: process.env.PORT ?? "3002" },
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+  process.on("exit", () => child.kill());
+  for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => process.exit(0));
+  enclave = await new Promise<URL>((resolve, reject) => {
+    child.stdout.on("data", (chunk: Buffer) => {
+      const match = /enclave ready (\S+)/.exec(chunk.toString());
+      if (match) resolve(new URL(match[1]!));
+    });
+    child.on("exit", (code) => reject(new Error(`rules engine exited with code ${code}`)));
+  });
+}
+
+const attestation = await checkEnclave(enclave, requireTee);
+const table = remoteTable(enclave, token);
+if (attestation.tee === "none") {
+  await table.log("Rules engine is running outside a TEE (local mode).", false);
+}
+runAgent(loadConfig(), table);
+
+console.log(`Zunno × Swaraj — playing at ${enclave}`);
+console.log(`Rules engine: ${attestation.tee === "none" ? "separate process, no TEE" : "TDX"} (code ${attestation.codeHash.slice(0, 12)}…)`);
+console.log("The agent's every move goes through its Agent Mandate (default deny). Blocked moves are marked in red.");
