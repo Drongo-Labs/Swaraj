@@ -2259,6 +2259,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "swaraj-registry"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+]
+
+[[package]]
 name = "swaraj-verifier"
 version = "0.1.0"
 dependencies = [

@@ -6,7 +6,7 @@ import type { VerificationBundle } from "./artifacts.js";
 export interface SinkAttestation {
   /** Reference recorded on the receipt, e.g. a statement id on the verification network. */
   ref: string;
-  sink: "local" | "zkverify";
+  sink: "local" | "zkverify" | "near";
 }
 
 export interface ProofSink {

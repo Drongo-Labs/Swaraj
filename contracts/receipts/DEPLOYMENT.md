@@ -3,12 +3,20 @@
 | | |
 |---|---|
 | Network | testnet |
-| Account | `swaraj-receipts-6j5g2u.testnet` |
-| Deploy tx | [4NJ6wBJvnL1FJFTywiStFKHF2CSAG28uRFimAsnVnTs9](https://testnet.nearblocks.io/txns/4NJ6wBJvnL1FJFTywiStFKHF2CSAG28uRFimAsnVnTs9) |
-| Init | `new(verifier=null)` |
+| Account | `swaraj-receipts-k-7znbe6.testnet` |
+| Deploy tx | [4ChhUBQNWeZShZKV761Gn4ZzLTNHadYNP1gP5hVkWxBu](https://testnet.nearblocks.io/txns/4ChhUBQNWeZShZKV761Gn4ZzLTNHadYNP1gP5hVkWxBu) |
+| Init | `new(verifier=swaraj-verifier-v2-11081417.testnet)` |
+| Verifier | `swaraj-verifier-v2-11081417.testnet` |
 | WASM | `contracts/target/wasm32-unknown-unknown/release/swaraj_receipts.wasm` |
 
-Private key lives only in `~/.near-credentials/testnet/swaraj-receipts-6j5g2u.testnet.json` and
-`/tmp/swaraj-near-kushagra/receipts.env` — never commit it.
+Private key: `~/.near-credentials/testnet/swaraj-receipts-k-7znbe6.testnet.json` and `/tmp/swaraj-near-kushagra/nov8.env` — never commit it.
 
-Ayush verifier (for Nov 8 wiring): `swaraj-verifier-11071456.testnet`.
+## NearProofSink (Nov 8)
+
+`node packages/proofs/scripts/near-sink-demo.mjs` moved fixture decisions
+`PENDING → PROVED` on this account via the verifier:
+
+| Fixture | Result |
+|---|---|
+| `decision-allow-groth16` | `sink: near`, claim `cbb6f895…69f9` |
+| `decision-block-groth16` | `sink: near`, claim `11e87ed7…8dd6` |

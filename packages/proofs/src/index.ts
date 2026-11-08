@@ -30,6 +30,14 @@ export {
   type RemoteSinkConfig,
   type SubmissionAccepted,
 } from "./remote-sink.js";
+export {
+  NearProofSink,
+  claimHashFromStatement,
+  deployNearWasm,
+  type NearGroth16Proof,
+  type NearProofSinkConfig,
+  type NearReceiptRecord,
+} from "./near-sink.js";
 export { runOneProofJob, type GateJobPayload, type WorkerOptions, type WorkerOutcome } from "./worker.js";
 export {
   proveStatementViaSp1,

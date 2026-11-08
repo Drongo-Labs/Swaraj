@@ -1,6 +1,6 @@
 # NEAR contracts
 
-Rust workspace under `contracts/` (`verifier`, `receipts`). Build with
+Rust workspace under `contracts/` (`verifier`, `receipts`, `registry`). Build with
 `cargo near` from each crate; run unit tests from the workspace root:
 
 ```bash
@@ -87,3 +87,35 @@ cd contracts/receipts && cargo near build non-reproducible-wasm
 
 Deployed account (Kushagra testnet): see `contracts/receipts/DEPLOYMENT.md`
 after first deploy (filled by the deploy script; never commit keys).
+
+## `registry` (Kushagra — Nov 8)
+
+Agent directory: an agent registers under its NEAR account id and can be read
+back by anyone. Updates are agent-only.
+
+| Method | Does |
+|---|---|
+| `new()` | Init; caller is owner |
+| `register(display_name, metadata_uri)` | Predecessor registers once |
+| `update(display_name, metadata_uri)` | Registered agent updates its record |
+| `get(agent_id)` / `is_registered(agent_id)` | Views |
+
+```bash
+cargo test --manifest-path contracts/Cargo.toml -p swaraj-registry
+cd contracts/registry && cargo near build non-reproducible-wasm
+```
+
+See `contracts/registry/DEPLOYMENT.md` after deploy.
+
+## `NearProofSink` (Kushagra — Nov 8)
+
+TypeScript sink in `@swaraj/proofs` (`packages/proofs/src/near-sink.ts`):
+`create_pending` → `prove` → poll until `PROVED`. The receipt moves only when
+the verifier accepts the Groth16 proof and the statement hash matches
+`claim_hash`.
+
+```bash
+pnpm --filter @swaraj/proofs build
+NEAR_ACCOUNT_ID=… NEAR_PRIVATE_KEY=… NEAR_RECEIPTS_CONTRACT_ID=… \
+  node packages/proofs/scripts/near-sink-demo.mjs
+```

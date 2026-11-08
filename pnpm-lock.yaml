@@ -256,6 +256,9 @@ importers:
       '@swaraj/smt':
         specifier: workspace:*
         version: link:../smt
+      near-api-js:
+        specifier: ^7.4.0
+        version: 7.4.0
     devDependencies:
       '@types/node':
         specifier: ^22.19.0
