@@ -49,18 +49,26 @@ On-chain receipt lifecycle mirroring
 | `PENDING` | `PROVED`, `NON_PROVABLE`, `INVALIDATED` |
 | `PROVED` | `INVALIDATED` |
 
-Illegal moves panic. `PROVED` requires a non-empty `proof_ref` (verifier
-cross-contract call lands Nov 8).
+Illegal moves panic. Only the owner (the account that called `new`) creates
+receipts or changes them by hand. `PROVED` is reached only through `prove`,
+which anyone may call: the verifier checks the proof, and the receipt moves only
+if the proved statement's SHA-256 equals the receipt's `claim_hash`.
 
 | Method | Does |
 |---|---|
-| `new(verifier?)` | Init; optional verifier account for Nov 8 |
-| `create_pending(receipt_id, app_id, intent_digest, claim_hash)` | Inserts `PENDING` |
-| `mark_proved(receipt_id, proof_ref)` | `PENDING → PROVED` |
-| `mark_non_provable(receipt_id, note?)` | `PENDING → NON_PROVABLE` |
-| `invalidate(receipt_id, note?)` | `PENDING\|PROVED → INVALIDATED` |
+| `new(verifier?)` | Init. The caller becomes the owner |
+| `set_verifier(verifier)` | Owner sets the verifier account |
+| `create_pending(receipt_id, app_id, intent_digest, claim_hash)` | Owner inserts `PENDING`. `claim_hash` is the lowercase hex SHA-256 of the statement to prove |
+| `prove(receipt_id, program, public_values, proof)` | Anyone. Calls the verifier, then `PENDING → PROVED` on a match. Attach about 100 Tgas |
+| `mark_non_provable(receipt_id, note?)` | Owner. `PENDING → NON_PROVABLE` |
+| `invalidate(receipt_id, note?)` | Owner. `PENDING\|PROVED → INVALIDATED` |
 | `get(receipt_id)` | View the record |
 | `event_count` / `get_event` | Append-only transition log |
+
+Tested end to end on testnet at `swaraj-receipts-11081321.testnet`, wired to the
+verifier: a stranger could not create a receipt or call the private callback,
+and a valid proof moved a receipt to `PROVED` for 39.32 Tgas in total
+([prove](https://testnet.nearblocks.io/txns/CduvB6UYRGk3YhdLdrkXNVWjFpGhogzPZqbawGwXVLZR)).
 
 ```bash
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-receipts
