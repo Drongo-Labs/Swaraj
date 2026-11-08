@@ -58,7 +58,8 @@
     "@swaraj/database": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",
-    "@swaraj/smt": "workspace:*"
+    "@swaraj/smt": "workspace:*",
+    "near-api-js": "^7.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
