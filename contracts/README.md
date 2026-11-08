@@ -27,6 +27,14 @@ the 300 Tgas transaction limit
 ([success](https://testnet.nearblocks.io/txns/JDzquNwpRxvncdR14cNxLPewwuj49UTT9ccqJqg14Qem),
 [tampered proof rejected](https://testnet.nearblocks.io/txns/6KgLm4rzD3piB7NiNHZpi98CW3Vm7LJDBeAcnL5d9ufU)).
 
+A second, test verifier at `swaraj-verifier-v2-11081417.testnet` pins the
+current Private Mandate key (`0x0040b8…a06e`) and the decision guest's key
+(`0x005617…7591`). It verified both decision fixtures on testnet
+([ALLOW](https://testnet.nearblocks.io/txns/H51uV9JmMSdHhHAEGDatNMNq8dCks8xxfPh5JXLY94Xt),
+[BLOCK](https://testnet.nearblocks.io/txns/9kXeytgw6sRNW8W8xyMcXVExniJffnSoHTNLeu13LewN)).
+The first verifier still pins the old Private Mandate key, so it no longer
+accepts newly generated proofs.
+
 ```bash
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-verifier
 cd contracts/verifier && cargo near build non-reproducible-wasm
@@ -69,6 +77,8 @@ Tested end to end on testnet at `swaraj-receipts-11081321.testnet`, wired to the
 verifier: a stranger could not create a receipt or call the private callback,
 and a valid proof moved a receipt to `PROVED` for 39.32 Tgas in total
 ([prove](https://testnet.nearblocks.io/txns/CduvB6UYRGk3YhdLdrkXNVWjFpGhogzPZqbawGwXVLZR)).
+Pointed at the test verifier, it then proved a receipt for a BLOCK decision
+([prove](https://testnet.nearblocks.io/txns/EYBeSwnNGTTWTtPu5ssKSp68u4nbDEd2eafek7RVw3rW)).
 
 ```bash
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-receipts
