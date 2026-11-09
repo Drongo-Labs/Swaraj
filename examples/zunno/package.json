@@ -15,6 +15,8 @@
   },
   "dependencies": {
     "@inco/lightning-js": "^1.1.0",
+    "@neardefi/shade-agent-js": "2.2.0",
+    "@noble/hashes": "^1.8.0",
     "@swaraj/agent": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",

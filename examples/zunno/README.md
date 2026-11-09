@@ -49,6 +49,33 @@ checked against Intel's collateral.
 
 Until it runs on TDX hardware, don't claim the hands are protected by a TEE.
 
+## Shade Agent (local mode)
+
+With `SHADE_*` set in `examples/zunno/.env`, `pnpm play` registers the agent as
+a Shade Agent first: it gets its own NEAR account and registers on an agent
+contract, then plays. The contract is the framework's unmodified
+`shade-contract-template` (commit `35758f35`), deployed in local mode
+(`requires_tee = false`) at `zunno-agent-contract-11081501.testnet`.
+
+In local mode the contract accepts a mock attestation, with all-zero
+measurements, from an agent its owner has whitelisted. It proves the agent's
+on-chain identity, not that it runs in a TEE.
+
+| Env | Value |
+|---|---|
+| `SHADE_AGENT_CONTRACT_ID` | The agent contract |
+| `SHADE_SPONSOR_ACCOUNT_ID`, `SHADE_SPONSOR_PRIVATE_KEY` | Account that funds the agent (1 NEAR when below 0.5) |
+| `SHADE_DERIVATION_PATH` | A secret that keeps the agent's account the same across runs |
+
+One-time setup by the contract owner:
+
+1. Deploy the template with `new(requires_tee=false, attestation_expiration_time_ms, owner_id, mpc_contract_id)`.
+2. Approve the mock measurements (all zeros) with `approve_measurements`, and the zero PPID with `approve_ppids`.
+3. Whitelist the agent's account with `whitelist_agent_for_local`. `pnpm play` prints the account if it isn't whitelisted.
+
+The template's TEE mode checks a Phala dstack attestation, so a Google Cloud TDX
+deploy needs its own attestation check.
+
 ## How it works
 
 ```mermaid
