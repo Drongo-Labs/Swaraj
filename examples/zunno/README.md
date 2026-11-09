@@ -103,8 +103,10 @@ With `ZUNNO_GATEWAY=live` and `SWARAJ_DEV_TOKEN` set, `pnpm play` registers
 `ZUNNO_GATEWAY=live`, play stays on the embedded mandate engine (safe default).
 
 ```sh
-# API running on :3000 with SWARAJ_DEV_TOKEN + ZUNNO_GATEWAY=live
-pnpm --filter swaraj-zunno e2e:gateway   # on-turn / off-turn / wager cap scenes
+# API on :3010 (or :3000) with SWARAJ_DEV_TOKEN + ZUNNO_GATEWAY=live
+SWARAJ_API_URL=http://127.0.0.1:3010 ZUNNO_GATEWAY=live \
+  ZUNNO_WAGER_ESCROW=swaraj-wager-k-9ldcod.testnet \
+  pnpm --filter swaraj-zunno e2e:gateway   # on-turn / off-turn / wager cap scenes
 ```
 
 Mandate v2 covers:
