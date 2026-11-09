@@ -20,14 +20,15 @@
     "dev:mcp": "pnpm --filter @swaraj/mcp start",
     "db:up": "docker compose up -d postgres",
     "db:stop": "docker compose stop postgres",
-    "check:all": "pnpm check && pnpm check:rust && pnpm check:lean",
+    "check:all": "pnpm check && pnpm check:rust && pnpm check:contracts && pnpm check:lean",
     "check:rust": "pnpm --filter @swaraj/proofs check:rust",
     "check:sp1-host": "pnpm --filter @swaraj/proofs check:sp1-host",
     "check:lean": "pnpm --filter @swaraj/lean check:lean",
     "build:sp1": "pnpm --filter @swaraj/proofs build:sp1",
     "execute:sp1": "pnpm --filter @swaraj/proofs execute:sp1",
     "prove:sp1": "pnpm --filter @swaraj/proofs prove:sp1",
-    "proofs:worker": "pnpm --filter @swaraj/proofs worker:once"
+    "proofs:worker": "pnpm --filter @swaraj/proofs worker:once",
+    "check:contracts": "cargo test --manifest-path contracts/Cargo.toml"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
