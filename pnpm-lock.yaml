@@ -134,6 +134,9 @@ importers:
       '@noble/hashes':
         specifier: ^1.8.0
         version: 1.8.0
+      '@phala/dcap-qvl-node':
+        specifier: 0.3.3
+        version: 0.3.3
       '@swaraj/agent':
         specifier: workspace:*
         version: link:../../packages/agent
@@ -855,6 +858,9 @@ packages:
   '@noble/post-quantum@0.6.1':
     resolution: {integrity: sha512-+pormrDZwjRw05U8ADK4JpHejo87+gBd+muRBB/ozztH5yhDLMDF4jHQWN3NQQAsu1zBNPWTG0ZwVI0CR29H0A==}
     engines: {node: '>= 20.19.0'}
+
+  '@phala/dcap-qvl-node@0.3.3':
+    resolution: {integrity: sha512-Iakz7N6VfWXWfgDkgJ5PFr414UV8BD3mk9ssEd0sFFiGNgiAwzD/wE2zwsGRya7qYYC+R8rvg4uEHXQfu1ArAQ==}
 
   '@phala/dstack-sdk@0.5.7':
     resolution: {integrity: sha512-yhdH1dIYCeyn/3jp9tIT4aCfOaVtO1cwFcTHKjeLzKeL/XTVWzbyTX1SU6NCN7tKpHWJ9y6Vdht/vcffZYEZnw==}
@@ -2481,6 +2487,8 @@ snapshots:
       '@noble/ciphers': 2.2.0
       '@noble/curves': 2.2.0
       '@noble/hashes': 2.2.0
+
+  '@phala/dcap-qvl-node@0.3.3': {}
 
   '@phala/dstack-sdk@0.5.7(@noble/hashes@1.8.0)(bufferutil@4.2.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)':
     dependencies:

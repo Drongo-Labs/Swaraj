@@ -4,6 +4,9 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { checkEnclave, runAgent } from "./agent/run.js";
 import { registerShadeAgent, shadeConfigFromEnv } from "./agent/shade.js";
+import { nearAiConfigFromEnv, nearAiMove, verifyNearAi } from "./agent/nearai.js";
+import type { AgentView } from "./game/table.js";
+import type { ZunnoProposal } from "./actions/intents.js";
 import { loadConfig } from "./config.js";
 import { remoteTable } from "./game/table.js";
 
@@ -15,7 +18,8 @@ import { remoteTable } from "./game/table.js";
  * ZUNNO_ENCLAVE_URL + ZUNNO_AGENT_TOKEN: use a rules engine running elsewhere
  * (e.g. a TDX VM) instead of starting one. ZUNNO_REQUIRE_TEE=1: refuse to play
  * unless the engine reports a TEE. SHADE_*: register the agent as a Shade
- * Agent on NEAR first (see the README).
+ * Agent on NEAR first (see the README). NEAR_AI_API_KEY: pick moves with NEAR AI
+ * Cloud private inference, after checking its attestation.
  */
 
 if (existsSync(".env")) process.loadEnvFile(".env");
@@ -54,7 +58,21 @@ if (shade) {
   await table.log(`Agent is Shade Agent ${agentAccount.slice(0, 8)}… on ${shade.contractId} (local mode, mock attestation).`, false);
   console.log(`Shade Agent: ${agentAccount} registered on ${shade.contractId}`);
 }
-runAgent(loadConfig(), table);
+let pickMove: ((view: AgentView) => Promise<ZunnoProposal | undefined>) | undefined;
+const nearAi = nearAiConfigFromEnv();
+if (nearAi) {
+  try {
+    const attested = await verifyNearAi(nearAi);
+    pickMove = (view) => nearAiMove(nearAi, attested, view);
+    await table.log(`Agent thinks with NEAR AI ${nearAi.model}; its TEE attestation checked out.`, false);
+    console.log(`NEAR AI: ${nearAi.model}, attested signer(s) ${[...attested].join(", ")}`);
+  } catch (error) {
+    // Fail closed: no prompt is sent to a model whose attestation did not verify.
+    await table.log("NEAR AI attestation failed, so the agent uses its built-in moves.", true);
+    console.error(`NEAR AI attestation failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+runAgent(loadConfig(), table, pickMove);
 
 console.log(`Zunno × Swaraj — playing at ${enclave}`);
 console.log(`Rules engine: ${attestation.tee === "none" ? "separate process, no TEE" : "TDX"} (code ${attestation.codeHash.slice(0, 12)}…)`);
