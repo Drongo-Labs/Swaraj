@@ -2,7 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { privateKeyToAccount } from "viem/accounts";
-import { nearAiMove, replyIsSigned, reportDataBinds, verifyNearAi, type Deps } from "../src/agent/nearai.js";
+import { nearAiConfigFromEnv, nearAiMove, replyIsSigned, reportDataBinds, verifyNearAi, type Deps } from "../src/agent/nearai.js";
+
+test("nearAiConfigFromEnv accepts NEAR_AI_API_KEY and NEAR_API_KEY alias", () => {
+  assert.equal(nearAiConfigFromEnv({}), undefined);
+  assert.equal(nearAiConfigFromEnv({ NEAR_API_KEY: "sk-from-alias" })?.apiKey, "sk-from-alias");
+  assert.equal(
+    nearAiConfigFromEnv({ NEAR_AI_API_KEY: "sk-preferred", NEAR_API_KEY: "sk-alias" })?.apiKey,
+    "sk-preferred",
+  );
+});
 
 const config = { apiKey: "test", model: "test/model", baseUrl: "https://nearai.test" };
 const signer = privateKeyToAccount(`0x${"11".repeat(32)}`);
