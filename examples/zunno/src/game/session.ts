@@ -1,5 +1,5 @@
 import { ZunnoAgent, openingProposal, type AgentDeps, type MoveExecutor } from "../agent/bridge.js";
-import { EmbeddedGateway } from "../swaraj/embeddedGateway.js";
+import { createGateway } from "../swaraj/gateway.js";
 import { loadConfig, type ZunnoAgentConfig } from "../config.js";
 import type { GatewayDecision } from "../swaraj/client.js";
 import type { AgentTable, AgentView } from "./table.js";
@@ -24,6 +24,8 @@ export class GameSession {
     private readonly table: AgentTable,
     /** Picks a move, e.g. NEAR AI; undefined falls back to the first legal card. */
     private readonly pickMove?: (view: AgentView) => Promise<ZunnoProposal | undefined>,
+    /** Mandate policy hash from live registration; local demo uses LOCAL_POLICY_HASH. */
+    private readonly policyHash: string = LOCAL_POLICY_HASH,
   ) {
     this.agent = this.createAgent();
   }
@@ -45,7 +47,7 @@ export class GameSession {
   }
 
   private createAgent(): ZunnoAgent {
-    const gateway = new EmbeddedGateway();
+    const gateway = createGateway(this.config);
     const loggingGateway = {
       evaluateUnifiedAction: async (wireAction: unknown): Promise<GatewayDecision> => {
         const decision = await gateway.evaluateUnifiedAction(wireAction);
@@ -54,13 +56,15 @@ export class GameSession {
           const what = wire.action === "APP_ACTION"
             ? (wire.context?.name ?? "app_action")
             : (wire.action ?? "action").toLowerCase();
-          await this.table.log(`Agent tried ${what} — BLOCKED by ${decision.violatedRuleIds.join(", ")}`, true);
+          const rules = decision.violatedRuleIds.join(", ") || "default_deny";
+          await this.table.log(`Agent tried ${what} — BLOCKED by ${rules}`, true);
         }
         return decision;
       },
     };
     const executor: MoveExecutor = {
       stake: async () => ({ txHash: "local" }),
+      wager: async (amount, recipient) => ({ txHash: `wager:${amount}:${recipient}` }),
       playCard: async (handIndex, cardValue, chosenColor) => {
         const error = await this.table.play(handIndex, chosenColor);
         if (error !== null) throw new Error(`engine rejected agent play: ${error}`);
@@ -72,6 +76,6 @@ export class GameSession {
       },
     };
     const deps: AgentDeps = { config: this.config, client: loggingGateway, executor };
-    return new ZunnoAgent(deps, LOCAL_POLICY_HASH);
+    return new ZunnoAgent(deps, this.policyHash);
   }
 }

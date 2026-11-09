@@ -1,6 +1,6 @@
 # NEAR contracts
 
-Rust workspace under `contracts/` (`verifier`, `receipts`, `registry`). Build with
+Rust workspace under `contracts/` (`verifier`, `receipts`, `registry`, `wager`). Build with
 `cargo near` from each crate; run unit tests from the workspace root:
 
 ```bash
@@ -106,6 +106,22 @@ cd contracts/registry && cargo near build non-reproducible-wasm
 ```
 
 See `contracts/registry/DEPLOYMENT.md` after deploy.
+
+## `wager` (Kushagra — Nov 9)
+
+NEP-141 / native NEAR escrow for Zunno buy-ins. Deposits above `max_wager`
+panic; owner settles with `payout` or `refund`.
+
+| Method | Does |
+|---|---|
+| `new(ft_contract?, max_wager)` | Init |
+| `deposit_near` | Native deposit (FT mode off) |
+| `ft_on_transfer` | NEP-141 deposit callback |
+| `payout(winner)` / `refund(agent)` | Owner settlement |
+
+```bash
+cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager
+```
 
 ## `NearProofSink` (Kushagra — Nov 8)
 

@@ -94,6 +94,33 @@ sent and the agent uses its built-in moves; a bad or unsigned reply falls back
 the same way. Verification takes about 5 to 10 seconds per game, and a move 3
 to 5 seconds.
 
+## Live Swaraj gateway (Nov 9)
+
+With `ZUNNO_GATEWAY=live` and `SWARAJ_DEV_TOKEN` set, `pnpm play` registers
+`mandate/zunno-mandate.json` on the API and evaluates every agent move via
+`POST …/unified-actions`. BLOCKs still name the rule in the game log. Without
+`ZUNNO_GATEWAY=live`, play stays on the embedded mandate engine (safe default).
+
+```sh
+# API running on :3000 with SWARAJ_DEV_TOKEN + ZUNNO_GATEWAY=live
+pnpm --filter swaraj-zunno e2e:gateway   # on-turn / off-turn / wager cap scenes
+```
+
+Mandate v2 covers:
+
+- legal moves (`play_card` / `draw_card`) with **turn discipline** (`onTurn`)
+- ETH stake cap (unchanged)
+- **NEAR USDC wager** via service `zunno_wager` (cap 5 USDC atomic)
+
+## NEP-141 wager escrow
+
+Rust contract `contracts/wager` (`swaraj-wager`): deposit up to `max_wager`,
+reject over-limit, owner `payout` / `refund`.
+
+```sh
+cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager
+```
+
 ## How it works
 
 ```mermaid

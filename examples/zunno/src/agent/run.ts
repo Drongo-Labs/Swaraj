@@ -26,8 +26,9 @@ export function runAgent(
   table: AgentTable,
   pickMove?: (view: AgentView) => Promise<ZunnoProposal | undefined>,
   pollMs = 300,
+  policyHash?: string,
 ): () => Promise<void> {
-  const session = new GameSession(config, table, pickMove);
+  const session = new GameSession(config, table, pickMove, policyHash);
   let stopped = false;
   const done = (async () => {
     while (!stopped) {

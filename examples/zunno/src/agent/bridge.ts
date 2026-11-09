@@ -17,6 +17,8 @@ import type { ZunnoAgentConfig } from "../config.js";
 
 export interface MoveExecutor {
   stake(amountWei: string, recipient: string): Promise<{ txHash: string }>;
+  /** Optional NEP-141 wager path (mandate-gated). */
+  wager?(amount: string, recipient: string): Promise<{ txHash: string }>;
   playCard(handIndex: number, cardValue: number, chosenColor: number): Promise<{ txHash: string }>;
   drawCard(): Promise<{ txHash: string }>;
 }
@@ -68,6 +70,9 @@ export class ZunnoAgent {
     switch (proposal.kind) {
       case "STAKE":
         return this.deps.executor.stake(proposal.amountWei, this.deps.config.gameAddress);
+      case "WAGER":
+        if (!this.deps.executor.wager) throw new Error("wager executor not configured");
+        return this.deps.executor.wager(proposal.amount, proposal.recipient);
       case "PLAY_CARD":
         return this.deps.executor.playCard(proposal.handIndex, proposal.cardValue, proposal.chosenColor ?? 4);
       case "DRAW_CARD":
@@ -75,11 +80,11 @@ export class ZunnoAgent {
     }
   }
 
-  /** Stakes ABSTAIN on BLOCK; moves RETRY with the next compliant legal card, else draw. */
+  /** Stakes/wagers ABSTAIN on BLOCK; moves RETRY with the next compliant legal card, else draw. */
   private specFor(input: TurnInput): GovernedActionSpec<ZunnoProposal> {
     const toWireAction = (proposal: ZunnoProposal): unknown =>
       toWire(buildIntent(proposal, this.deps.config, this.policyHash));
-    if (input.proposal.kind === "STAKE") {
+    if (input.proposal.kind === "STAKE" || input.proposal.kind === "WAGER") {
       return { policy: "ABSTAIN", toWireAction };
     }
     return {
@@ -92,7 +97,7 @@ export class ZunnoAgent {
 
 /** First legal card in hand order (excluding the blocked one), else draw. */
 function nextCompliantProposal(blocked: ZunnoProposal, input: TurnInput): ZunnoProposal | null {
-  if (blocked.kind === "STAKE") return null; // unreachable: stakes use ABSTAIN
+  if (blocked.kind === "STAKE" || blocked.kind === "WAGER") return null; // stakes/wagers use ABSTAIN
   const blockedCard = blocked.kind === "PLAY_CARD" ? blocked.cardValue : null;
   for (const [index, value] of input.hand.entries()) {
     if (value === blockedCard) continue;

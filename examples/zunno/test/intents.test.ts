@@ -43,18 +43,18 @@ test("PLAY_CARD builds a generic APP_ACTION with atomic decimal params", () => {
   if (wild.action !== "APP_ACTION") throw new Error("unreachable");
   assert.deepEqual(wild.resource, { app: "zunno", target: config.gameAddress });
   assert.equal(wild.context.name, "play_card");
-  assert.deepEqual(wild.context.params, { handIndex: "0", cardValue: "101", chosenColor: "2" });
+  assert.deepEqual(wild.context.params, { handIndex: "0", cardValue: "101", chosenColor: "2", onTurn: true });
 
   const plain = buildIntent({ kind: "PLAY_CARD", handIndex: 0, cardValue: 11 }, config, policyHash, now);
   if (plain.action !== "APP_ACTION") throw new Error("unreachable");
-  assert.deepEqual(plain.context.params, { handIndex: "0", cardValue: "11", chosenColor: "4" });
+  assert.deepEqual(plain.context.params, { handIndex: "0", cardValue: "11", chosenColor: "4", onTurn: true });
 });
 
 test("DRAW_CARD and wire flattening", () => {
   const draw = buildIntent({ kind: "DRAW_CARD" } satisfies ZunnoProposal, config, policyHash, now);
   if (draw.action !== "APP_ACTION") throw new Error("unreachable");
   assert.equal(draw.context.name, "draw_card");
-  assert.deepEqual(draw.context.params, {});
+  assert.deepEqual(draw.context.params, { onTurn: true });
   const wire = toWire(draw);
   assert.equal(wire.action, "APP_ACTION");
   assert.equal(wire.intentId, draw.common.intentId);

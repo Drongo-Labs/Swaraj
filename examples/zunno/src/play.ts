@@ -9,6 +9,7 @@ import type { AgentView } from "./game/table.js";
 import type { ZunnoProposal } from "./actions/intents.js";
 import { loadConfig } from "./config.js";
 import { remoteTable } from "./game/table.js";
+import { registerZunnoMandate } from "./swaraj/gateway.js";
 
 /**
  * `pnpm play` — Zunno with the Swaraj-governed AI opponent. The rules engine
@@ -72,7 +73,21 @@ if (nearAi) {
     console.error(`NEAR AI attestation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
-runAgent(loadConfig(), table, pickMove);
+const config = loadConfig();
+let policyHash: string | undefined;
+try {
+  const registered = await registerZunnoMandate(config);
+  if (registered) {
+    policyHash = registered.policyHash;
+    await table.log(`Mandate ${registered.mandateId} on live Swaraj gateway (${config.swarajApiUrl}).`, false);
+    console.log(`Swaraj gateway: live at ${config.swarajApiUrl} (mandate ${registered.mandateId})`);
+  } else {
+    console.log("Swaraj gateway: embedded (set SWARAJ_DEV_TOKEN for live unified-actions)");
+  }
+} catch (error) {
+  console.error(`Mandate registration failed; falling back to embedded gateway: ${error instanceof Error ? error.message : String(error)}`);
+}
+runAgent(config, table, pickMove, 300, policyHash);
 
 console.log(`Zunno × Swaraj — playing at ${enclave}`);
 console.log(`Rules engine: ${attestation.tee === "none" ? "separate process, no TEE" : "TDX"} (code ${attestation.codeHash.slice(0, 12)}…)`);

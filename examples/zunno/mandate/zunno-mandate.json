@@ -1,6 +1,6 @@
 {
   "mandateId": "zunno_mandate_v1",
-  "version": 1,
+  "version": 2,
   "agent": "zunno-agent",
   "defaultEffect": "DENY",
   "validFrom": 1789990000000,
@@ -21,7 +21,16 @@
       "action": "APP_ACTION",
       "predicates": [
         { "field": "resource.app", "operator": "EQ", "value": "zunno" },
-        { "field": "context.name", "operator": "IN", "values": ["draw_card", "play_card"] }
+        { "field": "context.name", "operator": "IN", "values": ["draw_card", "play_card"] },
+        { "field": "context.paramBool", "name": "onTurn", "operator": "EQ", "value": true }
+      ]
+    },
+    {
+      "ruleId": "forbid_off_turn",
+      "effect": "FORBID",
+      "action": "APP_ACTION",
+      "predicates": [
+        { "field": "context.paramBool", "name": "onTurn", "operator": "EQ", "value": false }
       ]
     },
     {
@@ -33,6 +42,15 @@
       ]
     },
     {
+      "ruleId": "forbid_wager_over_cap",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        { "field": "resource.service", "operator": "EQ", "value": "zunno_wager" },
+        { "field": "context.amount", "operator": "GT", "value": "5000000" }
+      ]
+    },
+    {
       "ruleId": "permit_stake_eth_in_cap",
       "effect": "PERMIT",
       "action": "PAYMENT",
@@ -40,6 +58,16 @@
         { "field": "context.amount", "operator": "LTE", "value": "10000000000000000" },
         { "field": "context.currency", "operator": "EQ", "value": "ETH" },
         { "field": "context.recipient", "operator": "EQ", "value": "0x82b2cce9a52c7e56838a5c46833067f9eb006911" }
+      ]
+    },
+    {
+      "ruleId": "permit_wager_near_in_cap",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        { "field": "resource.service", "operator": "EQ", "value": "zunno_wager" },
+        { "field": "context.amount", "operator": "LTE", "value": "5000000" },
+        { "field": "context.currency", "operator": "EQ", "value": "USDC" }
       ]
     }
   ]
