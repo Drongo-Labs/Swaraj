@@ -19,11 +19,17 @@ import { registerZunnoMandate } from "./swaraj/gateway.js";
  * ZUNNO_ENCLAVE_URL + ZUNNO_AGENT_TOKEN: use a rules engine running elsewhere
  * (e.g. a TDX VM) instead of starting one. ZUNNO_REQUIRE_TEE=1: refuse to play
  * unless the engine reports a TEE. SHADE_*: register the agent as a Shade
- * Agent on NEAR first (see the README). NEAR_AI_API_KEY: pick moves with NEAR AI
- * Cloud private inference, after checking its attestation.
+ * Agent on NEAR first (see the README). NEAR_AI_API_KEY / NEAR_API_KEY: pick
+ * moves with NEAR AI Cloud private inference, after checking its attestation.
  */
 
-if (existsSync(".env")) process.loadEnvFile(".env");
+for (const candidate of [
+  ".env",
+  fileURLToPath(new URL("../.env", import.meta.url)), // examples/zunno/.env
+  fileURLToPath(new URL("../../../.env", import.meta.url)), // repo root .env
+]) {
+  if (existsSync(candidate)) process.loadEnvFile(candidate);
+}
 
 const requireTee = process.env.ZUNNO_REQUIRE_TEE === "1";
 let enclave: URL;
@@ -82,7 +88,7 @@ try {
     await table.log(`Mandate ${registered.mandateId} on live Swaraj gateway (${config.swarajApiUrl}).`, false);
     console.log(`Swaraj gateway: live at ${config.swarajApiUrl} (mandate ${registered.mandateId})`);
   } else {
-    console.log("Swaraj gateway: embedded (set SWARAJ_DEV_TOKEN for live unified-actions)");
+    console.log("Swaraj gateway: embedded (set ZUNNO_GATEWAY=live + SWARAJ_DEV_TOKEN for live unified-actions)");
   }
 } catch (error) {
   console.error(`Mandate registration failed; falling back to embedded gateway: ${error instanceof Error ? error.message : String(error)}`);

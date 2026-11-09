@@ -28,7 +28,8 @@ const PCCS_URL = "https://api.trustedservices.intel.com/tdx/certification/v4";
 const NRAS_URL = "https://nras.attestation.nvidia.com/v3/attest/gpu";
 
 export function nearAiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): NearAiConfig | undefined {
-  const apiKey = env.NEAR_AI_API_KEY?.trim();
+  // Prefer NEAR_AI_API_KEY; accept NEAR_API_KEY as the common alias in root .env.
+  const apiKey = env.NEAR_AI_API_KEY?.trim() || env.NEAR_API_KEY?.trim();
   if (!apiKey) return undefined;
   return {
     apiKey,

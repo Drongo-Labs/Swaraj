@@ -78,10 +78,11 @@ deploy needs its own attestation check.
 
 ## NEAR AI Cloud (private inference)
 
-With `NEAR_AI_API_KEY` in `examples/zunno/.env`, the agent picks its moves with
-a model on NEAR AI Cloud (default `deepseek-ai/DeepSeek-V4.1-Flash-1017`, or
-`NEAR_AI_MODEL`). Before any prompt is sent, it checks the model's attestation
-the way NEAR's own verifier does:
+With `NEAR_AI_API_KEY` or `NEAR_API_KEY` in `.env` (repo root or
+`examples/zunno/.env`), the agent picks its moves with a model on NEAR AI Cloud
+(default `deepseek-ai/DeepSeek-V4.1-Flash-1017`, or `NEAR_AI_MODEL`). Before any
+prompt is sent, it checks the model's attestation the way NEAR's own verifier
+does:
 
 1. The Intel TDX quote verifies against Intel's collateral (`@phala/dcap-qvl-node`).
 2. The quote's report data binds the model's signing key and a fresh nonce.
