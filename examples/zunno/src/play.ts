@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { checkEnclave, runAgent } from "./agent/run.js";
+import { registerShadeAgent, shadeConfigFromEnv } from "./agent/shade.js";
 import { loadConfig } from "./config.js";
 import { remoteTable } from "./game/table.js";
 
@@ -12,8 +14,11 @@ import { remoteTable } from "./game/table.js";
  *
  * ZUNNO_ENCLAVE_URL + ZUNNO_AGENT_TOKEN: use a rules engine running elsewhere
  * (e.g. a TDX VM) instead of starting one. ZUNNO_REQUIRE_TEE=1: refuse to play
- * unless the engine reports a TEE.
+ * unless the engine reports a TEE. SHADE_*: register the agent as a Shade
+ * Agent on NEAR first (see the README).
  */
+
+if (existsSync(".env")) process.loadEnvFile(".env");
 
 const requireTee = process.env.ZUNNO_REQUIRE_TEE === "1";
 let enclave: URL;
@@ -42,6 +47,12 @@ const attestation = await checkEnclave(enclave, requireTee);
 const table = remoteTable(enclave, token);
 if (attestation.tee === "none") {
   await table.log("Rules engine is running outside a TEE (local mode).", false);
+}
+const shade = shadeConfigFromEnv();
+if (shade) {
+  const agentAccount = await registerShadeAgent(shade);
+  await table.log(`Agent is Shade Agent ${agentAccount.slice(0, 8)}… on ${shade.contractId} (local mode, mock attestation).`, false);
+  console.log(`Shade Agent: ${agentAccount} registered on ${shade.contractId}`);
 }
 runAgent(loadConfig(), table);
 
