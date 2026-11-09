@@ -75,7 +75,7 @@ async function runMandateJob(
     const expectedIds = payload.expected.matchedRuleIds.slice().sort().join(",");
     const actualIds = decision.matchedRuleIds.slice().sort().join(",");
     const sameOutcome = decision.decision === payload.expected.decision && actualIds === expectedIds;
-    if (decision.decision === "NEEDS_APPROVAL" && payload.approvedBy === undefined) {
+    if ((decision.decision as string) === "NEEDS_APPROVAL" && payload.approvedBy === undefined) {
       throw new Error("mandate parity failure: NEEDS_APPROVAL with no approver");
     }
     if (!sameOutcome) {

@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use sp1_sdk::blocking::{Elf, Prover, ProveRequest, ProverClient, SP1Stdin};
-use sp1_sdk::{ProvingKey, SP1ProofWithPublicValues};
+use sp1_sdk::{HashableKey, ProvingKey, SP1ProofWithPublicValues};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
@@ -37,6 +37,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // What the NEAR verifier contract takes: the program key and the proof as hex.
+    if args[2] == "--export" {
+        let bytes = std::fs::read(&args[3])?;
+        let (proof, _): (SP1ProofWithPublicValues, usize) =
+            bincode::serde::decode_from_slice(&bytes, bincode::config::standard())?;
+        let pk = prover.setup(elf)?;
+        println!(
+            "{}",
+            serde_json::json!({
+                "program": pk.verifying_key().bytes32(),
+                "public_values": hex_string(proof.public_values.as_slice()),
+                "proof": hex_string(&proof.bytes()),
+            })
+        );
+        return Ok(());
+    }
+
     let input_json = std::fs::read_to_string(&args[2])?;
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(input_json.into_bytes());
@@ -60,4 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("statement_id={statement_id}");
     }
     Ok(())
+}
+
+fn hex_string(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

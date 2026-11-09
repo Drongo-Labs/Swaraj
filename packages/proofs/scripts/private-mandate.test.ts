@@ -2,13 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { evaluateMandate } from "@swaraj/rules";
-import { mandateCommitment, privateStatement, runPrivateMandate } from "../dist/private-mandate.js";
+import { decisionStatement, mandateCommitment, privateStatement, runPrivateMandate } from "../dist/private-mandate.js";
 
 /** Keeps the Rust guest and @swaraj/rules in agreement. Opt-in: set SWARAJ_SP1_HOST_BIN and SWARAJ_SP1_PRIVATE_ELF. */
 
 const hostBin = process.env.SWARAJ_SP1_HOST_BIN ?? "";
 const elfPath = process.env.SWARAJ_SP1_PRIVATE_ELF ?? "";
 const skip = hostBin && elfPath ? false : "set SWARAJ_SP1_HOST_BIN and SWARAJ_SP1_PRIVATE_ELF";
+const decisionElf = process.env.SWARAJ_SP1_DECISION_ELF ?? "";
+const skipDecision = hostBin && decisionElf ? false : "set SWARAJ_SP1_HOST_BIN and SWARAJ_SP1_DECISION_ELF";
 
 const rule = (ruleId: string, effect: string, action: string, predicates: unknown[] = []) => ({ ruleId, effect, action, predicates });
 const amount = (operator: string, value: string) => ({ field: "context.amount", operator, value });
@@ -74,6 +76,18 @@ test("the Rust guest and the rules engine agree, and only ALLOW yields a stateme
     assert.equal(statement !== undefined, allowed, name);
     if (allowed) assert.equal(statement, privateStatement(input), name);
   }
+});
+
+test("the decision guest proves every outcome the rules engine gives, BLOCK included", { skip: skipDecision }, async () => {
+  const outcomes = new Set<string>();
+  for (const [name, mandateValue, action] of cases) {
+    const decision = evaluateMandate(mandateValue, action);
+    outcomes.add(decision.decision);
+    const input = { mandateJson: JSON.stringify(mandateValue), actionJson: JSON.stringify(action), evidenceDigest: "0xabc" };
+    const statement = await runPrivateMandate(input, { hostBin, elfPath: decisionElf });
+    assert.equal(statement, decisionStatement(input, decision), name);
+  }
+  assert.deepEqual([...outcomes].sort(), ["ALLOW", "BLOCK", "NEEDS_APPROVAL"]);
 });
 
 test("the commitment hides the mandate behind the salt", () => {

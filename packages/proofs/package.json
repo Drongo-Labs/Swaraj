@@ -51,13 +51,15 @@
     "execute:sp1": "cargo run --release --manifest-path host/Cargo.toml -- artifacts/swaraj-gate-guest",
     "prove:sp1": "cargo run --release --manifest-path host/Cargo.toml -- artifacts/swaraj-gate-guest --prove",
     "worker:once": "pnpm build && node --env-file ../../.env scripts/run-worker-once.mjs",
-    "build:sp1:private": "cd private-guest && cargo prove build --output-directory ../artifacts --elf-name swaraj-private-guest"
+    "build:sp1:private": "cd private-guest && cargo prove build --output-directory ../artifacts --elf-name swaraj-private-guest",
+    "build:sp1:decision": "cd decision-guest && cargo prove build --output-directory ../artifacts --elf-name swaraj-decision-guest"
   },
   "dependencies": {
     "@swaraj/database": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",
-    "@swaraj/smt": "workspace:*"
+    "@swaraj/smt": "workspace:*",
+    "near-api-js": "^7.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
