@@ -2,7 +2,8 @@ import { ZunnoAgent, openingProposal, type AgentDeps, type MoveExecutor } from "
 import { EmbeddedGateway } from "../swaraj/embeddedGateway.js";
 import { loadConfig, type ZunnoAgentConfig } from "../config.js";
 import type { GatewayDecision } from "../swaraj/client.js";
-import type { AgentTable } from "./table.js";
+import type { AgentTable, AgentView } from "./table.js";
+import type { ZunnoProposal } from "../actions/intents.js";
 
 /**
  * The agent's side of a match. Every move is a typed intent through the
@@ -18,7 +19,12 @@ const LOCAL_POLICY_HASH = `0x${"0".repeat(64)}`;
 export class GameSession {
   private readonly agent: ZunnoAgent;
 
-  constructor(private readonly config: ZunnoAgentConfig = loadConfig(), private readonly table: AgentTable) {
+  constructor(
+    private readonly config: ZunnoAgentConfig = loadConfig(),
+    private readonly table: AgentTable,
+    /** Picks a move, e.g. NEAR AI; undefined falls back to the first legal card. */
+    private readonly pickMove?: (view: AgentView) => Promise<ZunnoProposal | undefined>,
+  ) {
     this.agent = this.createAgent();
   }
 
@@ -32,7 +38,8 @@ export class GameSession {
         hand: view.hand,
         topValue: view.topValue,
         activeColor: view.activeColor,
-        proposal: openingProposal(view.hand, view.topValue, view.activeColor),
+        proposal: (await this.pickMove?.(view).catch(() => undefined))
+          ?? openingProposal(view.hand, view.topValue, view.activeColor),
       });
     }
   }

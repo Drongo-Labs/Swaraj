@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { checkAttestation, type Attestation } from "../enclave/attestation.js";
 import { GameSession } from "../game/session.js";
-import type { AgentTable } from "../game/table.js";
+import type { AgentTable, AgentView } from "../game/table.js";
+import type { ZunnoProposal } from "../actions/intents.js";
 import type { ZunnoAgentConfig } from "../config.js";
 
 /**
@@ -20,8 +21,13 @@ export async function checkEnclave(enclave: URL, requireTee: boolean, fetchImpl:
   return answer;
 }
 
-export function runAgent(config: ZunnoAgentConfig, table: AgentTable, pollMs = 300): () => Promise<void> {
-  const session = new GameSession(config, table);
+export function runAgent(
+  config: ZunnoAgentConfig,
+  table: AgentTable,
+  pickMove?: (view: AgentView) => Promise<ZunnoProposal | undefined>,
+  pollMs = 300,
+): () => Promise<void> {
+  const session = new GameSession(config, table, pickMove);
   let stopped = false;
   const done = (async () => {
     while (!stopped) {
