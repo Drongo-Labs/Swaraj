@@ -76,6 +76,24 @@ One-time setup by the contract owner:
 The template's TEE mode checks a Phala dstack attestation, so a Google Cloud TDX
 deploy needs its own attestation check.
 
+## NEAR AI Cloud (private inference)
+
+With `NEAR_AI_API_KEY` in `examples/zunno/.env`, the agent picks its moves with
+a model on NEAR AI Cloud (default `deepseek-ai/DeepSeek-V4.1-Flash-1017`, or
+`NEAR_AI_MODEL`). Before any prompt is sent, it checks the model's attestation
+the way NEAR's own verifier does:
+
+1. The Intel TDX quote verifies against Intel's collateral (`@phala/dcap-qvl-node`).
+2. The quote's report data binds the model's signing key and a fresh nonce.
+3. The GPU evidence carries the same nonce and passes NVIDIA's verifier.
+
+Every reply must be signed by an attested key over the exact request and
+response bytes. A pick is only a proposal: it must be a legal card, and it
+still goes through the mandate gateway. If the attestation fails, no prompt is
+sent and the agent uses its built-in moves; a bad or unsigned reply falls back
+the same way. Verification takes about 5 to 10 seconds per game, and a move 3
+to 5 seconds.
+
 ## How it works
 
 ```mermaid
