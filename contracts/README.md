@@ -121,7 +121,11 @@ panic; owner settles with `payout` or `refund`.
 
 ```bash
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager
+cd contracts && RUSTFLAGS='-C link-arg=-s' cargo build --release -p swaraj-wager --target wasm32-unknown-unknown
 ```
+
+Testnet: `swaraj-wager-k-9ldcod.testnet` (`max_wager=5000000`). See
+`contracts/wager/DEPLOYMENT.md`.
 
 ## `NearProofSink` (Kushagra — Nov 8)
 
