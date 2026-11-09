@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["verifier", "receipts", "registry"]
+members = ["verifier", "receipts", "registry", "wager"]
 
 [profile.release]
 codegen-units = 1

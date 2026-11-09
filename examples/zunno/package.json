@@ -8,6 +8,7 @@
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "e2e": "tsx src/e2e/gatedStake.ts",
+    "e2e:gateway": "tsx src/e2e/gatewayWager.ts",
     "play": "tsx src/play.ts",
     "vectors": "tsx scripts/gen-vectors.ts",
     "lean:sync": "node lean/scripts/sync-vectors.mjs",

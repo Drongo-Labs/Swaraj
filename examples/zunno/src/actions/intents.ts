@@ -14,8 +14,10 @@ import { playCardParams } from "./appAction.js";
 
 export type ZunnoProposal =
   | { kind: "STAKE"; amountWei: string }
-  | { kind: "PLAY_CARD"; handIndex: number; cardValue: number; chosenColor?: number }
-  | { kind: "DRAW_CARD" };
+  /** NEP-141 / mandate-gated wager (USDC atomic units). */
+  | { kind: "WAGER"; amount: string; recipient: string }
+  | { kind: "PLAY_CARD"; handIndex: number; cardValue: number; chosenColor?: number; onTurn?: boolean }
+  | { kind: "DRAW_CARD"; onTurn?: boolean };
 
 export type UnifiedIntent =
   | {
@@ -27,7 +29,7 @@ export type UnifiedIntent =
   | {
       action: "APP_ACTION";
       resource: { app: string; target: string };
-      context: { name: "play_card" | "draw_card"; params: Record<string, string> };
+      context: { name: "play_card" | "draw_card"; params: Record<string, string | boolean> };
       common: IntentCommon;
     };
 
@@ -75,18 +77,32 @@ export function buildIntent(
         },
         common,
       };
+    case "WAGER":
+      return {
+        action: "PAYMENT",
+        resource: { service: "zunno_wager" },
+        context: {
+          amount: proposal.amount,
+          currency: "USDC",
+          recipient: proposal.recipient,
+        },
+        common,
+      };
     case "PLAY_CARD":
       return {
         action: "APP_ACTION",
         resource: { app: "zunno", target: config.gameAddress },
         context: {
           name: "play_card",
-          params: playCardParams({
-            handIndex: proposal.handIndex,
-            cardValue: proposal.cardValue,
-            // Wilds must declare a chosen color (0–3); non-wilds keep 4.
-            chosenColor: isWild(proposal.cardValue) ? (proposal.chosenColor ?? 0) : (proposal.chosenColor ?? 4),
-          }),
+          params: {
+            ...playCardParams({
+              handIndex: proposal.handIndex,
+              cardValue: proposal.cardValue,
+              // Wilds must declare a chosen color (0–3); non-wilds keep 4.
+              chosenColor: isWild(proposal.cardValue) ? (proposal.chosenColor ?? 0) : (proposal.chosenColor ?? 4),
+            }),
+            onTurn: proposal.onTurn !== false,
+          },
         },
         common,
       };
@@ -94,7 +110,10 @@ export function buildIntent(
       return {
         action: "APP_ACTION",
         resource: { app: "zunno", target: config.gameAddress },
-        context: { name: "draw_card", params: {} },
+        context: {
+          name: "draw_card",
+          params: { onTurn: proposal.onTurn !== false },
+        },
         common,
       };
   }

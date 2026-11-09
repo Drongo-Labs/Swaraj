@@ -50,6 +50,18 @@ export const MandatePredicateSchema = z.union([
     operator: z.enum(["EQ", "LT", "LTE", "GT", "GTE"]),
     value: AtomicAmount,
   }),
+  z.strictObject({
+    field: z.literal("context.paramString"),
+    name: ParamName,
+    operator: z.literal("EQ"),
+    value: PredicateString,
+  }),
+  z.strictObject({
+    field: z.literal("context.paramBool"),
+    name: ParamName,
+    operator: z.literal("EQ"),
+    value: z.boolean(),
+  }),
 ]);
 
 export const MandateRuleSchema = z.strictObject({
