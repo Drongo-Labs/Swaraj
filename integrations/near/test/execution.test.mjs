@@ -59,7 +59,9 @@ test("live NEAR executor sends nothing when the capability is rejected", async (
       },
       rpcUrl: "http://127.0.0.1:9",
       accountId: "agent.testnet",
-      privateKey: "ed25519:3D4YudUahN1nawWvHfEKBGpmJLfbCTbvdXDJKqfLhQ98XewyWK4tEDWvmAYPZqcgz7qfkCEHyWD15m8JVVWJ3LXD",
+      // Obviously-fake throwaway key (64 zero bytes), built at runtime so no
+      // secret-shaped literal sits in the repo; the test never signs with it.
+      privateKey: "ed25519" + ":" + "1".repeat(88),
     });
     await assert.rejects(
       executor.execute({

@@ -1,100 +1,220 @@
 # Swaraj
 
-Formally constrained authorization for autonomous agents: every action is
-checked against a versioned policy before any effect, decided through an
-SMT gateway, and every decision is recorded durably and can be carried to
-a proof-bound receipt.
+**Formally checked, provable authorization for autonomous AI agents, settled on NEAR.**
 
-Status: active development. See [docs/phase_plan.md](docs/phase_plan.md)
-for the phase map and what is implemented today, and
-[OWNERSHIP.md](OWNERSHIP.md) for who owns what.
+An AI agent that can move money needs limits it can't talk its way around.
+Swaraj checks every action an agent proposes against an Agent Mandate before
+anything happens. Anything not explicitly permitted is blocked, with the broken
+rule named. Every decision becomes a receipt, and the decision is proved with a
+Groth16 zero-knowledge proof that a NEAR contract verifies on chain, for blocked
+actions as well as allowed ones.
 
-## Layout
+Built at [NEAR HACKATHON](https://nearhackathon.com/) (Nov 2026). Everything
+below runs on **NEAR testnet**; mainnet is untested.
+
+## What it does
+
+| | |
+|---|---|
+| **Decide** | A fail-closed gateway evaluates each action against the agent's mandate: FORBID wins, then REQUIRE_APPROVAL, then PERMIT, and anything else is BLOCK. Malformed input blocks, and an optional Z3 cross-check (`SWARAJ_Z3_CROSSCHECK=1`) blocks on any disagreement |
+| **Act** | Permitted actions execute for real: NEAR transfers, NEP-141 token transfers and Ref Finance swaps. Blocked actions never touch the chain |
+| **Record** | Every decision, receipt and idempotency claim is stored in Postgres. A database trigger makes illegal receipt moves (like PROVED → PENDING) impossible, even from raw SQL |
+| **Prove** | A worker re-derives each decision, proves it with an SP1 Groth16 proof, and settles the receipt on NEAR, where a contract verifies the proof with NEAR's `alt_bn128` host functions |
+| **Check** | `swaraj-verify` checks a signed receipt bundle with no Swaraj service, including the NEAR transaction behind it |
+| **Formal guarantees** | The decision rules are proved in Lean 4 (default deny, forbid always wins, approvals never widen a mandate) |
+
+## How it uses NEAR
+
+| Use | Where |
+|---|---|
+| **Execution**: NEAR transfers, NEP-141 transfers (`near_ft_transfer`) and Ref Finance swaps, run only after the mandate allows them | `integrations/near` |
+| **Evidence**: each transaction is read back from chain, and a receipt fails unless it is final, matches the action and fully succeeded | `integrations/near`, `packages/verify` |
+| **Groth16 verifier contract**: verifies SP1 proofs on chain, about 34 Tgas, with no oracle or other chain | `contracts/verifier` |
+| **Receipts contract**: a receipt reaches PROVED only when the verifier accepts a proof of its exact claim | `contracts/receipts` |
+| **`NearProofSink`**: the proof worker settles receipts on NEAR | `packages/proofs` |
+| **Registry contract**: agent registration | `contracts/registry` |
+| **Shade Agent** (demo): the AI opponent has its own NEAR account and registers on an agent contract | `examples/zunno` |
+| **NEAR AI Cloud** (demo): the opponent picks moves with private inference, after checking the model's TDX and GPU attestation | `examples/zunno` |
+| **Wager escrow** (demo): holds a match stake under the mandate's cap | `contracts/wager` |
+
+## How a decision gets proved on NEAR
+
+```mermaid
+flowchart LR
+  A["AI agent"] -->|"typed action"| G["Swaraj gateway<br/>mandate + Z3"]
+  G -->|"BLOCK: rule named"| R["Receipt (Postgres)<br/>PENDING"]
+  G -->|"ALLOW"| X["Execute on NEAR<br/>transfer / swap"]
+  X -->|"evidence from chain"| R
+  R --> W["Proof worker<br/>re-derives the decision"]
+  W -->|"SP1 decision guest"| P["Groth16 proof"]
+  P --> S["NearProofSink"]
+  S --> C["Receipts contract"]
+  C -->|"verify(proof)"| V["Verifier contract<br/>alt_bn128"]
+  V -->|"statement matches claim"| C
+  C -->|"PROVED"| R
+```
+
+The proof commits the statement `swaraj/statement/mandate/v1`: the intent hash,
+the mandate hash, the decision, the rules that decided it, and the approver and
+evidence when present. The SP1 guest computes both hashes from the exact bytes
+it evaluates, and the worker refuses any proof whose statement differs from the
+recorded decision.
+
+## Live on testnet
+
+| Contract | Account | Proof it works |
+|---|---|---|
+| Verifier (current) | [`swaraj-verifier-v3-11101557.testnet`](https://testnet.nearblocks.io/address/swaraj-verifier-v3-11101557.testnet) | Verified the ALLOW and BLOCK fixtures ([ALLOW](https://testnet.nearblocks.io/txns/6X5pjp1rFtBxBrJGjVp2nsL1RGdGphVBbanNpSVkZA3z), [BLOCK](https://testnet.nearblocks.io/txns/gdBEzrii87iUegjKkecseZSZ6krdouuYnjRB3ucVNGi)) |
+| Receipts | [`swaraj-receipts-11081321.testnet`](https://testnet.nearblocks.io/address/swaraj-receipts-11081321.testnet) | Wired to the v3 verifier. A live allowed action and a live blocked action went from the API to PROVED on chain |
+| Registry | [`swaraj-registry-k-7zndxw.testnet`](https://testnet.nearblocks.io/address/swaraj-registry-k-7zndxw.testnet) | Agent registered |
+| Wager escrow | [`swaraj-wager-k-9ldcod.testnet`](https://testnet.nearblocks.io/address/swaraj-wager-k-9ldcod.testnet) | In-cap deposit recorded, over-cap deposit rejected |
+| Shade agent contract | [`zunno-agent-contract-11081501.testnet`](https://testnet.nearblocks.io/address/zunno-agent-contract-11081501.testnet) | The Zunno agent is registered (local mode) |
+
+Contract details, methods and more transactions: [contracts/README.md](contracts/README.md).
+
+## The demo: Zunno
+
+[Zunno](examples/zunno) is UNO against an AI opponent that can't cheat. Every
+move the agent proposes goes through Swaraj first, so a forbidden move (like a
+Wild +4) is blocked with the rule named and the agent falls back to a legal
+move.
+
+- The **rules engine runs as a separate process** that holds the deck and both
+  hands. The agent sees only its own hand, through a token-protected API, and
+  the engine reports where it runs (`tee: "none"` locally).
+- The agent is a **Shade Agent** with its own NEAR account, registered on chain.
+- Its moves come from **NEAR AI Cloud**. Before sending any prompt, it checks
+  the model's Intel TDX quote, the nonce and key binding, and NVIDIA's GPU
+  verdict, and it accepts only replies signed by the attested key.
+- **Live gateway mode** sends moves to the real Swaraj API, with mandate rules for
+  turn order and the wager cap.
+
+```bash
+pnpm --filter swaraj-zunno play      # → http://127.0.0.1:3002
+```
+
+Setup for the Shade Agent, NEAR AI and the live gateway is in the
+[Zunno README](examples/zunno/README.md).
+
+## Quick start
+
+### 5-minute try — no keys, no database
+
+```bash
+pnpm install
+# unit tests that need no services: rules engine, schemas, the Zunno demo
+pnpm --filter @swaraj/rules --filter @swaraj/schemas --filter swaraj-zunno test
+# NEAR contract tests (Rust toolchain)
+cargo test --manifest-path contracts/Cargo.toml
+# playable demo: the AI opponent's every move is gated by its mandate
+pnpm --filter swaraj-zunno play      # then open http://127.0.0.1:3002
+```
+
+In the demo, a forbidden move (e.g. Wild +4) is blocked with the rule named in
+the game log, and the agent falls back to a legal move.
+
+### Full setup — database, API, live NEAR (needs Docker; live scenes need testnet keys)
+
+Requirements: Node 22.12+ (24/25 recommended), pnpm 10, Docker, a Rust toolchain,
+Lean 4 via elan, and the SP1 toolchain only to generate proofs.
+
+```bash
+pnpm install
+cp .env.example .env      # local config; never commit .env
+pnpm db:up                # Postgres 16 in Docker
+pnpm check                # build, typecheck and every TypeScript test
+pnpm check:all            # plus Rust, contracts and Lean
+```
+
+### Run a NEAR scene (requires a funded testnet account)
+
+```bash
+# Fund a testnet account first; these scenes spend real testnet NEAR.
+export NEAR_ACCOUNT_ID=<account>.testnet NEAR_PRIVATE_KEY=ed25519:... NEAR_REF_POOL_ID=17
+pnpm --filter @swaraj/near near-setup            # once per account, before the first swap
+NEAR_DEMO_RECIPIENT=<account>.testnet pnpm --filter @swaraj/near near-demo -- --scene=live.allow
+```
+
+Scenes: `live.allow` (transfer), `live.trade` (Ref Finance swap), `live.block`
+(over the cap). Without NEAR credentials, actions run against fixtures and end
+at `cant_prove`, so a fixture run can never show `proved`.
+
+### Prove live decisions on NEAR (requires the receipts-contract owner key)
+
+Build the decision guest and the native Groth16 host, then start the API with
+the NEAR sink. `SWARAJ_FORCE_MOCK=1` turns off the Base/Uniswap pipeline, which
+otherwise needs Base keys; NEAR actions and proofs still run for real.
+
+```bash
+pnpm --filter @swaraj/proofs build:sp1:decision
+(cd packages/proofs/host && cargo build --release --features native-gnark)
+
+SWARAJ_SP1_HOST_BIN=$PWD/packages/proofs/host/target/release/swaraj-gate-host \
+SWARAJ_SP1_DECISION_ELF=$PWD/packages/proofs/artifacts/swaraj-decision-guest \
+SWARAJ_FORCE_MOCK=1 SWARAJ_PROOF_SINK=near \
+NEAR_SINK_ACCOUNT_ID=<receipts contract owner> NEAR_SINK_PRIVATE_KEY=ed25519:... \
+NEAR_RECEIPTS_CONTRACT_ID=<receipts contract> \
+pnpm dev:api
+```
+
+Each proof takes about 6 to 7 minutes and needs up to 16 GB of free memory, so
+the API proves one job at a time. A receipt shows PENDING until its proof settles.
+
+## Repository layout
 
 | Path | Contents |
 |---|---|
-| `packages/schemas` | Canonical request, policy, evidence, snapshot, and receipt schemas |
-| `packages/rules` | Unified-action Agent Mandate evaluation with forbid precedence and default deny |
-| `packages/crypto` | Canonicalization, hashing, signing, key registry, and shared vectors |
-| `packages/evidence` | Normalized venue evidence and Base RPC adapters |
-| `packages/capability` | Capability tokens, budget reservations, and execution adapters |
-| `packages/receipts` | Receipt lifecycle and memory/Postgres stores |
-| `packages/contracts` | Shared API contracts and policy fixtures |
-| `packages/sdk` | Typed HTTP client for agents |
-| `packages/verify` | `swaraj-verify`: checks a receipt bundle with no Swaraj service |
-| `packages/smt` | Typed integer rule AST, SMT-LIB renderer, Z3 session, fail-closed policy gateway with rule attribution |
-| `packages/database` | Postgres migrations, pool, decision records, trigger-guarded receipt lifecycle, idempotency ledger, proof queue, artifact ledger |
-| `packages/proofs` | Rust gate engine, SP1 guest/host, statement/bundle layer, proof worker, zkVerify submission sink |
-| `packages/lean` | Lean 4 assurance suite: kernel-checked framework properties, shared vector proofs |
-| `integrations/near` | `@swaraj/near`: everything NEAR, including execution, evidence, mandates and the demo |
-| `apps/api` | Authorization, execution, receipt, and proof HTTP service |
-| `apps/mcp` | `swaraj-mcp` tools, and `swaraj-mcp-gateway`: a fail-closed proxy for an agent's MCP servers |
-| `apps/web` | React owner and agent interface |
-| `apps/example` | SDK demo and live-agent example |
+| `packages/schemas` | Canonical action, mandate, evidence and receipt schemas |
+| `packages/rules` | Agent Mandate evaluation: forbid precedence, approvals, default deny |
+| `packages/smt` | Integer rule AST, SMT-LIB rendering, Z3 session, fail-closed gateway |
+| `packages/crypto` | Canonical hashing, signing, key registry, shared vectors |
+| `packages/database` | Migrations, trigger-guarded receipt lifecycle, idempotency, proof queue |
+| `packages/proofs` | SP1 guests (decision, Private Mandate) and host, proof worker, `NearProofSink`, Groth16 fixtures |
+| `packages/agent` | `GovernedAgent`: propose, gate, execute only on ALLOW |
+| `packages/evidence`, `packages/capability`, `packages/receipts` | Evidence normalization, capabilities and budgets, receipt stores |
+| `packages/verify` | `swaraj-verify`, the standalone receipt checker |
+| `packages/lean` | Lean 4 proofs of the decision rules |
+| `packages/sdk`, `packages/contracts` | Typed client and shared API contracts |
+| `integrations/near` | Everything NEAR: execution, evidence, settlement, demo scenes |
+| `contracts/` | NEAR contracts: `verifier`, `receipts`, `registry`, `wager` |
+| `apps/api` | Authorization, execution, receipt and proof service |
+| `apps/mcp` | MCP tools, and a fail-closed MCP gateway for agent tool calls |
+| `apps/web` | Owner and agent interface |
+| `apps/example` | SDK and live-agent example |
+| `examples/zunno` | The Zunno demo |
+| `web/` | Project website (Next.js) |
 | `spec/` | [Receipt format](spec/receipt-v1.md) and [theorem list](spec/theorems.md) |
-| `docs/` | [phase plan](docs/phase_plan.md), [integration guide](docs/integration.md), [proof pipeline](docs/proof-pipeline.md) |
-| `examples/` | [JSON → SMT walkthrough](examples/json-to-smt.md), kept honest by a contract test |
 
-## Setup
+## Assurance
 
-Requirements: Node 22.12+ (24/25 recommended), pnpm 10, Docker, a Rust
-toolchain (for the engine), Lean 4 via elan (for the assurance suite),
-and the SP1 toolchain only if you build guest proofs.
+- **Lean 4:** kernel-checked theorems in `packages/lean`, listed in
+  [spec/theorems.md](spec/theorems.md). The build rejects `sorry` and added
+  axioms. Zunno's Lean suite also proves its game rules and imports Swaraj's
+  bridge theorem: nothing executes without an ALLOW.
+- **Tests:** about 300 TypeScript tests, the Rust engine and contract tests, and
+  opt-in SP1 parity tests that hold the Rust guests to the TypeScript rules
+  engine on every case.
+- **Contracts:** the verifier is tested against real Groth16 proofs and tampered
+  variants. The receipts contract is tested for every illegal move and every
+  stranger call.
 
-```bash
-pnpm install                       # workspace install
+## Hackathon disclosure
 
-cp .env.example .env               # local secrets/config; never commit .env
-pnpm db:up                         # Postgres 16 in Docker; schema loads on first boot
-pnpm check                         # build + typecheck + all TS tests; needs the Postgres above
-```
-
-The test suites for `database`, `proofs`, and `mcp` run against the
-Compose Postgres and read `DATABASE_URL` from `.env`.
-
-## Daily commands
-
-```bash
-pnpm check            # build, typecheck, and test every TS package
-pnpm check:rust      # Rust engine tests (packages/proofs/engine)
-pnpm check:lean      # Lean suite: kernel-checked theorems + shared vectors
-pnpm check:all       # everything above
-
-pnpm db:up           # start Postgres        pnpm db:stop to stop it
-pnpm proofs:worker   # process one queued proof job (local sink)
-pnpm dev:mcp         # start the MCP stdio bridge
-
-pnpm --filter @swaraj/lean sync:vectors   # regenerate Lean vectors from the shared JSON
-pnpm build:sp1        # SP1 guest ELF (needs the SP1 toolchain + Docker)
-```
-
-## How it works
-
-1. **Decide.** A policy is a typed integer rule document (see the
-   [example](examples/json-to-smt.md)). The gateway compiles it plus the
-   action's ground values to SMT-LIB and asks Z3; malformed input, solver
-   failure, or unknown verdicts fail closed to BLOCK. A BLOCK names the
-   exact violated rules, reproducible from the stored script.
-2. **Record.** Decisions, receipts, and idempotency claims persist in
-   Postgres. Receipt transitions are guarded by a database trigger —
-   illegal moves (e.g. `PROVED` → `PENDING`) are impossible even from
-   raw SQL — and every move is appended to an event log.
-3. **Prove.** A queued proof job re-derives the decision deterministically,
-   refuses to bundle on any disagreement with the recorded decision, and
-   emits a canonical statement whose id is the SHA-256 of its text —
-   identical in TypeScript, Rust, and (as checked examples) Lean. With
-   the SP1 toolchain configured, the Rust guest re-derives the same
-   statement id inside the zkVM before the sink attests and the receipt
-   promotes to `PROVED`. Details: [docs/proof-pipeline.md](docs/proof-pipeline.md).
-4. **Talk to it.** Agents submit actions over HTTP (the SDK's contract)
-   or through MCP tools; see [docs/integration.md](docs/integration.md).
-
-## Development notes
-
-- `CI=true` in your environment makes pnpm default to a frozen lockfile;
-  use `pnpm install --no-frozen-lockfile` after editing package.json.
-- Migrations are a single source of truth: the Compose container runs
-  them on first boot, and `applyMigrations()` re-checks them
-  idempotently from the application.
-- Test files run serially (`--test-concurrency 1`) because the suites
-  share one Postgres database.
+- **Built before the window:** the repository started on Oct 13, 2026. Work
+  before the Oct 19 announcement is baseline, including the typed schemas,
+  canonical hashing, the Z3 gateway, the Postgres receipt lifecycle, the first
+  SP1 proof pipeline, the first Lean suite, the MCP bridge and the web demo.
+- **Built in the window:** the NEAR integration (execution, evidence,
+  settlement), all four NEAR contracts, Groth16 proofs of mandate decisions
+  including BLOCK, on-chain verification, `NearProofSink`, Private Mandates,
+  human approvals, verified-programs-only mandates, signed receipt bundles and
+  `swaraj-verify`, and everything NEAR in Zunno.
+- **Zunno** started as a separate project on Inco and Base Sepolia and moved
+  into this repository on Nov 7, 2026. Its NEAR work (enclave process, Shade
+  Agent, NEAR AI, live gateway, wager) was built in the window.
+- **Third-party code:** SP1 (Succinct), `near-sdk`, the Shade Agent framework's
+  unmodified `shade-contract-template`, `@neardefi/shade-agent-js`, Phala's
+  `dcap-qvl`, and the verification steps of NEAR's
+  [nearai-cloud-verifier](https://github.com/nearai/nearai-cloud-verifier).
+- **AI tools:** parts of the code were written with AI coding assistants,
+  including Claude Code, Cursor and Mistral Vibe, and reviewed and tested by the team.
