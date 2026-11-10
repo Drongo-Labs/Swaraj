@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { Account, actions, type KeyPairString } from "near-api-js";
-import type { VerificationBundle } from "./artifacts.js";
+import type { BundleProof, VerificationBundle } from "./artifacts.js";
 import type { ProofSink, SinkAttestation } from "./zkverify.js";
 
 function asKey(privateKey: string): KeyPairString {
@@ -10,13 +10,7 @@ function asKey(privateKey: string): KeyPairString {
 }
 
 /** Groth16 payload the on-chain receipts `prove` method expects (hex from host export). */
-export type NearGroth16Proof = {
-  program: string;
-  /** Hex-encoded public values (no 0x). */
-  publicValuesHex: string;
-  /** Hex-encoded proof (no 0x). */
-  proofHex: string;
-};
+export type NearGroth16Proof = BundleProof;
 
 export type NearProofSinkConfig = {
   rpcUrl?: string;
@@ -25,10 +19,10 @@ export type NearProofSinkConfig = {
   /** Deployed `swaraj-receipts` account. */
   receiptsContractId: string;
   /**
-   * Resolve the Groth16 bytes for this bundle. For the Nov 8 demo, return a
-   * fixture whose statement SHA-256 equals `sha256(bundle.canonicalText)`.
+   * Resolve the Groth16 bytes for this bundle. When omitted, the bundle's own
+   * `proof` (attached by the worker after proving) is used.
    */
-  resolveProof: (bundle: VerificationBundle) => NearGroth16Proof | Promise<NearGroth16Proof>;
+  resolveProof?: (bundle: VerificationBundle) => NearGroth16Proof | Promise<NearGroth16Proof>;
   /** Optional app_id stored on the receipt (default app_demo). */
   appId?: string;
   pollIntervalMs?: number;
@@ -85,25 +79,43 @@ export class NearProofSink implements ProofSink {
   }
 
   async submit(bundle: VerificationBundle): Promise<SinkAttestation> {
-    const proof = await this.config.resolveProof(bundle);
+    const proof = this.config.resolveProof
+      ? await this.config.resolveProof(bundle)
+      : bundle.proof;
+    if (!proof) {
+      throw new Error("no Groth16 proof: the bundle carries none and no resolveProof is configured");
+    }
     const claimHash = claimHashFromStatement(bundle.canonicalText);
     const receiptId = `receipt_${bundle.statementId}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
     const account = this.account();
     const contractId = this.config.receiptsContractId;
 
-    await account.callFunction({
+    try {
+      await account.callFunction({
+        contractId,
+        methodName: "create_pending",
+        args: {
+          receipt_id: receiptId,
+          app_id: this.appId,
+          intent_digest: bundle.statementId,
+          claim_hash: claimHash,
+        },
+        gas: 30_000_000_000_000n,
+        deposit: 0n,
+        waitUntil: "FINAL",
+      });
+    } catch (error) {
+      // A retry after a successful create_pending must reuse the receipt.
+      if (!String(error).includes("already exists")) throw error;
+    }
+
+    // A retry after a successful prove must not prove again.
+    const existing = (await account.callFunction({
       contractId,
-      methodName: "create_pending",
-      args: {
-        receipt_id: receiptId,
-        app_id: this.appId,
-        intent_digest: bundle.statementId,
-        claim_hash: claimHash,
-      },
-      gas: 30_000_000_000_000n,
-      deposit: 0n,
-      waitUntil: "FINAL",
-    });
+      methodName: "get",
+      args: { receipt_id: receiptId },
+    })) as NearReceiptRecord | null;
+    if (existing?.state === "Proved" && existing.proof_ref) return { ref: existing.proof_ref, sink: "near" };
 
     await account.callFunction({
       contractId,
