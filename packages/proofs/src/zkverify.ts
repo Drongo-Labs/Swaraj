@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { VerificationBundle } from "./artifacts.js";
+import { NearProofSink } from "./near-sink.js";
 
 /** Where proofs get verified. The local sink is offline and deterministic, and is not a ZK proof. */
 
@@ -20,11 +21,27 @@ export class LocalProofSink implements ProofSink {
   }
 }
 
-export function selectProofSink(): ProofSink {
-  // ZKVERIFY_SEED_PHRASE / KURIER_API_KEY will select the network sink
-  // once the submission client is wired in; until then everything is
-  // local.
-  return new LocalProofSink();
+export function selectProofSink(env: NodeJS.ProcessEnv = process.env): ProofSink {
+  const kind = env.SWARAJ_PROOF_SINK ?? "local";
+  if (kind === "local") return new LocalProofSink();
+  if (kind === "near") {
+    const accountId = env.NEAR_SINK_ACCOUNT_ID?.trim();
+    const privateKey = env.NEAR_SINK_PRIVATE_KEY?.trim();
+    const receiptsContractId = env.NEAR_RECEIPTS_CONTRACT_ID?.trim();
+    // Fail closed: a NEAR sink without its settings must never fall back to local.
+    if (!accountId || !privateKey || !receiptsContractId) {
+      throw new Error(
+        "SWARAJ_PROOF_SINK=near requires NEAR_SINK_ACCOUNT_ID, NEAR_SINK_PRIVATE_KEY and NEAR_RECEIPTS_CONTRACT_ID",
+      );
+    }
+    return new NearProofSink({
+      accountId,
+      privateKey,
+      receiptsContractId,
+      ...(env.NEAR_RPC_URL?.trim() ? { rpcUrl: env.NEAR_RPC_URL.trim() } : {}),
+    });
+  }
+  throw new Error(`unknown SWARAJ_PROOF_SINK: ${kind}`);
 }
 
 /** Compatibility exports for callers that provide their own zkVerify session. */
