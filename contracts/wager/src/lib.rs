@@ -71,6 +71,11 @@ impl WagerEscrow {
         self.receipts.clone()
     }
 
+    /// The whole pot a payout must pay, as a decimal string.
+    pub fn pot_amount(&self) -> U128 {
+        U128(self.pot())
+    }
+
     pub fn owner(&self) -> AccountId {
         self.owner.clone()
     }
@@ -325,6 +330,11 @@ mod tests {
     fn settle(c: &mut WagerEscrow, winner: usize, action_wire: &str, statement: &str, receipt: Result<Option<ProvedReceipt>, PromiseError>) {
         context(0, 0);
         let _ = c.on_receipt(accounts(winner), "r1".into(), statement.into(), action_wire.into(), receipt);
+    }
+
+    #[test]
+    fn the_pot_is_every_wager_added_up() {
+        assert_eq!(funded().pot_amount().0, 200);
     }
 
     #[test]

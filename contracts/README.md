@@ -122,6 +122,7 @@ owner can pay without one, and each receipt pays once.
 | `ft_on_transfer` | NEP-141 deposit callback |
 | `payout(winner, receipt_id, statement, action_wire)` | Anyone. Reads the receipt, checks it is PROVED for this exact payout, then pays the pot. Attach about 100 Tgas |
 | `refund(agent)` | Owner returns one agent's wager on cancel |
+| `pot_amount()` | View: the whole pot a payout must pay |
 
 ```bash
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager
