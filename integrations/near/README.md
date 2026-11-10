@@ -24,4 +24,4 @@ if (settler.handles(action)) {
 
 The core packages do not depend on this one. A new chain implements `ActionSettler` from `@swaraj/capability` the same way. `apps/api` picks NEAR as the default, and `swaraj-verify` imports the NEAR checks from here.
 
-Steps and limits are in [RUNBOOK_PHASE2_NEAR.md](../../RUNBOOK_PHASE2_NEAR.md).
+Setup, demo scenes and limits are in the [root README](../../README.md#run-a-near-scene).
