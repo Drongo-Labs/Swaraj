@@ -41,11 +41,12 @@ export function startProofLoop(runOne: () => Promise<unknown>, idleMs = 2000): (
 
 export function startProofService(): () => Promise<void> {
   const pool = openPool();
-  const { SWARAJ_SP1_ELF: elfPath, SWARAJ_SP1_HOST_BIN: hostBin } = process.env;
+  const { SWARAJ_SP1_ELF: elfPath, SWARAJ_SP1_HOST_BIN: hostBin, SWARAJ_SP1_DECISION_ELF: decisionElf } = process.env;
   const stop = startProofLoop(() =>
     runOneProofJob(pool, {
       artifactRoot: process.env.SWARAJ_PROOF_ARTIFACT_ROOT ?? "./artifacts",
       ...(elfPath && hostBin ? { sp1: { elfPath, hostBin } } : {}),
+      ...(decisionElf && hostBin ? { decisionSp1: { elfPath: decisionElf, hostBin } } : {}),
     }),
   );
   return async () => {

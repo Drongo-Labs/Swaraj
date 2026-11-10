@@ -9,12 +9,17 @@ try {
   // The SP1 guest proves the statement when the toolchain artifacts are
   // configured; otherwise the worker produces the deterministic local
   // verification bundle only.
+  const hostBin = process.env.SWARAJ_SP1_HOST_BIN;
   const sp1 =
-    process.env.SWARAJ_SP1_ELF !== undefined && process.env.SWARAJ_SP1_HOST_BIN !== undefined
-      ? { elfPath: process.env.SWARAJ_SP1_ELF, hostBin: process.env.SWARAJ_SP1_HOST_BIN }
+    process.env.SWARAJ_SP1_ELF !== undefined && hostBin !== undefined
+      ? { elfPath: process.env.SWARAJ_SP1_ELF, hostBin }
+      : undefined;
+  const decisionSp1 =
+    process.env.SWARAJ_SP1_DECISION_ELF !== undefined && hostBin !== undefined
+      ? { elfPath: process.env.SWARAJ_SP1_DECISION_ELF, hostBin }
       : undefined;
 
-  const outcome = await runOneProofJob(pool, { artifactRoot, sp1 });
+  const outcome = await runOneProofJob(pool, { artifactRoot, sp1, decisionSp1 });
   console.log(outcome
     ? `proved ${outcome.receiptId} -> ${outcome.statementId} (${outcome.proofRef})`
     : "proof queue is empty");
