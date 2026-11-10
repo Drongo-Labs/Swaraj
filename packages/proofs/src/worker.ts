@@ -10,9 +10,15 @@ import type { PolicyDoc } from "@swaraj/smt";
 import { parseAgentMandate, parseUnifiedAction } from "@swaraj/schemas";
 import { evaluateParsedMandate } from "@swaraj/rules";
 import { buildMandateStatement, canonicalMandateStatementText, mandateStatementId } from "./mandate-statement.js";
-import { openArtifactStore, storeProofArtifact } from "./artifacts.js";
+import { openArtifactStore, storeProofArtifact, type VerificationBundle } from "./artifacts.js";
 import { buildStatement, canonicalStatementText, statementId } from "./statement.js";
 import { proveStatementViaSp1, type Sp1ProverConfig } from "./sp1-prover.js";
+import {
+  decisionGuestInput,
+  expectedHashes,
+  proveMandateDecision,
+  type DecisionProverConfig,
+} from "./decision-prover.js";
 import { reevaluateGround, fromWirePolicy, type GroundBinding, type GroundDecision } from "./verifier.js";
 import { selectProofSink, type ProofSink } from "./zkverify.js";
 
@@ -55,8 +61,10 @@ export interface WorkerOutcome {
 export interface WorkerOptions {
   artifactRoot: string;
   sink?: ProofSink;
-  /** When set, the SP1 guest proves the statement before submission. */
+  /** When set, the SP1 gate guest proves the statement before submission. */
   sp1?: Sp1ProverConfig;
+  /** When set, the decision guest proves MANDATE jobs with Groth16 before submission. */
+  decisionSp1?: DecisionProverConfig;
 }
 
 async function runMandateJob(
@@ -93,11 +101,33 @@ async function runMandateJob(
       ...(payload.evidenceDigest !== undefined ? { evidenceDigest: payload.evidenceDigest } : {}),
     });
     const id = mandateStatementId(statement);
-    const bundle = {
+    const canonicalText = canonicalMandateStatementText(statement);
+    const bundle: VerificationBundle = {
       statementId: id,
-      canonicalText: canonicalMandateStatementText(statement),
+      canonicalText,
       createdAt: new Date().toISOString(),
     };
+
+    // Prove with the decision guest (Groth16) when configured. The guest must
+    // commit exactly the bundle's text; anything else fails the job.
+    if (options.decisionSp1) {
+      const guestInput = decisionGuestInput(payload);
+      const hashes = expectedHashes(guestInput);
+      if (hashes.intentHash !== payload.intentHash || hashes.mandateHash !== payload.mandateHash) {
+        throw new Error(
+          `mandate hash mismatch: payload intent=${payload.intentHash} mandate=${payload.mandateHash}, canonical bytes give intent=${hashes.intentHash} mandate=${hashes.mandateHash}`,
+        );
+      }
+      const proof = await proveMandateDecision(options.decisionSp1, guestInput, canonicalText);
+      bundle.proof = proof.groth16;
+      const proofArtifactPath = await storeProofArtifact(options.artifactRoot, receiptId, id, proof.proofBytes);
+      await insertProofArtifact(pool, {
+        jobId,
+        receiptId,
+        kind: "SP1_PROOF",
+        content: { statementId: id, proofPath: proofArtifactPath },
+      });
+    }
 
     const artifactPath = await openArtifactStore(options.artifactRoot).writeBundle(receiptId, bundle);
     await insertProofArtifact(pool, { jobId, receiptId, kind: "VERIFICATION_BUNDLE", content: bundle });
