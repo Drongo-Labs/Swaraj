@@ -160,6 +160,30 @@ pnpm dev:api
 Each proof takes about 6 to 7 minutes and needs up to 16 GB of free memory, so
 the API proves one job at a time. A receipt shows PENDING until its proof settles.
 
+## Environment variables
+
+The 5-minute quickstart above needs **none** of these. Copy `.env.example` to
+`.env` (`cp .env.example .env`) and fill only what you use — `.env` is
+gitignored and keys must never be committed. Full details: [SETUP.md](SETUP.md).
+
+| Variable | Needed for | Where to get it |
+|---|---|---|
+| `DATABASE_URL`, `POSTGRES_*` | `pnpm db:up`, API, proof worker | local Docker Postgres (compose defaults in `.env.example`) |
+| `SWARAJ_URL`, `SWARAJ_DEV_TOKEN`, `SWARAJ_APPLICATION_ID` | SDK / MCP / API calls | any ≥32-char random string; the API enforces it as `Authorization: Bearer …` |
+| `SWARAJ_APPROVER_TOKEN` | human Approve/Reject | separate ≥32-char random string; must differ from `SWARAJ_DEV_TOKEN` |
+| `BASE_RPC_URL`, `SWARAJ_EXECUTION_PRIVATE_KEY`, `SWARAJ_SIGNER_PRIVATE_KEY` | live Base trades (real spend) | public RPC (mainnet.base.org / sepolia.base.org); a dedicated funded test wallet — never reuse keys |
+| `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `NEAR_RPC_URL` | live NEAR scenes (`pnpm --filter @swaraj/near near-demo`) | create a testnet account in any NEAR wallet; free testnet NEAR from the faucet (near-faucet.io or `near` CLI); RPC: `https://test.rpc.fastnear.com` |
+| `NEAR_DEMO_RECIPIENT`, `NEAR_FT_CONTRACT`, `NEAR_REF_POOL_ID`, `NEAR_REF_CONTRACT` | NEAR demo scenes | your own testnet recipient; FT contract id; Ref Finance pool id (17 = testnet wNEAR/USDT) |
+| `SWARAJ_PROOF_SINK=near`, `NEAR_SINK_ACCOUNT_ID`, `NEAR_SINK_PRIVATE_KEY`, `NEAR_RECEIPTS_CONTRACT_ID` | settling receipts on NEAR | the receipts-contract owner account (see `contracts/receipts/DEPLOYMENT.md`); `SWARAJ_PROOF_SINK=near` selects the on-chain sink fail-closed |
+| `SWARAJ_SP1_HOST_BIN`, `SWARAJ_SP1_DECISION_ELF`, `SWARAJ_SP1_ELF`, `SWARAJ_SP1_VKEYS` | generating proofs | SP1 toolchain via `sp1up`, then `pnpm --filter @swaraj/proofs build:sp1:decision` and the host build in the README above; needs ~16 GB free per Groth16 proof |
+| `KURIER_API_KEY` / `ZKVERIFY_SEED_PHRASE` | zkVerify submission sink | Kurier partner portal (partners.near-intents.org) or a zkVerify account; optional — NEAR sink or the local sink works without them |
+| `SHADE_AGENT_CONTRACT_ID`, `SHADE_SPONSOR_ACCOUNT_ID`, `SHADE_SPONSOR_PRIVATE_KEY`, `SHADE_DERIVATION_PATH` | Zunno Shade Agent registration | the deployed agent contract (see `examples/zunno/README.md`) + a sponsor testnet account/key |
+| `NEAR_AI_API_KEY` (alias `NEAR_API_KEY`), `NEAR_AI_MODEL`, `NEAR_AI_BASE_URL` | Zunno moves via NEAR AI Cloud private inference | $10 of free credits via the NEAR Builders dashboard (nearbuilders.org/dashboard) or buy at cloud.near.ai; key generated there (hackathon rule Q-000) |
+| `ZUNNO_GATEWAY=remote`, `ZUNNO_RPC_URL`, `ZUNNO_HOST`, `ZUNNO_GAME_ID`, `ZUNNO_WAGER_ESCROW`, `ZUNNO_LIVE_STAKE_WEI`, `ZUNNO_LIVE_OVER_STAKE_WEI` | Zunno live-gateway mode | a running Swaraj API + the wager escrow contract; see `examples/zunno/README.md` |
+| `ZUNNO_ENCLAVE_URL`, `ZUNNO_AGENT_TOKEN`, `ZUNNO_REQUIRE_TEE=1` | remote/attested rules engine | only when running the engine in a TEE VM instead of the local process |
+| `VITE_SWARAJ_URL`, `VITE_SWARAJ_DEV_TOKEN`, `VITE_SWARAJ_APPROVER_TOKEN`, `VITE_SWARAJ_APPLICATION_ID` | web UI (`pnpm dev:web`) | `apps/web/.env`; same values as the API |
+| `STRIPE_WEBHOOK_SECRET`, `GITHUB_WEBHOOK_SECRET` | Web2 evidence settlement | your Stripe/GitHub webhook signing secrets; unset = those flows stay pending |
+
 ## Repository layout
 
 | Path | Contents |
