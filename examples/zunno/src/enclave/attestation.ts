@@ -31,17 +31,28 @@ export function reportData(nonce: string, code: string): Buffer {
   return Buffer.concat([createHash("sha256").update(nonce).digest(), Buffer.from(code, "hex")]);
 }
 
-export function attest(nonce: string, code: string): Attestation {
-  if (!existsSync(TSM_REPORTS)) return { tee: "none", nonce, codeHash: code };
+export function attest(nonce: string, code: string, reports = TSM_REPORTS): Attestation {
+  if (!existsSync(reports)) return { tee: "none", nonce, codeHash: code };
   // ponytail: written against the Linux configfs-tsm ABI, not yet run on a TDX VM.
   // Verify on the Google Cloud deploy before relying on it.
-  const entry = mkdtempSync(join(TSM_REPORTS, "zunno-"));
+  // Some non-TDX Linux hosts (e.g. CI runners) expose configfs-tsm without a TDX
+  // provider. If no quote can be made, say "none" honestly rather than fail.
+  let entry: string | undefined;
   try {
+    entry = mkdtempSync(join(reports, "zunno-"));
     writeFileSync(join(entry, "inblob"), reportData(nonce, code));
     const quote = readFileSync(join(entry, "outblob")).toString("base64");
     return { tee: "tdx", nonce, codeHash: code, quote };
+  } catch {
+    return { tee: "none", nonce, codeHash: code };
   } finally {
-    rmdirSync(entry);
+    if (entry) {
+      try {
+        rmdirSync(entry);
+      } catch {
+        // nothing to clean up
+      }
+    }
   }
 }
 
