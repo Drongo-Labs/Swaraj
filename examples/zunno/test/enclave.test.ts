@@ -5,7 +5,10 @@ import { startServer } from "../src/server/http.js";
 import { remoteTable } from "../src/game/table.js";
 import { GameSession } from "../src/game/session.js";
 import { checkEnclave } from "../src/agent/run.js";
-import { checkAttestation, reportData } from "../src/enclave/attestation.js";
+import { attest, checkAttestation, reportData } from "../src/enclave/attestation.js";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const token = "agent-token-at-least-32-characters-long";
 const config = {
@@ -92,4 +95,11 @@ test("an attestation for another nonce is rejected, and report data binds nonce 
 
 test("the enclave refuses a short agent token", () => {
   assert.throws(() => startServer({ port: 0, agentToken: "short" }), /32 characters/);
+});
+
+test("a host with a report directory but no TDX quote says no TEE instead of failing", () => {
+  // Like a CI runner: configfs-tsm exists, but nothing produces a quote.
+  const reports = mkdtempSync(join(tmpdir(), "tsm-"));
+  const answer = attest("aa".repeat(32), "bb".repeat(32), reports);
+  assert.deepEqual(answer, { tee: "none", nonce: "aa".repeat(32), codeHash: "bb".repeat(32) });
 });
