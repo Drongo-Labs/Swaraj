@@ -146,6 +146,9 @@ importers:
       '@swaraj/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      near-api-js:
+        specifier: ^7.4.0
+        version: 7.4.0
       viem:
         specifier: ^2.57.13
         version: 2.57.16(bufferutil@4.2.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)

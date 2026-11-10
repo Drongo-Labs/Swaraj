@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { checkEnclave, runAgent } from "./agent/run.js";
 import { registerShadeAgent, shadeConfigFromEnv } from "./agent/shade.js";
+import { nearDeps, settleConfigFromEnv, settleMatch } from "./swaraj/settle.js";
 import { nearAiConfigFromEnv, nearAiMove, verifyNearAi } from "./agent/nearai.js";
 import type { AgentView } from "./game/table.js";
 import type { ZunnoProposal } from "./actions/intents.js";
@@ -60,8 +61,9 @@ if (attestation.tee === "none") {
   await table.log("Rules engine is running outside a TEE (local mode).", false);
 }
 const shade = shadeConfigFromEnv();
+let agentAccount = process.env.ZUNNO_AGENT_NEAR_ACCOUNT?.trim();
 if (shade) {
-  const agentAccount = await registerShadeAgent(shade);
+  agentAccount = await registerShadeAgent(shade);
   await table.log(`Agent is Shade Agent ${agentAccount.slice(0, 8)}… on ${shade.contractId} (local mode, mock attestation).`, false);
   console.log(`Shade Agent: ${agentAccount} registered on ${shade.contractId}`);
 }
@@ -94,6 +96,34 @@ try {
   console.error(`Mandate registration failed; falling back to embedded gateway: ${error instanceof Error ? error.message : String(error)}`);
 }
 runAgent(config, table, pickMove, 300, policyHash);
+
+// Pays the pot when a game ends, but only through a receipt proved on NEAR.
+const settle = settleConfigFromEnv();
+if (settle && policyHash) {
+  const deps = { ...nearDeps(settle), fetchImpl: fetch, sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)) };
+  let settled = false;
+  setInterval(() => {
+    void table.view().then(async (view) => {
+      if (view.winner === null) {
+        settled = false;
+        return;
+      }
+      if (settled) return;
+      settled = true;
+      const winner = view.winner === "agent" ? agentAccount : process.env.ZUNNO_PLAYER_ACCOUNT_ID?.trim();
+      if (!winner) {
+        await table.log("No NEAR account for the winner, so the pot stays in escrow.", false);
+        return;
+      }
+      await settleMatch(config, settle, winner, deps, (event) => {
+        void table.log(event.kind === "submitted"
+          ? "Payout allowed by the mandate; waiting for its proof on NEAR (a few minutes)."
+          : `Pot paid to ${winner} on NEAR, against the proved receipt (tx ${event.txHash.slice(0, 10)}…).`, false);
+      }).catch((error: unknown) => table.log(`Payout not made: ${error instanceof Error ? error.message : String(error)}`, true));
+    }).catch(() => {});
+  }, 2000);
+  console.log(`Settlement: pots pay out from ${settle.escrow} only on a proved receipt.`);
+}
 
 console.log(`Zunno × Swaraj — playing at ${enclave}`);
 console.log(`Rules engine: ${attestation.tee === "none" ? "separate process, no TEE" : "TDX"} (code ${attestation.codeHash.slice(0, 12)}…)`);

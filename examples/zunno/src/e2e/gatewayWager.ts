@@ -35,7 +35,7 @@ async function main(): Promise<number> {
   const registered = await client.registerMandate(mandate);
   console.log(`mandate ${registered.mandateId} v${registered.version} hash=${registered.policyHash}`);
 
-  const escrow = process.env.ZUNNO_WAGER_ESCROW ?? "swaraj-wager.testnet";
+  const escrow = process.env.ZUNNO_WAGER_ESCROW ?? "swaraj-wager-proof-11110149.testnet";
   const agent = new ZunnoAgent(
     {
       config,

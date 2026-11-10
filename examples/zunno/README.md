@@ -105,7 +105,7 @@ With `ZUNNO_GATEWAY=live` and `SWARAJ_DEV_TOKEN` set, `pnpm play` registers
 ```sh
 # API on :3010 (or :3000) with SWARAJ_DEV_TOKEN + ZUNNO_GATEWAY=live
 SWARAJ_API_URL=http://127.0.0.1:3010 ZUNNO_GATEWAY=live \
-  ZUNNO_WAGER_ESCROW=swaraj-wager-k-9ldcod.testnet \
+  ZUNNO_WAGER_ESCROW=swaraj-wager-proof-11110149.testnet \
   pnpm --filter swaraj-zunno e2e:gateway   # on-turn / off-turn / wager cap scenes
 ```
 
@@ -120,6 +120,25 @@ Mandate v2 covers:
 Rust contract `contracts/wager` (`swaraj-wager`): deposit up to `max_wager`,
 reject over-limit. The pot pays out only on a PROVED receipt for that exact
 payout (see `contracts/README.md`); the owner can only refund on cancel.
+
+### Settling a match through a proof
+
+When a game ends in live gateway mode, `pnpm play` pays the pot automatically:
+it asks the Swaraj API to allow a `payout` of the whole pot to the winner (the
+mandate's `permit_payout` rule), waits until that receipt is PROVED on NEAR
+(a few minutes, for the Groth16 proof), then calls the escrow, which pays only
+against that receipt. The game log shows each step. To settle by hand:
+`pnpm settle -- <winner>.testnet`. Tested on testnet: the API allowed the payout,
+its receipt was proved on NEAR, and the escrow paid the 0.2 NEAR pot
+([tx](https://testnet.nearblocks.io/txns/5mkTUD5NntbyUoZwHmcvn4GE4xAPEyYmfFhFoyE1mD4Q)).
+
+| Env | Value |
+|---|---|
+| `ZUNNO_WAGER_ESCROW` | The proof-gated escrow, e.g. `swaraj-wager-proof-11110149.testnet` |
+| `ZUNNO_REFEREE_ACCOUNT_ID`, `ZUNNO_REFEREE_PRIVATE_KEY` | Any funded testnet account that sends the payout call; the proof, not this account, authorizes it |
+| `ZUNNO_PLAYER_ACCOUNT_ID` | Where the pot goes when you win |
+| `ZUNNO_AGENT_NEAR_ACCOUNT` | Where the pot goes when the agent wins, if the Shade Agent isn't registered |
+| `SWARAJ_DEV_TOKEN`, `SWARAJ_API_URL` | The live API, which must run with the NEAR proof sink |
 
 ```sh
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager

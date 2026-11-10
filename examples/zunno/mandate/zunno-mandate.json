@@ -51,6 +51,15 @@
       ]
     },
     {
+      "ruleId": "permit_payout",
+      "effect": "PERMIT",
+      "action": "APP_ACTION",
+      "predicates": [
+        { "field": "resource.app", "operator": "EQ", "value": "zunno" },
+        { "field": "context.name", "operator": "EQ", "value": "payout" }
+      ]
+    },
+    {
       "ruleId": "permit_stake_eth_in_cap",
       "effect": "PERMIT",
       "action": "PAYMENT",

@@ -12,7 +12,8 @@
     "play": "tsx src/play.ts",
     "vectors": "tsx scripts/gen-vectors.ts",
     "lean:sync": "node lean/scripts/sync-vectors.mjs",
-    "check:lean": "cd lean && $HOME/.elan/bin/lake build"
+    "check:lean": "cd lean && $HOME/.elan/bin/lake build",
+    "settle": "tsx src/swaraj/settleCli.ts"
   },
   "dependencies": {
     "@inco/lightning-js": "^1.1.0",
@@ -22,6 +23,7 @@
     "@swaraj/agent": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",
+    "near-api-js": "^7.4.0",
     "viem": "^2.57.13",
     "zod": "^4.1.0"
   },
