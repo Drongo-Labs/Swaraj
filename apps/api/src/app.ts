@@ -1266,6 +1266,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         const matched = [...evaluated.matchedForbidRuleIds, ...evaluated.matchedPermitRuleIds];
         const detail = matched.length > 0 ? ` (${matched.join(", ")})` : "";
         const violations = [{ ruleId: "MANDATE", reason: `MANDATE:${evaluated.reason}${detail}` }];
+        const wireAction = (request.body as { action?: unknown })?.action;
         const block = {
           decision: "BLOCK" as const,
           violations,
@@ -1283,6 +1284,72 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           request.log.error(error);
           return { status: "NON_PROVABLE" as const, reasonCode: "NOT_RECORDED" };
         });
+        // A BLOCK the mandate itself decided gets a PENDING receipt and a
+        // MANDATE proof job, so rejections become provable too. Blocks from a
+        // bad signature, an unverified program or an engine disagreement do
+        // not: the mandate alone does not explain them. A duplicate decision
+        // for the same intent reuses the recorded receipt.
+        let blockProofReceipt: { id: string; state: string } | undefined;
+        const mandateDecided = mandateParsed.success && gateFailure === undefined && evaluated.reason !== "ENGINE_DISAGREEMENT";
+        if (pool && mandateDecided) {
+          const handle = { raw: pool, close: async () => {} };
+          try {
+            const replay = await findReceiptByIdempotencyKey(handle, applicationId, action.idempotencyKey);
+            if (replay) {
+              blockProofReceipt = { id: replay.receiptId, state: replay.state };
+            } else {
+              await handle.raw.query(
+                "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
+                [applicationId],
+              );
+              const logged = await insertDecision(handle, {
+                appId: applicationId,
+                intentDigest: intentHash,
+                policyId: MANDATE_POLICY_ID,
+                policyRevision: mandateParsed.success ? mandateParsed.data.version : 1,
+                outcome: "BLOCK",
+                violatedRules: evaluated.matchedRuleIds,
+                smtScript: "",
+              });
+              const receiptId = randomUUID();
+              await insertReceipt(handle, {
+                receiptId,
+                appId: applicationId,
+                intentDigest: intentHash,
+                decisionId: Number(logged.decisionId),
+                claim: {
+                  kind: "MANDATE_DECISION_V1",
+                  action: wireAction,
+                  decision: "BLOCK",
+                  matchedRuleIds: evaluated.matchedRuleIds,
+                  intentHash,
+                  mandateHash: policyHash,
+                },
+              });
+              await claimIdempotencyKey(handle, {
+                appId: applicationId,
+                idemKey: action.idempotencyKey,
+                intentDigest: intentHash,
+                receiptId,
+              });
+              await enqueueProofJobOnce(handle, {
+                receiptId,
+                payload: {
+                  kind: "MANDATE",
+                  mandate: mandateDefinition,
+                  action: wireAction,
+                  // The deciding rules only, as the rules engine reports them, so the worker's re-check matches.
+                  expected: { decision: "BLOCK", matchedRuleIds: evaluated.matchedRuleIds },
+                  intentHash,
+                  mandateHash: policyHash,
+                },
+              });
+              blockProofReceipt = { id: receiptId, state: "PENDING" };
+            }
+          } catch (error) {
+            request.log.error(error);
+          }
+        }
         const productStatus = productStatusFromDecision("BLOCK");
         const activity: ActivityItem = {
           id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
@@ -1306,6 +1373,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           intentHash,
           policyHash,
           decisionReceipt,
+          ...(blockProofReceipt ? { receipt: blockProofReceipt, receiptId: blockProofReceipt.id } : {}),
           activityId: activity.id,
         });
       }
