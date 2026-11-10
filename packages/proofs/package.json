@@ -55,6 +55,7 @@
     "build:sp1:decision": "cd decision-guest && cargo prove build --output-directory ../artifacts --elf-name swaraj-decision-guest"
   },
   "dependencies": {
+    "@swaraj/crypto": "workspace:*",
     "@swaraj/database": "workspace:*",
     "@swaraj/rules": "workspace:*",
     "@swaraj/schemas": "workspace:*",

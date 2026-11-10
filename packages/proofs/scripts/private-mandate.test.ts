@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { evaluateMandate } from "@swaraj/rules";
-import { decisionStatement, mandateCommitment, privateStatement, runPrivateMandate } from "../dist/private-mandate.js";
+import { mandateCommitment, privateStatement, runPrivateMandate } from "../dist/private-mandate.js";
+import { buildMandateStatement, canonicalMandateStatementText, decisionGuestInput, expectedHashes } from "../dist/index.js";
+import { hashObject } from "@swaraj/crypto";
+import { ObjectType } from "@swaraj/schemas";
 
 /** Keeps the Rust guest and @swaraj/rules in agreement. Opt-in: set SWARAJ_SP1_HOST_BIN and SWARAJ_SP1_PRIVATE_ELF. */
 
@@ -78,14 +81,24 @@ test("the Rust guest and the rules engine agree, and only ALLOW yields a stateme
   }
 });
 
-test("the decision guest proves every outcome the rules engine gives, BLOCK included", { skip: skipDecision }, async () => {
+test("the decision guest proves the worker's mandate/v1 statement for every outcome", { skip: skipDecision }, async () => {
   const outcomes = new Set<string>();
   for (const [name, mandateValue, action] of cases) {
     const decision = evaluateMandate(mandateValue, action);
     outcomes.add(decision.decision);
-    const input = { mandateJson: JSON.stringify(mandateValue), actionJson: JSON.stringify(action), evidenceDigest: "0xabc" };
-    const statement = await runPrivateMandate(input, { hostBin, elfPath: decisionElf });
-    assert.equal(statement, decisionStatement(input, decision), name);
+    const approvedBy = decision.decision === "NEEDS_APPROVAL" ? "alice" : undefined;
+    const input = decisionGuestInput({ mandate: mandateValue, action, evidenceDigest: "0xabc", ...(approvedBy ? { approvedBy } : {}) });
+    const { intentHash, mandateHash } = expectedHashes(input);
+    assert.equal(mandateHash, hashObject(ObjectType.POLICY_PROFILE, mandateValue), name);
+    const expected = canonicalMandateStatementText(buildMandateStatement({
+      intentHash,
+      mandateHash,
+      decision: decision.decision,
+      matchedRuleIds: decision.matchedRuleIds,
+      evidenceDigest: "0xabc",
+      ...(approvedBy ? { approvedBy } : {}),
+    }));
+    assert.equal(await runPrivateMandate(input, { hostBin, elfPath: decisionElf }), expected, name);
   }
   assert.deepEqual([...outcomes].sort(), ["ALLOW", "BLOCK", "NEEDS_APPROVAL"]);
 });

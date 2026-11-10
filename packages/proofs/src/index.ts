@@ -2,8 +2,19 @@ export {
   openArtifactStore,
   storeProofArtifact,
   type ArtifactStore,
+  type BundleProof,
   type VerificationBundle,
 } from "./artifacts.js";
+export {
+  decisionGuestInput,
+  expectedHashes,
+  proveMandateDecision,
+  DecisionProverError,
+  type DecisionGuestInput,
+  type DecisionProofOutcome,
+  type DecisionProverConfig,
+  type Groth16Export,
+} from "./decision-prover.js";
 export {
   buildStatement,
   canonicalStatementText,

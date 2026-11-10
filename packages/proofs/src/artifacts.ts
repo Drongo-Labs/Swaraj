@@ -3,11 +3,22 @@ import { join } from "node:path";
 
 /** Stores each proven statement as a JSON file, independent of the database. */
 
+/** The host's `--export` output: what the NEAR verifier contract's `prove` takes. */
+export interface BundleProof {
+  program: string;
+  /** Hex-encoded public values (no 0x). */
+  publicValuesHex: string;
+  /** Hex-encoded proof (no 0x). */
+  proofHex: string;
+}
+
 export interface VerificationBundle {
   statementId: string;
   canonicalText: string;
   /** Digest of the evidence the proof was produced against, when the pipeline supplied one. */
   evidenceDigest?: string | undefined;
+  /** Groth16 export attached by the worker when the decision prover ran. */
+  proof?: BundleProof | undefined;
   createdAt: string;
 }
 
