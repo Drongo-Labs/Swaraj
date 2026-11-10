@@ -133,6 +133,15 @@ owner-settled version; see `contracts/wager/DEPLOYMENT.md`. The proof-gated
 version is at `swaraj-wager-proof-11110149.testnet` (1 NEAR cap, receipts
 `swaraj-receipts-11081321.testnet`).
 
+Tested end to end on testnet: two agents deposited 0.1 NEAR each; a payout with
+an unknown receipt paid nothing
+([tx](https://testnet.nearblocks.io/txns/AjN5caaJYwTifUe3TNDwRhwfbHBTLuZpsqUWFwZBPgte));
+the Swaraj API allowed a `payout` action and its receipt was proved on NEAR; a
+third account then called `payout` and the winner received the 0.2 NEAR pot
+([tx](https://testnet.nearblocks.io/txns/5L6gBJhz9UzK6EVo1vSs1VyZWac4kXpNvdVv8cH64T7X));
+reusing the receipt was refused
+([tx](https://testnet.nearblocks.io/txns/J1PUPHvLvT6KUZyyuShg5uAdycA8PcUvnGgjRVEn11s1)).
+
 ## `NearProofSink` (Kushagra — Nov 8)
 
 TypeScript sink in `@swaraj/proofs` (`packages/proofs/src/near-sink.ts`):
