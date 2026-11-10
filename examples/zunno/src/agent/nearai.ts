@@ -21,9 +21,15 @@ export interface NearAiConfig {
   apiKey: string;
   model: string;
   baseUrl: string;
+  /** Sent as `reasoning_effort` when set. Reasoning models otherwise think past the token limit. */
+  reasoningEffort?: string;
+  /** Longest a move may wait for the model before the built-in pick is used. */
+  timeoutMs?: number;
 }
 
-export const DEFAULT_MODEL = "deepseek-ai/DeepSeek-V4.1-Flash-1017";
+// A fast attested model. With reasoning off it answers in about half a second; the
+// earlier DeepSeek default spent every token reasoning and never answered.
+export const DEFAULT_MODEL = "Qwen/Qwen3.6-35B-A3B-FP8";
 const PCCS_URL = "https://api.trustedservices.intel.com/tdx/certification/v4";
 const NRAS_URL = "https://nras.attestation.nvidia.com/v3/attest/gpu";
 
@@ -35,6 +41,9 @@ export function nearAiConfigFromEnv(env: NodeJS.ProcessEnv = process.env): NearA
     apiKey,
     model: env.NEAR_AI_MODEL?.trim() || DEFAULT_MODEL,
     baseUrl: env.NEAR_AI_BASE_URL?.trim() || "https://cloud-api.near.ai",
+    // NEAR_AI_REASONING= (empty) sends no reasoning_effort, for models that reject it.
+    ...(env.NEAR_AI_REASONING === "" ? {} : { reasoningEffort: env.NEAR_AI_REASONING?.trim() || "none" }),
+    timeoutMs: Number(env.NEAR_AI_TIMEOUT_MS) || 10_000,
   };
 }
 
@@ -147,11 +156,13 @@ export async function nearAiMove(
     stream: false,
     temperature: 0,
     max_tokens: 1024,
+    ...(config.reasoningEffort ? { reasoning_effort: config.reasoningEffort } : {}),
   });
   const response = await fetchImpl(`${config.baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${config.apiKey}`, "content-type": "application/json" },
     body: requestBody,
+    ...(config.timeoutMs ? { signal: AbortSignal.timeout(config.timeoutMs) } : {}),
   });
   if (!response.ok) return undefined;
   const responseText = await response.text();

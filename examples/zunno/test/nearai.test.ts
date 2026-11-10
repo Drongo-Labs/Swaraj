@@ -110,3 +110,26 @@ test("the signature check recovers the attested signer over the exact bytes", as
   assert.ok(await replyIsSigned(config, attested, "chat-1", body, text, fetchImpl));
   assert.ok(!(await replyIsSigned(config, attested, "chat-1", "{ }", text, fetchImpl)));
 });
+
+test("a model slower than the time limit gives up, so the built-in pick is used", async () => {
+  const hanging = ((_input: string | URL, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+    })) as typeof fetch;
+  await assert.rejects(nearAiMove({ ...config, timeoutMs: 20 }, attested, view, hanging));
+});
+
+test("reasoning is off by default, and the request asks for it that way", async () => {
+  const { nearAiConfigFromEnv, DEFAULT_MODEL } = await import("../src/agent/nearai.js");
+  assert.deepEqual(nearAiConfigFromEnv({ NEAR_AI_API_KEY: "k" }), {
+    apiKey: "k", model: DEFAULT_MODEL, baseUrl: "https://cloud-api.near.ai", reasoningEffort: "none", timeoutMs: 10_000,
+  });
+  assert.equal(nearAiConfigFromEnv({ NEAR_AI_API_KEY: "k", NEAR_AI_REASONING: "" })?.reasoningEffort, undefined);
+  let sent = "";
+  const capture = (async (input: string | URL, init?: RequestInit) => {
+    sent = String(init?.body);
+    throw new Error("stop");
+  }) as typeof fetch;
+  await assert.rejects(nearAiMove({ ...config, reasoningEffort: "none" }, attested, view, capture), /stop/);
+  assert.equal(JSON.parse(sent).reasoning_effort, "none");
+});

@@ -80,7 +80,9 @@ deploy needs its own attestation check.
 
 With `NEAR_AI_API_KEY` or `NEAR_API_KEY` in `.env` (repo root or
 `examples/zunno/.env`), the agent picks its moves with a model on NEAR AI Cloud
-(default `deepseek-ai/DeepSeek-V4.1-Flash-1017`, or `NEAR_AI_MODEL`). Before any
+(default `Qwen/Qwen3.6-35B-A3B-FP8` with reasoning off, or `NEAR_AI_MODEL`;
+`NEAR_AI_REASONING` sets `reasoning_effort`, and a move waits at most
+`NEAR_AI_TIMEOUT_MS`, 10 seconds by default, before the built-in pick). Before any
 prompt is sent, it checks the model's attestation the way NEAR's own verifier
 does:
 
@@ -92,8 +94,8 @@ Every reply must be signed by an attested key over the exact request and
 response bytes. A pick is only a proposal: it must be a legal card, and it
 still goes through the mandate gateway. If the attestation fails, no prompt is
 sent and the agent uses its built-in moves; a bad or unsigned reply falls back
-the same way. Verification takes about 5 to 10 seconds per game, and a move 3
-to 5 seconds.
+the same way. Verification takes about 5 to 10 seconds per game, and a move about a
+second.
 
 ## Live Swaraj gateway (Nov 9)
 
