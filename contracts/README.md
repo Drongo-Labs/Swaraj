@@ -110,22 +110,28 @@ See `contracts/registry/DEPLOYMENT.md` after deploy.
 ## `wager` (Kushagra — Nov 9)
 
 NEP-141 / native NEAR escrow for Zunno buy-ins. Deposits above `max_wager`
-panic; owner settles with `payout` or `refund`.
+panic. **The pot pays out only on a PROVED receipt:** the receipts contract must
+hold a receipt, verified by the Groth16 verifier, whose statement is an ALLOW of a
+`payout` APP_ACTION naming this escrow, the winner and the exact pot. Not even the
+owner can pay without one, and each receipt pays once.
 
 | Method | Does |
 |---|---|
-| `new(ft_contract?, max_wager)` | Init |
+| `new(ft_contract?, max_wager, receipts)` | Init, with the receipts contract that authorizes payouts |
 | `deposit_near` | Native deposit (FT mode off) |
 | `ft_on_transfer` | NEP-141 deposit callback |
-| `payout(winner)` / `refund(agent)` | Owner settlement |
+| `payout(winner, receipt_id, statement, action_wire)` | Anyone. Reads the receipt, checks it is PROVED for this exact payout, then pays the pot. Attach about 100 Tgas |
+| `refund(agent)` | Owner returns one agent's wager on cancel |
 
 ```bash
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager
 cd contracts && RUSTFLAGS='-C link-arg=-s' cargo build --release -p swaraj-wager --target wasm32-unknown-unknown
 ```
 
-Testnet: `swaraj-wager-k-9ldcod.testnet` (`max_wager=5000000`). See
-`contracts/wager/DEPLOYMENT.md`.
+Testnet: `swaraj-wager-k-9ldcod.testnet` (`max_wager=5000000`) runs the earlier,
+owner-settled version; see `contracts/wager/DEPLOYMENT.md`. The proof-gated
+version is at `swaraj-wager-proof-11110149.testnet` (1 NEAR cap, receipts
+`swaraj-receipts-11081321.testnet`).
 
 ## `NearProofSink` (Kushagra — Nov 8)
 

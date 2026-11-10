@@ -118,7 +118,8 @@ Mandate v2 covers:
 ## NEP-141 wager escrow
 
 Rust contract `contracts/wager` (`swaraj-wager`): deposit up to `max_wager`,
-reject over-limit, owner `payout` / `refund`.
+reject over-limit. The pot pays out only on a PROVED receipt for that exact
+payout (see `contracts/README.md`); the owner can only refund on cancel.
 
 ```sh
 cargo test --manifest-path contracts/Cargo.toml -p swaraj-wager

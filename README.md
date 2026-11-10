@@ -35,7 +35,7 @@ below runs on **NEAR testnet**; mainnet is untested.
 | **Registry contract**: agent registration | `contracts/registry` |
 | **Shade Agent** (demo): the AI opponent has its own NEAR account and registers on an agent contract | `examples/zunno` |
 | **NEAR AI Cloud** (demo): the opponent picks moves with private inference, after checking the model's TDX and GPU attestation | `examples/zunno` |
-| **Wager escrow** (demo): holds a match stake under the mandate's cap | `contracts/wager` |
+| **Wager escrow** (demo): holds a match stake under the mandate's cap, and pays out only on a receipt proved on NEAR | `contracts/wager` |
 
 ## How a decision gets proved on NEAR
 
