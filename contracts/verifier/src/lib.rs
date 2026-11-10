@@ -143,7 +143,7 @@ mod tests {
         let verifier = Verifier::new(vec![fixture().0, allow_program.clone()]);
         let allowed = verifier.verify(allow_program.clone(), allow_values.into(), allow_proof.into());
         let blocked = verifier.verify(block_program, block_values.into(), block_proof.into());
-        assert!(allowed.starts_with("swaraj/statement/mandate-decision/v1\n"));
+        assert!(allowed.starts_with("swaraj/statement/mandate/v1\n"));
         assert!(allowed.contains("\ndecision=ALLOW\nmatched=permit_pay"), "{allowed}");
         assert!(blocked.contains("\ndecision=BLOCK\nmatched=forbid_cap"), "{blocked}");
     }
