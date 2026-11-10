@@ -32,28 +32,6 @@ export function privateStatement(input: PrivateMandateInput): string {
   ].join("\n");
 }
 
-export interface DecisionInput {
-  mandateJson: string;
-  actionJson: string;
-  evidenceDigest?: string;
-}
-
-/** What the decision guest (packages/proofs/decision-guest) commits. The mandate is public. */
-export function decisionStatement(
-  input: DecisionInput,
-  decision: { decision: string; matchedRuleIds: string[] },
-): string {
-  const matched = [...decision.matchedRuleIds].sort();
-  return [
-    "swaraj/statement/mandate-decision/v1",
-    `mandate=${sha256(input.mandateJson)}`,
-    `action=${sha256(input.actionJson)}`,
-    `decision=${decision.decision}`,
-    `matched=${matched.length > 0 ? matched.join(",") : "-"}`,
-    ...(input.evidenceDigest !== undefined ? [`evidence=${input.evidenceDigest}`] : []),
-  ].join("\n");
-}
-
 export type PrivateProofOptions = {
   hostBin: string;
   elfPath: string;
@@ -77,7 +55,7 @@ function run(command: string, args: string[]): Promise<{ code: number; stdout: s
  * Runs a guest. Resolves to the committed statement, or undefined if the guest
  * aborted, as the Private Mandate guest does on a refusal.
  */
-export async function runPrivateMandate(input: PrivateMandateInput | DecisionInput, options: PrivateProofOptions): Promise<string | undefined> {
+export async function runPrivateMandate(input: object, options: PrivateProofOptions): Promise<string | undefined> {
   const dir = await mkdtemp(join(tmpdir(), "swaraj-private-"));
   try {
     const inputPath = join(dir, "input.json");

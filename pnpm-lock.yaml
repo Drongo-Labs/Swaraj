@@ -253,6 +253,9 @@ importers:
 
   packages/proofs:
     dependencies:
+      '@swaraj/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@swaraj/database':
         specifier: workspace:*
         version: link:../database
