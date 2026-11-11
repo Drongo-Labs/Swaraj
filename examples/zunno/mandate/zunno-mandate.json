@@ -11,8 +11,17 @@
       "effect": "FORBID",
       "action": "APP_ACTION",
       "predicates": [
-        { "field": "context.name", "operator": "EQ", "value": "play_card" },
-        { "field": "context.param", "name": "cardValue", "operator": "GT", "value": "104" }
+        {
+          "field": "context.name",
+          "operator": "EQ",
+          "value": "play_card"
+        },
+        {
+          "field": "context.param",
+          "name": "cardValue",
+          "operator": "GT",
+          "value": "100"
+        }
       ]
     },
     {
@@ -20,9 +29,25 @@
       "effect": "PERMIT",
       "action": "APP_ACTION",
       "predicates": [
-        { "field": "resource.app", "operator": "EQ", "value": "zunno" },
-        { "field": "context.name", "operator": "IN", "values": ["draw_card", "play_card"] },
-        { "field": "context.paramBool", "name": "onTurn", "operator": "EQ", "value": true }
+        {
+          "field": "resource.app",
+          "operator": "EQ",
+          "value": "zunno"
+        },
+        {
+          "field": "context.name",
+          "operator": "IN",
+          "values": [
+            "draw_card",
+            "play_card"
+          ]
+        },
+        {
+          "field": "context.paramBool",
+          "name": "onTurn",
+          "operator": "EQ",
+          "value": true
+        }
       ]
     },
     {
@@ -30,7 +55,12 @@
       "effect": "FORBID",
       "action": "APP_ACTION",
       "predicates": [
-        { "field": "context.paramBool", "name": "onTurn", "operator": "EQ", "value": false }
+        {
+          "field": "context.paramBool",
+          "name": "onTurn",
+          "operator": "EQ",
+          "value": false
+        }
       ]
     },
     {
@@ -38,7 +68,11 @@
       "effect": "FORBID",
       "action": "PAYMENT",
       "predicates": [
-        { "field": "context.amount", "operator": "GT", "value": "10000000000000000" }
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "10000000000000000"
+        }
       ]
     },
     {
@@ -46,8 +80,16 @@
       "effect": "FORBID",
       "action": "PAYMENT",
       "predicates": [
-        { "field": "resource.service", "operator": "EQ", "value": "zunno_wager" },
-        { "field": "context.amount", "operator": "GT", "value": "5000000" }
+        {
+          "field": "resource.service",
+          "operator": "EQ",
+          "value": "zunno_wager"
+        },
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "5000000"
+        }
       ]
     },
     {
@@ -55,8 +97,16 @@
       "effect": "PERMIT",
       "action": "APP_ACTION",
       "predicates": [
-        { "field": "resource.app", "operator": "EQ", "value": "zunno" },
-        { "field": "context.name", "operator": "EQ", "value": "payout" }
+        {
+          "field": "resource.app",
+          "operator": "EQ",
+          "value": "zunno"
+        },
+        {
+          "field": "context.name",
+          "operator": "EQ",
+          "value": "payout"
+        }
       ]
     },
     {
@@ -64,9 +114,21 @@
       "effect": "PERMIT",
       "action": "PAYMENT",
       "predicates": [
-        { "field": "context.amount", "operator": "LTE", "value": "10000000000000000" },
-        { "field": "context.currency", "operator": "EQ", "value": "ETH" },
-        { "field": "context.recipient", "operator": "EQ", "value": "0x82b2cce9a52c7e56838a5c46833067f9eb006911" }
+        {
+          "field": "context.amount",
+          "operator": "LTE",
+          "value": "10000000000000000"
+        },
+        {
+          "field": "context.currency",
+          "operator": "EQ",
+          "value": "ETH"
+        },
+        {
+          "field": "context.recipient",
+          "operator": "EQ",
+          "value": "0x82b2cce9a52c7e56838a5c46833067f9eb006911"
+        }
       ]
     },
     {
@@ -74,9 +136,21 @@
       "effect": "PERMIT",
       "action": "PAYMENT",
       "predicates": [
-        { "field": "resource.service", "operator": "EQ", "value": "zunno_wager" },
-        { "field": "context.amount", "operator": "LTE", "value": "5000000" },
-        { "field": "context.currency", "operator": "EQ", "value": "USDC" }
+        {
+          "field": "resource.service",
+          "operator": "EQ",
+          "value": "zunno_wager"
+        },
+        {
+          "field": "context.amount",
+          "operator": "LTE",
+          "value": "5000000"
+        },
+        {
+          "field": "context.currency",
+          "operator": "EQ",
+          "value": "USDC"
+        }
       ]
     }
   ]

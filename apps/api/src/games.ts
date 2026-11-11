@@ -31,8 +31,10 @@ type GamesRegistry = { games: GameRecord[] };
 /** Repo `examples/` root. Override with SWARAJ_EXAMPLES_DIR. */
 export function resolveExamplesRoot(env: NodeJS.ProcessEnv = process.env): string {
   if (env.SWARAJ_EXAMPLES_DIR?.trim()) return path.resolve(env.SWARAJ_EXAMPLES_DIR.trim());
-  // apps/api/dist/games.js → ../../examples
-  return path.resolve(__dirname, "../../examples");
+  // Works from both apps/api/src and apps/api/dist → repo examples/
+  const apiPackageRoot = path.resolve(__dirname, "..");
+  const repoRoot = path.resolve(apiPackageRoot, "../..");
+  return path.join(repoRoot, "examples");
 }
 
 function registryPath(examplesRoot: string): string {
