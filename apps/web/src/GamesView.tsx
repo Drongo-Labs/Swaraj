@@ -16,15 +16,15 @@ type Props = { apiOk: boolean };
 type RulePreset = {
   id: string;
   label: string;
-  description: string;
+  hint: string;
   build: (slug: string) => MandateRule;
 };
 
 const PRESETS: RulePreset[] = [
   {
     id: "forbid_plus4",
-    label: "Forbid Wild +4",
-    description: "BLOCK play_card when cardValue > 104 (Zunno +4).",
+    label: "Block Wild +4",
+    hint: "Stops play_card when cardValue > 104",
     build: () => ({
       ruleId: "a_forbid_wild_draw_four",
       effect: "FORBID",
@@ -37,8 +37,8 @@ const PRESETS: RulePreset[] = [
   },
   {
     id: "permit_on_turn",
-    label: "Permit on-turn play/draw",
-    description: "PERMIT draw_card and play_card when onTurn is true.",
+    label: "Allow on-turn moves",
+    hint: "Permit draw/play only when onTurn",
     build: (slug) => ({
       ruleId: "a_permit_game_actions",
       effect: "PERMIT",
@@ -52,8 +52,8 @@ const PRESETS: RulePreset[] = [
   },
   {
     id: "cap_wager",
-    label: "Cap wager (5 USDC)",
-    description: "FORBID wager payments over 5_000_000 atomic USDC.",
+    label: "Cap wager",
+    hint: "Forbid wager over 5 USDC",
     build: (slug) => ({
       ruleId: "forbid_wager_over_cap",
       effect: "FORBID",
@@ -75,27 +75,43 @@ function slugFromName(name: string): string {
     .slice(0, 32);
 }
 
-function emptyPredicate(): MandatePredicate {
-  return { field: "context.name", operator: "EQ", value: "" };
-}
-
-function emptyRule(): MandateRule {
-  return {
-    ruleId: "new_rule",
-    effect: "FORBID",
-    action: "APP_ACTION",
-    predicates: [emptyPredicate()],
-  };
-}
-
 function sortRules(rules: MandateRule[]): MandateRule[] {
   return [...rules].sort((a, b) => (a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0));
 }
 
-function predicateSummary(p: MandatePredicate): string {
-  const name = p.name ? `.${p.name}` : "";
-  if (p.values) return `${p.field}${name} ${p.operator} [${p.values.join(", ")}]`;
-  return `${p.field}${name} ${p.operator} ${String(p.value)}`;
+function ruleTitle(rule: MandateRule): string {
+  if (rule.ruleId.includes("wild_draw_four") || rule.ruleId.includes("plus4")) return "Block Wild +4";
+  if (rule.ruleId.includes("permit_game")) return "Allow game moves";
+  if (rule.ruleId.includes("off_turn")) return "Block off-turn actions";
+  if (rule.ruleId.includes("wager_over")) return "Block oversized wagers";
+  if (rule.ruleId.includes("wager") && rule.effect === "PERMIT") return "Allow wagers in cap";
+  if (rule.ruleId.includes("stake_over")) return "Block oversized stakes";
+  if (rule.ruleId.includes("stake") && rule.effect === "PERMIT") return "Allow stakes in cap";
+  if (rule.ruleId.includes("payout")) return "Allow payout";
+  return rule.ruleId.replace(/_/g, " ");
+}
+
+function rulePlainEnglish(rule: MandateRule): string {
+  const bits = rule.predicates.map((p) => {
+    const target = p.name ? `${p.field} (${p.name})` : p.field;
+    if (p.values) return `${target} in [${p.values.join(", ")}]`;
+    return `${target} ${p.operator} ${String(p.value)}`;
+  });
+  const verb =
+    rule.effect === "FORBID" ? "Block" : rule.effect === "PERMIT" ? "Allow" : "Require approval for";
+  return `${verb} ${rule.action.replace(/_/g, " ").toLowerCase()} when ${bits.join(" and ")}.`;
+}
+
+function findCardValuePred(rule: MandateRule): { index: number; pred: MandatePredicate } | null {
+  const index = rule.predicates.findIndex((p) => p.field === "context.param" && p.name === "cardValue");
+  if (index < 0) return null;
+  return { index, pred: rule.predicates[index]! };
+}
+
+function findAmountPred(rule: MandateRule): { index: number; pred: MandatePredicate } | null {
+  const index = rule.predicates.findIndex((p) => p.field === "context.amount");
+  if (index < 0) return null;
+  return { index, pred: rule.predicates[index]! };
 }
 
 export function GamesView({ apiOk }: Props) {
@@ -104,11 +120,13 @@ export function GamesView({ apiOk }: Props) {
   const [mandate, setMandate] = useState<AgentMandateView | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [slug, setSlug] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [jsonMode, setJsonMode] = useState(false);
   const [jsonDraft, setJsonDraft] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   async function refreshGames(preferSlug?: string) {
     const data = await listGames();
@@ -142,6 +160,7 @@ export function GamesView({ apiOk }: Props) {
     setSelected(gameSlug);
     setNote(null);
     setError(null);
+    setExpanded(null);
     setBusy(true);
     try {
       await loadMandate(gameSlug);
@@ -151,6 +170,11 @@ export function GamesView({ apiOk }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function syncMandate(next: AgentMandateView) {
+    setMandate(next);
+    setJsonDraft(JSON.stringify(next, null, 2));
   }
 
   async function onAddGame(e: FormEvent) {
@@ -166,9 +190,10 @@ export function GamesView({ apiOk }: Props) {
       const { game } = await createGame(body);
       setDisplayName("");
       setSlug("");
+      setShowAdd(false);
       await refreshGames(game.slug);
       await loadMandate(game.slug);
-      setNote(`Created examples/${game.slug}/ and registered ${game.displayName}.`);
+      setNote(`Created ${game.displayName} → examples/${game.slug}/`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -180,18 +205,9 @@ export function GamesView({ apiOk }: Props) {
     if (!mandate || !selected) return;
     const nextRule = preset.build(selected);
     const without = mandate.rules.filter((r) => r.ruleId !== nextRule.ruleId);
-    const next = { ...mandate, rules: sortRules([...without, nextRule]) };
-    setMandate(next);
-    setJsonDraft(JSON.stringify(next, null, 2));
-    setNote(`Applied preset “${preset.label}”. Save to write the mandate file.`);
-  }
-
-  function updateRule(index: number, patch: Partial<MandateRule>) {
-    if (!mandate) return;
-    const rules = mandate.rules.map((r, i) => (i === index ? { ...r, ...patch } : r));
-    const next = { ...mandate, rules };
-    setMandate(next);
-    setJsonDraft(JSON.stringify(next, null, 2));
+    syncMandate({ ...mandate, rules: sortRules([...without, nextRule]) });
+    setExpanded(nextRule.ruleId);
+    setNote(`Added “${preset.label}”. Save, then Activate.`);
   }
 
   function setPredicate(ruleIndex: number, predIndex: number, nextPred: MandatePredicate) {
@@ -201,23 +217,12 @@ export function GamesView({ apiOk }: Props) {
       const predicates = r.predicates.map((p, j) => (j === predIndex ? nextPred : p));
       return { ...r, predicates };
     });
-    const next = { ...mandate, rules };
-    setMandate(next);
-    setJsonDraft(JSON.stringify(next, null, 2));
-  }
-
-  function addRule() {
-    if (!mandate) return;
-    const next = { ...mandate, rules: [...mandate.rules, emptyRule()] };
-    setMandate(next);
-    setJsonDraft(JSON.stringify(next, null, 2));
+    syncMandate({ ...mandate, rules });
   }
 
   function removeRule(index: number) {
     if (!mandate) return;
-    const next = { ...mandate, rules: mandate.rules.filter((_, i) => i !== index) };
-    setMandate(next);
-    setJsonDraft(JSON.stringify(next, null, 2));
+    syncMandate({ ...mandate, rules: mandate.rules.filter((_, i) => i !== index) });
   }
 
   async function onSave() {
@@ -227,17 +232,11 @@ export function GamesView({ apiOk }: Props) {
     setNote(null);
     try {
       let body = mandate;
-      if (jsonMode) {
-        body = JSON.parse(jsonDraft) as AgentMandateView;
-      }
+      if (jsonMode) body = JSON.parse(jsonDraft) as AgentMandateView;
       if (!body) throw new Error("No mandate to save");
-      const saved = await saveGameMandate(selected, {
-        ...body,
-        rules: sortRules(body.rules),
-      });
-      setMandate(saved.mandate);
-      setJsonDraft(JSON.stringify(saved.mandate, null, 2));
-      setNote("Mandate saved to disk.");
+      const saved = await saveGameMandate(selected, { ...body, rules: sortRules(body.rules) });
+      syncMandate(saved.mandate);
+      setNote("Saved to disk. Activate to enforce for agents.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -253,7 +252,7 @@ export function GamesView({ apiOk }: Props) {
     try {
       const result = await activateGameMandate(selected);
       setNote(
-        `Activated ${result.mandateId} v${result.version} on app ${result.game.applicationId} (${result.ruleCount} rules).`,
+        `Live for agents · ${result.mandateId} v${result.version} · ${result.ruleCount} rules on app “${result.game.applicationId}”.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -265,13 +264,54 @@ export function GamesView({ apiOk }: Props) {
   const selectedGame = games.find((g) => g.slug === selected) ?? null;
 
   return (
-    <>
-      <section className="panel enter" aria-labelledby="games-list">
-        <div className="panel-head">
-          <h2 id="games-list">Games</h2>
-          <p>Examples registered for Swaraj. Add a game to scaffold under examples/.</p>
+    <div className="games-layout enter">
+      <aside className="games-rail" aria-label="Games">
+        <div className="rail-head">
+          <h2>Your games</h2>
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={!apiOk || busy}
+            onClick={() => setShowAdd((v) => !v)}
+          >
+            {showAdd ? "Cancel" : "New game"}
+          </button>
         </div>
-        {!apiOk && <p className="muted">API offline.</p>}
+
+        {!apiOk && <p className="muted">API offline — start the Swaraj API to manage games.</p>}
+
+        {showAdd && (
+          <form className="add-game-form" onSubmit={(e) => void onAddGame(e)}>
+            <label className="field">
+              <span>Name</span>
+              <input
+                value={displayName}
+                onChange={(e) => {
+                  setDisplayName(e.target.value);
+                  setSlug(slugFromName(e.target.value));
+                }}
+                placeholder="Zolo"
+                disabled={busy}
+                autoFocus
+              />
+            </label>
+            <label className="field">
+              <span>Folder slug</span>
+              <input
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                placeholder="zolo"
+                pattern="[a-z][a-z0-9_-]{1,31}"
+                disabled={busy}
+              />
+            </label>
+            <p className="hint">Creates examples/{slug || "…"}/ with a starter mandate.</p>
+            <button type="submit" className="cta" disabled={busy || !displayName.trim()}>
+              {busy ? "Creating…" : "Create"}
+            </button>
+          </form>
+        )}
+
         <ul className="game-list">
           {games.map((game) => (
             <li key={game.slug}>
@@ -282,283 +322,179 @@ export function GamesView({ apiOk }: Props) {
                 disabled={!apiOk}
               >
                 <strong>{game.displayName}</strong>
-                <span className="muted mono small">
-                  {game.slug} · app={game.applicationId}
-                </span>
+                <span className="mono small">{game.slug}</span>
               </button>
             </li>
           ))}
         </ul>
-        {games.length === 0 && apiOk && <p className="muted">No games yet.</p>}
-      </section>
+        {games.length === 0 && apiOk && <p className="muted">No games yet — create one.</p>}
+      </aside>
 
-      <section className="panel enter" style={{ animationDelay: "60ms" }} aria-labelledby="games-add">
-        <div className="panel-head">
-          <h2 id="games-add">Add game</h2>
-          <p>Creates examples/&lt;slug&gt;/ with mandate, package.json, and a stub Swaraj client.</p>
-        </div>
-        <form className="intent-form owner-form" onSubmit={(e) => void onAddGame(e)}>
-          <div className="propose">
-            <label className="field">
-              <span>Display name</span>
-              <input
-                value={displayName}
-                onChange={(e) => {
-                  setDisplayName(e.target.value);
-                  if (!slug) setSlug(slugFromName(e.target.value));
-                }}
-                placeholder="Zolo"
-                disabled={!apiOk || busy}
-              />
-            </label>
-            <label className="field">
-              <span>Slug</span>
-              <input
-                value={slug}
-                onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                placeholder="zolo"
-                pattern="[a-z][a-z0-9_-]{1,31}"
-                disabled={!apiOk || busy}
-              />
-            </label>
+      <section className="games-workspace" aria-label="Rules editor">
+        {!selectedGame ? (
+          <div className="empty-workspace">
+            <h2>Select a game</h2>
+            <p>Rules you set here gate the agent before it acts.</p>
           </div>
-          <button type="submit" className="cta submit" disabled={!apiOk || busy || !displayName.trim()}>
-            {busy ? "Working…" : "Add game"}
-          </button>
-        </form>
-      </section>
-
-      {selectedGame && (
-        <section className="panel enter" style={{ animationDelay: "120ms" }} aria-labelledby="games-rules">
-          <div className="panel-head">
-            <h2 id="game-rules">Rules · {selectedGame.displayName}</h2>
-            <p>
-              Edit Agent Mandate rules (e.g. forbid +4). Save writes{" "}
-              <span className="mono small">{selectedGame.mandatePath}</span>; Activate registers it on the API.
-            </p>
-          </div>
-
-          <div className="preset-row">
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.id}
-                type="button"
-                className="preset-btn"
-                title={preset.description}
-                disabled={!mandate || busy}
-                onClick={() => applyPreset(preset)}
-              >
-                {preset.label}
-              </button>
-            ))}
-            <button type="button" className="preset-btn" disabled={!mandate || busy} onClick={addRule}>
-              + Blank rule
-            </button>
-            <button
-              type="button"
-              className="preset-btn"
-              disabled={!mandate || busy}
-              onClick={() => setJsonMode((v) => !v)}
-            >
-              {jsonMode ? "Form mode" : "JSON mode"}
-            </button>
-          </div>
-
-          {jsonMode ? (
-            <textarea
-              className="mandate-json"
-              value={jsonDraft}
-              onChange={(e) => setJsonDraft(e.target.value)}
-              rows={22}
-              spellCheck={false}
-              disabled={busy}
-            />
-          ) : mandate ? (
-            <div className="rule-stack">
-              <div className="propose meta-fields">
-                <label className="field">
-                  <span>mandateId</span>
-                  <input
-                    value={mandate.mandateId}
-                    onChange={(e) => {
-                      const next = { ...mandate, mandateId: e.target.value };
-                      setMandate(next);
-                      setJsonDraft(JSON.stringify(next, null, 2));
-                    }}
-                  />
-                </label>
-                <label className="field">
-                  <span>version</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={mandate.version}
-                    onChange={(e) => {
-                      const next = { ...mandate, version: Number(e.target.value) };
-                      setMandate(next);
-                      setJsonDraft(JSON.stringify(next, null, 2));
-                    }}
-                  />
-                </label>
-                <label className="field">
-                  <span>agent</span>
-                  <input
-                    value={mandate.agent}
-                    onChange={(e) => {
-                      const next = { ...mandate, agent: e.target.value };
-                      setMandate(next);
-                      setJsonDraft(JSON.stringify(next, null, 2));
-                    }}
-                  />
-                </label>
+        ) : (
+          <>
+            <div className="workspace-head">
+              <div>
+                <p className="eyebrow">Editing rules</p>
+                <h2>{selectedGame.displayName}</h2>
+                <p className="muted small">
+                  File <span className="mono">{selectedGame.mandatePath}</span> · app{" "}
+                  <span className="mono">{selectedGame.applicationId}</span>
+                </p>
               </div>
+              <div className="flow-steps" aria-hidden="true">
+                <span className="step on">1 Edit</span>
+                <span className="step-sep" />
+                <span className="step">2 Save</span>
+                <span className="step-sep" />
+                <span className="step">3 Activate</span>
+              </div>
+            </div>
 
-              {mandate.rules.map((rule, ruleIndex) => (
-                <article key={`${rule.ruleId}-${ruleIndex}`} className="rule-card">
-                  <div className="propose">
-                    <label className="field">
-                      <span>ruleId</span>
-                      <input
-                        value={rule.ruleId}
-                        onChange={(e) => updateRule(ruleIndex, { ruleId: e.target.value })}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>effect</span>
-                      <select
-                        value={rule.effect}
-                        onChange={(e) =>
-                          updateRule(ruleIndex, {
-                            effect: e.target.value as MandateRule["effect"],
-                          })
-                        }
-                      >
-                        <option value="FORBID">FORBID</option>
-                        <option value="PERMIT">PERMIT</option>
-                        <option value="REQUIRE_APPROVAL">REQUIRE_APPROVAL</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>action</span>
-                      <select
-                        value={rule.action}
-                        onChange={(e) => updateRule(ruleIndex, { action: e.target.value })}
-                      >
-                        <option value="APP_ACTION">APP_ACTION</option>
-                        <option value="PAYMENT">PAYMENT</option>
-                        <option value="SPOT_TRADE">SPOT_TRADE</option>
-                        <option value="DEPLOY">DEPLOY</option>
-                        <option value="DELETE">DELETE</option>
-                        <option value="REFUND">REFUND</option>
-                      </select>
-                    </label>
-                  </div>
-                  <ul className="pred-list">
-                    {rule.predicates.map((p, predIndex) => (
-                      <li key={predIndex} className="pred-row">
-                        <span className="mono small pred-summary">{predicateSummary(p)}</span>
-                        <div className="propose pred-edit">
-                          <label className="field">
-                            <span>field</span>
-                            <input
-                              value={p.field}
-                              onChange={(e) => setPredicate(ruleIndex, predIndex, { ...p, field: e.target.value })}
-                            />
-                          </label>
-                          <label className="field">
-                            <span>name</span>
-                            <input
-                              value={p.name ?? ""}
-                              onChange={(e) => {
-                                const nextPred: MandatePredicate = {
-                                  field: p.field,
-                                  operator: p.operator,
-                                  ...(e.target.value ? { name: e.target.value } : {}),
-                                  ...(p.values ? { values: p.values } : {}),
-                                  ...(p.value !== undefined ? { value: p.value } : {}),
-                                };
-                                setPredicate(ruleIndex, predIndex, nextPred);
-                              }}
-                            />
-                          </label>
-                          <label className="field">
-                            <span>operator</span>
-                            <input
-                              value={p.operator}
-                              onChange={(e) =>
-                                setPredicate(ruleIndex, predIndex, { ...p, operator: e.target.value })
-                              }
-                            />
-                          </label>
-                          <label className="field">
-                            <span>value</span>
-                            <input
-                              value={
-                                p.values
-                                  ? p.values.join(",")
-                                  : typeof p.value === "boolean"
-                                    ? String(p.value)
-                                    : String(p.value ?? "")
-                              }
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const base: MandatePredicate = {
-                                  field: p.field,
-                                  operator: p.operator,
-                                  ...(p.name ? { name: p.name } : {}),
-                                };
-                                if (p.operator === "IN") {
-                                  setPredicate(ruleIndex, predIndex, {
-                                    ...base,
-                                    values: raw.split(",").map((s) => s.trim()).filter(Boolean),
-                                  });
-                                  return;
-                                }
-                                if (raw === "true" || raw === "false") {
-                                  setPredicate(ruleIndex, predIndex, { ...base, value: raw === "true" });
-                                  return;
-                                }
-                                setPredicate(ruleIndex, predIndex, { ...base, value: raw });
-                              }}
-                            />
-                          </label>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    type="button"
-                    className="preset-btn danger"
-                    onClick={() => removeRule(ruleIndex)}
-                    disabled={busy}
-                  >
-                    Remove rule
-                  </button>
-                </article>
+            <div className="preset-row" role="group" aria-label="Quick rules">
+              {PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className="preset-chip"
+                  title={preset.hint}
+                  disabled={!mandate || busy}
+                  onClick={() => applyPreset(preset)}
+                >
+                  <strong>{preset.label}</strong>
+                  <span>{preset.hint}</span>
+                </button>
               ))}
             </div>
-          ) : (
-            <p className="muted">{busy ? "Loading mandate…" : "Select a game."}</p>
-          )}
 
-          <div className="game-actions">
-            <button type="button" className="cta submit" disabled={!apiOk || busy || !mandate} onClick={() => void onSave()}>
-              Save to disk
-            </button>
-            <button
-              type="button"
-              className="cta submit secondary"
-              disabled={!apiOk || busy || !selected}
-              onClick={() => void onActivate()}
-            >
-              Activate on API
-            </button>
-          </div>
-        </section>
-      )}
+            <div className="workspace-toolbar">
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={!mandate || busy}
+                onClick={() => setJsonMode((v) => !v)}
+              >
+                {jsonMode ? "Simple view" : "Advanced JSON"}
+              </button>
+            </div>
 
-      {note && <p className="ok-note reveal">{note}</p>}
-      {error && <p className="err">{error}</p>}
-    </>
+            {jsonMode ? (
+              <textarea
+                className="mandate-json"
+                value={jsonDraft}
+                onChange={(e) => setJsonDraft(e.target.value)}
+                rows={20}
+                spellCheck={false}
+                disabled={busy}
+              />
+            ) : !mandate ? (
+              <p className="muted">{busy ? "Loading rules…" : "No mandate loaded."}</p>
+            ) : (
+              <ul className="rule-readable-list">
+                {mandate.rules.map((rule, ruleIndex) => {
+                  const open = expanded === rule.ruleId;
+                  const cardPred = findCardValuePred(rule);
+                  const amountPred = findAmountPred(rule);
+                  return (
+                    <li key={`${rule.ruleId}-${ruleIndex}`} className={`rule-readable ${rule.effect.toLowerCase()}`}>
+                      <button
+                        type="button"
+                        className="rule-readable-main"
+                        onClick={() => setExpanded(open ? null : rule.ruleId)}
+                      >
+                        <span className={`effect-pill ${rule.effect.toLowerCase()}`}>{rule.effect}</span>
+                        <span className="rule-readable-copy">
+                          <strong>{ruleTitle(rule)}</strong>
+                          <span>{rulePlainEnglish(rule)}</span>
+                        </span>
+                        <span className="chevron" aria-hidden="true">
+                          {open ? "−" : "+"}
+                        </span>
+                      </button>
+
+                      {open && (
+                        <div className="rule-readable-body">
+                          {cardPred && (
+                            <label className="field inline-edit">
+                              <span>Block when card value is greater than</span>
+                              <input
+                                type="number"
+                                value={String(cardPred.pred.value ?? "")}
+                                disabled={busy}
+                                onChange={(e) =>
+                                  setPredicate(ruleIndex, cardPred.index, {
+                                    ...cardPred.pred,
+                                    value: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          )}
+                          {amountPred && (
+                            <label className="field inline-edit">
+                              <span>Amount threshold (atomic units)</span>
+                              <input
+                                value={String(amountPred.pred.value ?? "")}
+                                disabled={busy}
+                                onChange={(e) =>
+                                  setPredicate(ruleIndex, amountPred.index, {
+                                    ...amountPred.pred,
+                                    value: e.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+                          )}
+                          {!cardPred && !amountPred && (
+                            <p className="hint">
+                              Use Advanced JSON to edit this rule’s predicates in full.
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            className="btn-ghost danger"
+                            disabled={busy}
+                            onClick={() => removeRule(ruleIndex)}
+                          >
+                            Remove rule
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div className="sticky-actions">
+              <button
+                type="button"
+                className="cta ghost-cta"
+                disabled={!apiOk || busy || !mandate}
+                onClick={() => void onSave()}
+              >
+                {busy ? "Working…" : "Save to disk"}
+              </button>
+              <button
+                type="button"
+                className="cta"
+                disabled={!apiOk || busy || !selected}
+                onClick={() => void onActivate()}
+              >
+                Activate for agents
+              </button>
+            </div>
+          </>
+        )}
+
+        {note && <p className="ok-note reveal">{note}</p>}
+        {error && <p className="err">{error}</p>}
+      </section>
+    </div>
   );
 }

@@ -6,10 +6,10 @@ import { GamesView } from "./GamesView.js";
 import { OwnerView } from "./OwnerView.js";
 import "./style.css";
 
-type View = "owner" | "agent" | "games";
+type View = "games" | "owner" | "agent";
 
 function App() {
-  const [view, setView] = useState<View>("owner");
+  const [view, setView] = useState<View>("games");
   const [health, setHealth] = useState<HealthView | null>(null);
   const [policy, setPolicy] = useState<PolicyView | null>(null);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
@@ -34,52 +34,64 @@ function App() {
   return (
     <div className="shell">
       <div className="atmosphere" aria-hidden="true" />
-      <header className="hero">
-        <div className="hero-top">
+      <header className="topbar">
+        <div className="topbar-brand">
           <p className="brand">Swaraj</p>
+          <span className="brand-sub">Dashboard</span>
+        </div>
+        <div className="topbar-meta">
           <p className={`pulse ${apiOk === false ? "down" : apiOk ? "up" : ""}`}>
             {apiOk === null ? "Connecting…" : apiOk ? "API live" : "API offline"}
           </p>
+          {health && (
+            <p className="runtime mono small">
+              {health.mode}
+              {health.network ? ` · ${health.network}` : ""}
+            </p>
+          )}
         </div>
-        <h1>Policy-gated agent authorization</h1>
-        {health && (
-          <p className="runtime mono small">
-            mode={health.mode}
-            {health.live ? " · live" : ""}
-            {health.network ? ` · network=${health.network}` : ""} · execution=
-            {health.phases.execution} · base={health.phases.base} · lean={health.phases.lean} · sp1=
-            {health.phases.sp1} · zk={health.phases.zkVerify} · kurier={health.phases.kurier} ·
-            autoProve={health.phases.autoProve}
-          </p>
-        )}
-        <nav className="view-tabs" aria-label="App views">
-          <button
-            type="button"
-            className={`tab ${view === "owner" ? "active" : ""}`}
-            onClick={() => setView("owner")}
-          >
-            Owner · Policy
-          </button>
-          <button
-            type="button"
-            className={`tab ${view === "agent" ? "active" : ""}`}
-            onClick={() => setView("agent")}
-          >
-            Agent · Activity
-          </button>
-          <button
-            type="button"
-            className={`tab ${view === "games" ? "active" : ""}`}
-            onClick={() => setView("games")}
-          >
-            Games · Mandates
-          </button>
-        </nav>
       </header>
+
+      <div className="page-intro">
+        <h1>{view === "games" ? "Games & rules" : view === "owner" ? "Owner policy" : "Agent activity"}</h1>
+        <p className="lede">
+          {view === "games"
+            ? "Pick a game, set what the agent may do, save, then activate. Same Swaraj mandate gate as production."
+            : view === "owner"
+              ? "Limits map to Lean/SMT predicates. Agent intents evaluate against the ACTIVE version only."
+              : "Propose intents and inspect allow / block decisions with rule reasons."}
+        </p>
+      </div>
+
+      <nav className="view-tabs" aria-label="App views">
+        <button
+          type="button"
+          className={`tab ${view === "games" ? "active" : ""}`}
+          onClick={() => setView("games")}
+        >
+          Games
+        </button>
+        <button
+          type="button"
+          className={`tab ${view === "owner" ? "active" : ""}`}
+          onClick={() => setView("owner")}
+        >
+          Owner
+        </button>
+        <button
+          type="button"
+          className={`tab ${view === "agent" ? "active" : ""}`}
+          onClick={() => setView("agent")}
+        >
+          Agent
+        </button>
+      </nav>
 
       {error && view === "owner" && !policy && <p className="err">{error}</p>}
 
-      {view === "owner" ? (
+      {view === "games" ? (
+        <GamesView apiOk={apiOk === true} />
+      ) : view === "owner" ? (
         <OwnerView
           policy={policy}
           apiOk={apiOk === true}
@@ -88,10 +100,8 @@ function App() {
             setError(null);
           }}
         />
-      ) : view === "agent" ? (
-        <AgentView policy={policy} apiOk={apiOk === true} />
       ) : (
-        <GamesView apiOk={apiOk === true} />
+        <AgentView policy={policy} apiOk={apiOk === true} />
       )}
     </div>
   );
