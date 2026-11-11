@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import {
-  activateGameMandate,
-  createGame,
-  listGames,
-  loadGameMandate,
-  saveGameMandate,
+  activateProjectMandate,
+  createProject,
+  listProjects,
+  loadProjectMandate,
+  saveProjectMandate,
   type AgentMandateView,
-  type GameRecord,
+  type ProjectRecord,
   type MandatePredicate,
   type MandateRule,
 } from "./api.js";
@@ -114,8 +114,8 @@ function findAmountPred(rule: MandateRule): { index: number; pred: MandatePredic
   return { index, pred: rule.predicates[index]! };
 }
 
-export function GamesView({ apiOk }: Props) {
-  const [games, setGames] = useState<GameRecord[]>([]);
+export function ProjectsView({ apiOk }: Props) {
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [mandate, setMandate] = useState<AgentMandateView | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -128,16 +128,16 @@ export function GamesView({ apiOk }: Props) {
   const [jsonDraft, setJsonDraft] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  async function refreshGames(preferSlug?: string) {
-    const data = await listGames();
-    setGames(data.games);
-    const next = preferSlug ?? selected ?? data.games[0]?.slug ?? null;
+  async function refreshProjects(preferSlug?: string) {
+    const data = await listProjects();
+    setProjects(data.projects);
+    const next = preferSlug ?? selected ?? data.projects[0]?.slug ?? null;
     setSelected(next);
     return next;
   }
 
-  async function loadMandate(gameSlug: string) {
-    const data = await loadGameMandate(gameSlug);
+  async function loadMandate(projectSlug: string) {
+    const data = await loadProjectMandate(projectSlug);
     setMandate(data.mandate);
     setJsonDraft(JSON.stringify(data.mandate, null, 2));
   }
@@ -147,7 +147,7 @@ export function GamesView({ apiOk }: Props) {
     void (async () => {
       try {
         setError(null);
-        const next = await refreshGames();
+        const next = await refreshProjects();
         if (next) await loadMandate(next);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -156,14 +156,14 @@ export function GamesView({ apiOk }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiOk]);
 
-  async function selectGame(gameSlug: string) {
-    setSelected(gameSlug);
+  async function selectProject(projectSlug: string) {
+    setSelected(projectSlug);
     setNote(null);
     setError(null);
     setExpanded(null);
     setBusy(true);
     try {
-      await loadMandate(gameSlug);
+      await loadMandate(projectSlug);
     } catch (err) {
       setMandate(null);
       setError(err instanceof Error ? err.message : String(err));
@@ -177,7 +177,7 @@ export function GamesView({ apiOk }: Props) {
     setJsonDraft(JSON.stringify(next, null, 2));
   }
 
-  async function onAddGame(e: FormEvent) {
+  async function onAddProject(e: FormEvent) {
     e.preventDefault();
     if (!displayName.trim()) return;
     setBusy(true);
@@ -187,13 +187,13 @@ export function GamesView({ apiOk }: Props) {
       const body: { displayName: string; slug?: string } = { displayName: displayName.trim() };
       const derived = slug.trim() || slugFromName(displayName);
       if (derived) body.slug = derived;
-      const { game } = await createGame(body);
+      const { project } = await createProject(body);
       setDisplayName("");
       setSlug("");
       setShowAdd(false);
-      await refreshGames(game.slug);
-      await loadMandate(game.slug);
-      setNote(`Created ${game.displayName} → examples/${game.slug}/`);
+      await refreshProjects(project.slug);
+      await loadMandate(project.slug);
+      setNote(`Created ${project.displayName} → examples/${project.slug}/`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -234,7 +234,7 @@ export function GamesView({ apiOk }: Props) {
       let body = mandate;
       if (jsonMode) body = JSON.parse(jsonDraft) as AgentMandateView;
       if (!body) throw new Error("No mandate to save");
-      const saved = await saveGameMandate(selected, { ...body, rules: sortRules(body.rules) });
+      const saved = await saveProjectMandate(selected, { ...body, rules: sortRules(body.rules) });
       syncMandate(saved.mandate);
       setNote("Saved to disk. Activate to enforce for agents.");
     } catch (err) {
@@ -250,9 +250,9 @@ export function GamesView({ apiOk }: Props) {
     setError(null);
     setNote(null);
     try {
-      const result = await activateGameMandate(selected);
+      const result = await activateProjectMandate(selected);
       setNote(
-        `Live for agents · ${result.mandateId} v${result.version} · ${result.ruleCount} rules on app “${result.game.applicationId}”.`,
+        `Live for agents · ${result.mandateId} v${result.version} · ${result.ruleCount} rules on app “${result.project.applicationId}”.`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -261,27 +261,27 @@ export function GamesView({ apiOk }: Props) {
     }
   }
 
-  const selectedGame = games.find((g) => g.slug === selected) ?? null;
+  const selectedProject = projects.find((p) => p.slug === selected) ?? null;
 
   return (
-    <div className="games-layout enter">
-      <aside className="games-rail" aria-label="Games">
+    <div className="projects-layout enter">
+      <aside className="projects-rail" aria-label="Projects">
         <div className="rail-head">
-          <h2>Your games</h2>
+          <h2>Your projects</h2>
           <button
             type="button"
             className="btn-ghost"
             disabled={!apiOk || busy}
             onClick={() => setShowAdd((v) => !v)}
           >
-            {showAdd ? "Cancel" : "New game"}
+            {showAdd ? "Cancel" : "New project"}
           </button>
         </div>
 
-        {!apiOk && <p className="muted">API offline — start the Swaraj API to manage games.</p>}
+        {!apiOk && <p className="muted">API offline — start the Swaraj API to manage projects.</p>}
 
         {showAdd && (
-          <form className="add-game-form" onSubmit={(e) => void onAddGame(e)}>
+          <form className="add-project-form" onSubmit={(e) => void onAddProject(e)}>
             <label className="field">
               <span>Name</span>
               <input
@@ -312,28 +312,28 @@ export function GamesView({ apiOk }: Props) {
           </form>
         )}
 
-        <ul className="game-list">
-          {games.map((game) => (
-            <li key={game.slug}>
+        <ul className="project-list">
+          {projects.map((project) => (
+            <li key={project.slug}>
               <button
                 type="button"
-                className={`game-row ${selected === game.slug ? "selected" : ""}`}
-                onClick={() => void selectGame(game.slug)}
+                className={`project-row ${selected === project.slug ? "selected" : ""}`}
+                onClick={() => void selectProject(project.slug)}
                 disabled={!apiOk}
               >
-                <strong>{game.displayName}</strong>
-                <span className="mono small">{game.slug}</span>
+                <strong>{project.displayName}</strong>
+                <span className="mono small">{project.slug}</span>
               </button>
             </li>
           ))}
         </ul>
-        {games.length === 0 && apiOk && <p className="muted">No games yet — create one.</p>}
+        {projects.length === 0 && apiOk && <p className="muted">No projects yet — create one.</p>}
       </aside>
 
-      <section className="games-workspace" aria-label="Rules editor">
-        {!selectedGame ? (
+      <section className="projects-workspace" aria-label="Rules editor">
+        {!selectedProject ? (
           <div className="empty-workspace">
-            <h2>Select a game</h2>
+            <h2>Select a project</h2>
             <p>Rules you set here gate the agent before it acts.</p>
           </div>
         ) : (
@@ -341,10 +341,10 @@ export function GamesView({ apiOk }: Props) {
             <div className="workspace-head">
               <div>
                 <p className="eyebrow">Editing rules</p>
-                <h2>{selectedGame.displayName}</h2>
+                <h2>{selectedProject.displayName}</h2>
                 <p className="muted small">
-                  File <span className="mono">{selectedGame.mandatePath}</span> · app{" "}
-                  <span className="mono">{selectedGame.applicationId}</span>
+                  File <span className="mono">{selectedProject.mandatePath}</span> · app{" "}
+                  <span className="mono">{selectedProject.applicationId}</span>
                 </p>
               </div>
               <div className="flow-steps" aria-hidden="true">

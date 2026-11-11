@@ -192,7 +192,7 @@ export function atomicToUsdc(atomic: unknown): number {
   return Number(BigInt(raw)) / 1e6;
 }
 
-export type GameRecord = {
+export type ProjectRecord = {
   slug: string;
   displayName: string;
   applicationId: string;
@@ -227,10 +227,14 @@ export type AgentMandateView = {
   programCertifier?: string;
 };
 
-export type GamesListView = { games: GameRecord[] };
-export type GameMandateView = { game: GameRecord; mandate: AgentMandateView; issues?: unknown[] };
-export type GameActivateView = {
-  game: GameRecord;
+export type ProjectsListView = { projects: ProjectRecord[] };
+export type ProjectMandateView = {
+  project: ProjectRecord;
+  mandate: AgentMandateView;
+  issues?: unknown[];
+};
+export type ProjectActivateView = {
+  project: ProjectRecord;
   mandateId: string;
   version: number;
   policyHash: string;
@@ -238,19 +242,21 @@ export type GameActivateView = {
   issues?: unknown[];
 };
 
-export const listGames = () => api<GamesListView>("/v1/games");
+export const listProjects = () => api<ProjectsListView>("/v1/projects");
 
-export const createGame = (body: { displayName: string; slug?: string; applicationId?: string }) =>
-  api<{ game: GameRecord }>("/v1/games", { method: "POST", body: JSON.stringify(body) });
+export const createProject = (body: { displayName: string; slug?: string; applicationId?: string }) =>
+  api<{ project: ProjectRecord }>("/v1/projects", { method: "POST", body: JSON.stringify(body) });
 
-export const loadGameMandate = (slug: string) =>
-  api<GameMandateView>(`/v1/games/${encodeURIComponent(slug)}/mandate`);
+export const loadProjectMandate = (slug: string) =>
+  api<ProjectMandateView>(`/v1/projects/${encodeURIComponent(slug)}/mandate`);
 
-export const saveGameMandate = (slug: string, mandate: AgentMandateView) =>
-  api<GameMandateView>(`/v1/games/${encodeURIComponent(slug)}/mandate`, {
+export const saveProjectMandate = (slug: string, mandate: AgentMandateView) =>
+  api<ProjectMandateView>(`/v1/projects/${encodeURIComponent(slug)}/mandate`, {
     method: "PUT",
     body: JSON.stringify(mandate),
   });
 
-export const activateGameMandate = (slug: string) =>
-  api<GameActivateView>(`/v1/games/${encodeURIComponent(slug)}/activate`, { method: "POST" });
+export const activateProjectMandate = (slug: string) =>
+  api<ProjectActivateView>(`/v1/projects/${encodeURIComponent(slug)}/activate`, {
+    method: "POST",
+  });

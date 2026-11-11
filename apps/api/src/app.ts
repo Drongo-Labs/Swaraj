@@ -82,15 +82,15 @@ import { resolveBaseNetwork } from "@swaraj/evidence";
 import { createLiveStateOracle, type LiveStateOracle } from "./pipeline/live-state.js";
 import { proofStackStatus } from "./auto-prove.js";
 import {
-  CreateGameBodySchema,
-  GameSlugSchema,
-  createGameScaffold,
-  getGame,
-  listGames,
-  readGameMandate,
+  CreateProjectBodySchema,
+  ProjectSlugSchema,
+  createProjectScaffold,
+  getProject,
+  listProjects,
+  readProjectMandate,
   resolveExamplesRoot,
-  writeGameMandate,
-} from "./games.js";
+  writeProjectMandate,
+} from "./projects.js";
 
 export type ActivityItem = {
   id: string;
@@ -1662,39 +1662,39 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     },
   );
 
-  /** Dev Games dashboard: list / scaffold examples/* and edit mandate files on disk. */
+  /** Dev Projects dashboard: list / scaffold examples/* and edit mandate files on disk. */
   const examplesRoot = resolveExamplesRoot();
 
-  app.get("/v1/games", async (_request, reply) => {
+  app.get("/v1/projects", async (_request, reply) => {
     try {
-      return { games: await listGames(examplesRoot) };
+      return { projects: await listProjects(examplesRoot) };
     } catch (err) {
       return reply.code(500).send({
-        error: "games_registry_unavailable",
+        error: "projects_registry_unavailable",
         message: err instanceof Error ? err.message : String(err),
       });
     }
   });
 
-  app.post("/v1/games", async (request, reply) => {
-    const body = CreateGameBodySchema.safeParse(request.body);
+  app.post("/v1/projects", async (request, reply) => {
+    const body = CreateProjectBodySchema.safeParse(request.body);
     if (!body.success) {
       const issues = body.error.issues.slice(0, 10).map((issue) => ({
         path: issue.path.join(".") || "(root)",
         message: issue.message,
       }));
-      return reply.code(400).send({ error: "invalid_game", issues });
+      return reply.code(400).send({ error: "invalid_project", issues });
     }
     try {
-      const game = await createGameScaffold(examplesRoot, {
+      const project = await createProjectScaffold(examplesRoot, {
         displayName: body.data.displayName,
         ...(body.data.slug !== undefined ? { slug: body.data.slug } : {}),
         ...(body.data.applicationId !== undefined ? { applicationId: body.data.applicationId } : {}),
       });
-      return reply.code(201).send({ game });
+      return reply.code(201).send({ project });
     } catch (err) {
       const code = (err as { code?: string }).code;
-      if (code === "game_exists") return reply.code(409).send({ error: "game_exists" });
+      if (code === "project_exists") return reply.code(409).send({ error: "project_exists" });
       if (code === "invalid_slug") return reply.code(400).send({ error: "invalid_slug" });
       return reply.code(500).send({
         error: "scaffold_failed",
@@ -1703,24 +1703,24 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     }
   });
 
-  app.get<{ Params: { slug: string } }>("/v1/games/:slug/mandate", async (request, reply) => {
-    const slug = GameSlugSchema.safeParse(request.params.slug);
+  app.get<{ Params: { slug: string } }>("/v1/projects/:slug/mandate", async (request, reply) => {
+    const slug = ProjectSlugSchema.safeParse(request.params.slug);
     if (!slug.success) return reply.code(400).send({ error: "invalid_slug" });
-    const game = await getGame(examplesRoot, slug.data);
-    if (!game) return reply.code(404).send({ error: "game_not_found" });
+    const project = await getProject(examplesRoot, slug.data);
+    if (!project) return reply.code(404).send({ error: "project_not_found" });
     try {
-      const mandate = await readGameMandate(examplesRoot, game);
-      return { game, mandate };
+      const mandate = await readProjectMandate(examplesRoot, project);
+      return { project, mandate };
     } catch {
       return reply.code(404).send({ error: "mandate_file_not_found" });
     }
   });
 
-  app.put<{ Params: { slug: string } }>("/v1/games/:slug/mandate", async (request, reply) => {
-    const slug = GameSlugSchema.safeParse(request.params.slug);
+  app.put<{ Params: { slug: string } }>("/v1/projects/:slug/mandate", async (request, reply) => {
+    const slug = ProjectSlugSchema.safeParse(request.params.slug);
     if (!slug.success) return reply.code(400).send({ error: "invalid_slug" });
-    const game = await getGame(examplesRoot, slug.data);
-    if (!game) return reply.code(404).send({ error: "game_not_found" });
+    const project = await getProject(examplesRoot, slug.data);
+    if (!project) return reply.code(404).send({ error: "project_not_found" });
     const parsed = AgentMandateSchema.safeParse(request.body);
     if (!parsed.success) {
       const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
@@ -1732,22 +1732,22 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     const definition = normalizeAgentMandate(
       request.body as { rules: Array<{ ruleId: string }> },
     ) as Record<string, unknown>;
-    await writeGameMandate(examplesRoot, game, definition);
+    await writeProjectMandate(examplesRoot, project, definition);
     return {
-      game,
+      project,
       mandate: definition,
       issues: lintMandate(parsed.data),
     };
   });
 
-  app.post<{ Params: { slug: string } }>("/v1/games/:slug/activate", async (request, reply) => {
-    const slug = GameSlugSchema.safeParse(request.params.slug);
+  app.post<{ Params: { slug: string } }>("/v1/projects/:slug/activate", async (request, reply) => {
+    const slug = ProjectSlugSchema.safeParse(request.params.slug);
     if (!slug.success) return reply.code(400).send({ error: "invalid_slug" });
-    const game = await getGame(examplesRoot, slug.data);
-    if (!game) return reply.code(404).send({ error: "game_not_found" });
+    const project = await getProject(examplesRoot, slug.data);
+    if (!project) return reply.code(404).send({ error: "project_not_found" });
     let raw: unknown;
     try {
-      raw = await readGameMandate(examplesRoot, game);
+      raw = await readProjectMandate(examplesRoot, project);
     } catch {
       return reply.code(404).send({ error: "mandate_file_not_found" });
     }
@@ -1767,13 +1767,13 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         ? (definition as { version: number }).version
         : 1;
     const mandateHash = await saveActiveDefinition(
-      game.applicationId,
+      project.applicationId,
       MANDATE_POLICY_ID,
       version,
       definition,
     );
     return reply.code(201).send({
-      game,
+      project,
       mandateId: String(definition.mandateId),
       version,
       policyHash: mandateHash,

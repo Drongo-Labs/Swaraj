@@ -1,24 +1,24 @@
-import { mkdir, readFile, writeFile, access } from "node:fs/promises";
+import { mkdir, readFile, writeFile, access, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export const GameSlugSchema = z
+export const ProjectSlugSchema = z
   .string()
   .regex(/^[a-z][a-z0-9_-]{1,31}$/, "slug must match ^[a-z][a-z0-9_-]{1,31}$");
 
-export const CreateGameBodySchema = z.strictObject({
+export const CreateProjectBodySchema = z.strictObject({
   displayName: z.string().min(1).max(64),
-  slug: GameSlugSchema.optional(),
+  slug: ProjectSlugSchema.optional(),
   applicationId: z
     .string()
     .regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,63}$/)
     .optional(),
 });
 
-export type GameRecord = {
+export type ProjectRecord = {
   slug: string;
   displayName: string;
   applicationId: string;
@@ -26,7 +26,7 @@ export type GameRecord = {
   createdAt: string;
 };
 
-type GamesRegistry = { games: GameRecord[] };
+type ProjectsRegistry = { projects: ProjectRecord[] };
 
 /** Repo `examples/` root. Override with SWARAJ_EXAMPLES_DIR. */
 export function resolveExamplesRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -38,6 +38,10 @@ export function resolveExamplesRoot(env: NodeJS.ProcessEnv = process.env): strin
 }
 
 function registryPath(examplesRoot: string): string {
+  return path.join(examplesRoot, "projects.json");
+}
+
+function legacyRegistryPath(examplesRoot: string): string {
   return path.join(examplesRoot, "games.json");
 }
 
@@ -52,47 +56,73 @@ function slugify(displayName: string): string {
   throw new Error("could_not_derive_slug");
 }
 
-export async function loadGamesRegistry(examplesRoot: string): Promise<GamesRegistry> {
+export async function loadProjectsRegistry(examplesRoot: string): Promise<ProjectsRegistry> {
   const file = registryPath(examplesRoot);
-  const raw = await readFile(file, "utf8");
-  const parsed = JSON.parse(raw) as GamesRegistry;
-  if (!parsed || !Array.isArray(parsed.games)) {
-    throw new Error("invalid_games_registry");
+  try {
+    const raw = await readFile(file, "utf8");
+    const parsed = JSON.parse(raw) as ProjectsRegistry;
+    if (!parsed || !Array.isArray(parsed.projects)) {
+      throw new Error("invalid_projects_registry");
+    }
+    return parsed;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
-  return parsed;
+
+  // One-time migrate from legacy examples/games.json
+  const legacyFile = legacyRegistryPath(examplesRoot);
+  const legacyRaw = await readFile(legacyFile, "utf8");
+  const legacy = JSON.parse(legacyRaw) as { games?: ProjectRecord[] };
+  if (!legacy || !Array.isArray(legacy.games)) {
+    throw new Error("invalid_projects_registry");
+  }
+  const migrated: ProjectsRegistry = { projects: legacy.games };
+  await saveProjectsRegistry(examplesRoot, migrated);
+  try {
+    await unlink(legacyFile);
+  } catch {
+    // Best-effort cleanup of legacy registry
+  }
+  return migrated;
 }
 
-async function saveGamesRegistry(examplesRoot: string, registry: GamesRegistry): Promise<void> {
+async function saveProjectsRegistry(examplesRoot: string, registry: ProjectsRegistry): Promise<void> {
   const file = registryPath(examplesRoot);
   await writeFile(file, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
 }
 
-export async function listGames(examplesRoot: string): Promise<GameRecord[]> {
-  const registry = await loadGamesRegistry(examplesRoot);
-  return registry.games;
+export async function listProjects(examplesRoot: string): Promise<ProjectRecord[]> {
+  const registry = await loadProjectsRegistry(examplesRoot);
+  return registry.projects;
 }
 
-export async function getGame(examplesRoot: string, slug: string): Promise<GameRecord | undefined> {
-  const games = await listGames(examplesRoot);
-  return games.find((g) => g.slug === slug);
+export async function getProject(
+  examplesRoot: string,
+  slug: string,
+): Promise<ProjectRecord | undefined> {
+  const projects = await listProjects(examplesRoot);
+  return projects.find((p) => p.slug === slug);
 }
 
-export function absoluteMandatePath(examplesRoot: string, game: GameRecord): string {
-  return path.join(examplesRoot, game.mandatePath);
+export function absoluteMandatePath(examplesRoot: string, project: ProjectRecord): string {
+  return path.join(examplesRoot, project.mandatePath);
 }
 
-export async function readGameMandate(examplesRoot: string, game: GameRecord): Promise<unknown> {
-  const file = absoluteMandatePath(examplesRoot, game);
+export async function readProjectMandate(
+  examplesRoot: string,
+  project: ProjectRecord,
+): Promise<unknown> {
+  const file = absoluteMandatePath(examplesRoot, project);
   const raw = await readFile(file, "utf8");
   return JSON.parse(raw) as unknown;
 }
 
-export async function writeGameMandate(
+export async function writeProjectMandate(
   examplesRoot: string,
-  game: GameRecord,
+  project: ProjectRecord,
   mandate: unknown,
 ): Promise<void> {
-  const file = absoluteMandatePath(examplesRoot, game);
+  const file = absoluteMandatePath(examplesRoot, project);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, `${JSON.stringify(mandate, null, 2)}\n`, "utf8");
 }
@@ -185,7 +215,7 @@ function packageJson(slug: string, displayName: string): string {
 function readme(slug: string, displayName: string, applicationId: string): string {
   return `# ${displayName}
 
-Light Swaraj game scaffold generated from the Games dashboard.
+Light Swaraj project scaffold generated from the Projects dashboard.
 
 - **Application id:** \`${applicationId}\`
 - **Mandate:** \`mandate/${slug}-mandate.json\`
@@ -200,7 +230,7 @@ export SWARAJ_APPLICATION_ID=${applicationId}
 pnpm register-mandate
 \`\`\`
 
-Edit rules in the Swaraj dashboard (Games → ${displayName}) or edit the mandate JSON directly, then Save / Activate.
+Edit rules in the Swaraj dashboard (Projects → ${displayName}) or edit the mandate JSON directly, then Save / Activate.
 `;
 }
 
@@ -350,33 +380,33 @@ console.log(JSON.stringify(result, null, 2));
 `;
 }
 
-export async function createGameScaffold(
+export async function createProjectScaffold(
   examplesRoot: string,
   input: { displayName: string; slug?: string; applicationId?: string },
-): Promise<GameRecord> {
+): Promise<ProjectRecord> {
   const slug = input.slug ?? slugify(input.displayName);
-  const parsedSlug = GameSlugSchema.safeParse(slug);
+  const parsedSlug = ProjectSlugSchema.safeParse(slug);
   if (!parsedSlug.success) {
     throw Object.assign(new Error("invalid_slug"), { code: "invalid_slug" as const });
   }
 
-  const registry = await loadGamesRegistry(examplesRoot);
-  if (registry.games.some((g) => g.slug === slug)) {
-    throw Object.assign(new Error("game_exists"), { code: "game_exists" as const });
+  const registry = await loadProjectsRegistry(examplesRoot);
+  if (registry.projects.some((p) => p.slug === slug)) {
+    throw Object.assign(new Error("project_exists"), { code: "project_exists" as const });
   }
 
-  const gameDir = path.join(examplesRoot, slug);
+  const projectDir = path.join(examplesRoot, slug);
   try {
-    await access(gameDir);
-    throw Object.assign(new Error("game_dir_exists"), { code: "game_exists" as const });
+    await access(projectDir);
+    throw Object.assign(new Error("project_dir_exists"), { code: "project_exists" as const });
   } catch (err) {
-    if ((err as { code?: string }).code === "game_exists") throw err;
+    if ((err as { code?: string }).code === "project_exists") throw err;
     // ENOENT → ok to create
   }
 
   const applicationId = input.applicationId ?? slug;
   const mandateRel = `${slug}/mandate/${slug}-mandate.json`;
-  const record: GameRecord = {
+  const record: ProjectRecord = {
     slug,
     displayName: input.displayName.trim(),
     applicationId,
@@ -384,22 +414,22 @@ export async function createGameScaffold(
     createdAt: new Date().toISOString(),
   };
 
-  await mkdir(path.join(gameDir, "mandate"), { recursive: true });
-  await mkdir(path.join(gameDir, "src", "swaraj"), { recursive: true });
+  await mkdir(path.join(projectDir, "mandate"), { recursive: true });
+  await mkdir(path.join(projectDir, "src", "swaraj"), { recursive: true });
 
-  await writeFile(path.join(gameDir, "package.json"), packageJson(slug, record.displayName), "utf8");
-  await writeFile(path.join(gameDir, "README.md"), readme(slug, record.displayName, applicationId), "utf8");
-  await writeFile(path.join(gameDir, "tsconfig.json"), tsconfig(), "utf8");
+  await writeFile(path.join(projectDir, "package.json"), packageJson(slug, record.displayName), "utf8");
+  await writeFile(path.join(projectDir, "README.md"), readme(slug, record.displayName, applicationId), "utf8");
+  await writeFile(path.join(projectDir, "tsconfig.json"), tsconfig(), "utf8");
   await writeFile(
-    path.join(gameDir, "mandate", `${slug}-mandate.json`),
+    path.join(projectDir, "mandate", `${slug}-mandate.json`),
     `${JSON.stringify(starterMandate(slug), null, 2)}\n`,
     "utf8",
   );
-  await writeFile(path.join(gameDir, "src", "swaraj", "mandateSchema.ts"), mandateSchemaStub(), "utf8");
-  await writeFile(path.join(gameDir, "src", "swaraj", "client.ts"), clientStub(), "utf8");
-  await writeFile(path.join(gameDir, "src", "registerMandate.ts"), registerMandateScript(slug), "utf8");
+  await writeFile(path.join(projectDir, "src", "swaraj", "mandateSchema.ts"), mandateSchemaStub(), "utf8");
+  await writeFile(path.join(projectDir, "src", "swaraj", "client.ts"), clientStub(), "utf8");
+  await writeFile(path.join(projectDir, "src", "registerMandate.ts"), registerMandateScript(slug), "utf8");
 
-  registry.games.push(record);
-  await saveGamesRegistry(examplesRoot, registry);
+  registry.projects.push(record);
+  await saveProjectsRegistry(examplesRoot, registry);
   return record;
 }

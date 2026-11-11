@@ -533,8 +533,8 @@ button.cta {
   background: var(--warn);
 }
 
-/* —— Games layout —— */
-.games-layout {
+/* —— Projects layout —— */
+.projects-layout {
   display: grid;
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
   gap: 1.1rem;
@@ -542,15 +542,15 @@ button.cta {
   min-height: calc(100vh - 12rem);
 }
 
-.games-rail,
-.games-workspace {
+.projects-rail,
+.projects-workspace {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 1.15rem 1.2rem;
 }
 
-.games-workspace {
+.projects-workspace {
   min-height: calc(100vh - 12rem);
 }
 
@@ -571,7 +571,7 @@ button.cta {
   letter-spacing: -0.03em;
 }
 
-.game-list {
+.project-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -579,7 +579,7 @@ button.cta {
   gap: 0.4rem;
 }
 
-.game-row {
+.project-row {
   width: 100%;
   appearance: none;
   border: 1px solid transparent;
@@ -594,24 +594,24 @@ button.cta {
   border-radius: 12px;
 }
 
-.game-row strong {
+.project-row strong {
   font-weight: 750;
 }
 
-.game-row .mono {
+.project-row .mono {
   color: var(--muted);
 }
 
-.game-row.selected {
+.project-row.selected {
   border-color: var(--brand);
   background: color-mix(in srgb, var(--brand) 12%, var(--surface-2));
 }
 
-.game-row:hover:not(.selected):not(:disabled) {
+.project-row:hover:not(.selected):not(:disabled) {
   border-color: var(--line);
 }
 
-.add-game-form {
+.add-project-form {
   display: grid;
   gap: 0.65rem;
   margin-bottom: 0.9rem;
@@ -874,7 +874,7 @@ button.cta {
 }
 
 @media (max-width: 860px) {
-  .games-layout {
+  .projects-layout {
     grid-template-columns: 1fr;
   }
 

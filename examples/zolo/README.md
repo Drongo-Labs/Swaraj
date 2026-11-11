@@ -1,6 +1,6 @@
 # Zolo
 
-Light Swaraj game scaffold generated from the Games dashboard.
+Light Swaraj project scaffold generated from the Projects dashboard.
 
 - **Application id:** `zolo`
 - **Mandate:** `mandate/zolo-mandate.json`
@@ -15,4 +15,4 @@ export SWARAJ_APPLICATION_ID=zolo
 pnpm register-mandate
 ```
 
-Edit rules in the Swaraj dashboard (Games → Zolo) or edit the mandate JSON directly, then Save / Activate.
+Edit rules in the Swaraj dashboard (Projects → Zolo) or edit the mandate JSON directly, then Save / Activate.

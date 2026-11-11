@@ -2,14 +2,14 @@ import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
 import { APP_ID, api, type HealthView, type PolicyView } from "./api.js";
 import { AgentView } from "./AgentView.js";
-import { GamesView } from "./GamesView.js";
+import { ProjectsView } from "./ProjectsView.js";
 import { OwnerView } from "./OwnerView.js";
 import "./style.css";
 
-type View = "games" | "owner" | "agent";
+type View = "projects" | "owner" | "agent";
 
 function App() {
-  const [view, setView] = useState<View>("games");
+  const [view, setView] = useState<View>("projects");
   const [health, setHealth] = useState<HealthView | null>(null);
   const [policy, setPolicy] = useState<PolicyView | null>(null);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
@@ -53,10 +53,16 @@ function App() {
       </header>
 
       <div className="page-intro">
-        <h1>{view === "games" ? "Games & rules" : view === "owner" ? "Owner policy" : "Agent activity"}</h1>
+        <h1>
+          {view === "projects"
+            ? "Projects & rules"
+            : view === "owner"
+              ? "Owner policy"
+              : "Agent activity"}
+        </h1>
         <p className="lede">
-          {view === "games"
-            ? "Pick a game, set what the agent may do, save, then activate. Same Swaraj mandate gate as production."
+          {view === "projects"
+            ? "Pick a project, set what the agent may do, save, then activate. Same Swaraj mandate gate as production."
             : view === "owner"
               ? "Limits map to Lean/SMT predicates. Agent intents evaluate against the ACTIVE version only."
               : "Propose intents and inspect allow / block decisions with rule reasons."}
@@ -66,10 +72,10 @@ function App() {
       <nav className="view-tabs" aria-label="App views">
         <button
           type="button"
-          className={`tab ${view === "games" ? "active" : ""}`}
-          onClick={() => setView("games")}
+          className={`tab ${view === "projects" ? "active" : ""}`}
+          onClick={() => setView("projects")}
         >
-          Games
+          Projects
         </button>
         <button
           type="button"
@@ -89,8 +95,8 @@ function App() {
 
       {error && view === "owner" && !policy && <p className="err">{error}</p>}
 
-      {view === "games" ? (
-        <GamesView apiOk={apiOk === true} />
+      {view === "projects" ? (
+        <ProjectsView apiOk={apiOk === true} />
       ) : view === "owner" ? (
         <OwnerView
           policy={policy}
