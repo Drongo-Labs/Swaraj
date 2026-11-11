@@ -713,3 +713,132 @@ body {
 .product-badge.status-needs_approval::before {
   background: var(--brass);
 }
+
+.game-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.game-row {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, #fff 60%, transparent);
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  display: grid;
+  gap: 0.2rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.game-row.selected {
+  border-color: var(--ink);
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.preset-btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.preset-btn:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.preset-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.preset-btn.danger {
+  color: var(--deny);
+  border-color: color-mix(in srgb, var(--deny) 35%, transparent);
+}
+
+.rule-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.rule-card {
+  border: 1px solid var(--line);
+  padding: 0.9rem;
+  background: color-mix(in srgb, #fff 55%, transparent);
+}
+
+.pred-list {
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.pred-summary {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--muted);
+}
+
+.pred-edit {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.meta-fields {
+  margin-bottom: 0.75rem;
+}
+
+.mandate-json {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, #fff 70%, transparent);
+  color: var(--ink);
+  resize: vertical;
+}
+
+.game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.1rem;
+}
+
+.cta.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.cta.secondary:hover:not(:disabled) {
+  background: var(--ink);
+  color: #f4f8f5;
+}
+
+@media (max-width: 720px) {
+  .pred-edit {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -191,3 +191,66 @@ export function atomicToUsdc(atomic: unknown): number {
   if (!/^\d+$/.test(raw)) return 0;
   return Number(BigInt(raw)) / 1e6;
 }
+
+export type GameRecord = {
+  slug: string;
+  displayName: string;
+  applicationId: string;
+  mandatePath: string;
+  createdAt: string;
+};
+
+export type MandatePredicate = {
+  field: string;
+  operator: string;
+  value?: string | boolean | number;
+  values?: string[];
+  name?: string;
+};
+
+export type MandateRule = {
+  ruleId: string;
+  effect: "PERMIT" | "FORBID" | "REQUIRE_APPROVAL";
+  action: string;
+  predicates: MandatePredicate[];
+};
+
+export type AgentMandateView = {
+  mandateId: string;
+  version: number;
+  agent: string;
+  defaultEffect: "DENY";
+  validFrom: number;
+  validUntil: number;
+  rules: MandateRule[];
+  agentSigner?: string;
+  programCertifier?: string;
+};
+
+export type GamesListView = { games: GameRecord[] };
+export type GameMandateView = { game: GameRecord; mandate: AgentMandateView; issues?: unknown[] };
+export type GameActivateView = {
+  game: GameRecord;
+  mandateId: string;
+  version: number;
+  policyHash: string;
+  ruleCount: number;
+  issues?: unknown[];
+};
+
+export const listGames = () => api<GamesListView>("/v1/games");
+
+export const createGame = (body: { displayName: string; slug?: string; applicationId?: string }) =>
+  api<{ game: GameRecord }>("/v1/games", { method: "POST", body: JSON.stringify(body) });
+
+export const loadGameMandate = (slug: string) =>
+  api<GameMandateView>(`/v1/games/${encodeURIComponent(slug)}/mandate`);
+
+export const saveGameMandate = (slug: string, mandate: AgentMandateView) =>
+  api<GameMandateView>(`/v1/games/${encodeURIComponent(slug)}/mandate`, {
+    method: "PUT",
+    body: JSON.stringify(mandate),
+  });
+
+export const activateGameMandate = (slug: string) =>
+  api<GameActivateView>(`/v1/games/${encodeURIComponent(slug)}/activate`, { method: "POST" });

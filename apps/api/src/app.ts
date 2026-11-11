@@ -81,6 +81,16 @@ import {
 import { resolveBaseNetwork } from "@swaraj/evidence";
 import { createLiveStateOracle, type LiveStateOracle } from "./pipeline/live-state.js";
 import { proofStackStatus } from "./auto-prove.js";
+import {
+  CreateGameBodySchema,
+  GameSlugSchema,
+  createGameScaffold,
+  getGame,
+  listGames,
+  readGameMandate,
+  resolveExamplesRoot,
+  writeGameMandate,
+} from "./games.js";
 
 export type ActivityItem = {
   id: string;
@@ -292,7 +302,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   app.addHook("onRequest", async (request, reply) => {
     reply.header("access-control-allow-origin", request.headers.origin ?? "*");
     reply.header("access-control-allow-headers", "authorization, content-type, accept");
-    reply.header("access-control-allow-methods", "GET, POST, OPTIONS");
+    reply.header("access-control-allow-methods", "GET, POST, PUT, OPTIONS");
     if (request.method === "OPTIONS") {
       return reply.code(204).send();
     }
@@ -1651,6 +1661,126 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       return { decisionReceiptId: found.receipt.id, guestBundle: found.bundle };
     },
   );
+
+  /** Dev Games dashboard: list / scaffold examples/* and edit mandate files on disk. */
+  const examplesRoot = resolveExamplesRoot();
+
+  app.get("/v1/games", async (_request, reply) => {
+    try {
+      return { games: await listGames(examplesRoot) };
+    } catch (err) {
+      return reply.code(500).send({
+        error: "games_registry_unavailable",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  app.post("/v1/games", async (request, reply) => {
+    const body = CreateGameBodySchema.safeParse(request.body);
+    if (!body.success) {
+      const issues = body.error.issues.slice(0, 10).map((issue) => ({
+        path: issue.path.join(".") || "(root)",
+        message: issue.message,
+      }));
+      return reply.code(400).send({ error: "invalid_game", issues });
+    }
+    try {
+      const game = await createGameScaffold(examplesRoot, {
+        displayName: body.data.displayName,
+        ...(body.data.slug !== undefined ? { slug: body.data.slug } : {}),
+        ...(body.data.applicationId !== undefined ? { applicationId: body.data.applicationId } : {}),
+      });
+      return reply.code(201).send({ game });
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "game_exists") return reply.code(409).send({ error: "game_exists" });
+      if (code === "invalid_slug") return reply.code(400).send({ error: "invalid_slug" });
+      return reply.code(500).send({
+        error: "scaffold_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  app.get<{ Params: { slug: string } }>("/v1/games/:slug/mandate", async (request, reply) => {
+    const slug = GameSlugSchema.safeParse(request.params.slug);
+    if (!slug.success) return reply.code(400).send({ error: "invalid_slug" });
+    const game = await getGame(examplesRoot, slug.data);
+    if (!game) return reply.code(404).send({ error: "game_not_found" });
+    try {
+      const mandate = await readGameMandate(examplesRoot, game);
+      return { game, mandate };
+    } catch {
+      return reply.code(404).send({ error: "mandate_file_not_found" });
+    }
+  });
+
+  app.put<{ Params: { slug: string } }>("/v1/games/:slug/mandate", async (request, reply) => {
+    const slug = GameSlugSchema.safeParse(request.params.slug);
+    if (!slug.success) return reply.code(400).send({ error: "invalid_slug" });
+    const game = await getGame(examplesRoot, slug.data);
+    if (!game) return reply.code(404).send({ error: "game_not_found" });
+    const parsed = AgentMandateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
+        path: issue.path.join(".") || "(root)",
+        message: issue.message,
+      }));
+      return reply.code(400).send({ error: "invalid_mandate", issues });
+    }
+    const definition = normalizeAgentMandate(
+      request.body as { rules: Array<{ ruleId: string }> },
+    ) as Record<string, unknown>;
+    await writeGameMandate(examplesRoot, game, definition);
+    return {
+      game,
+      mandate: definition,
+      issues: lintMandate(parsed.data),
+    };
+  });
+
+  app.post<{ Params: { slug: string } }>("/v1/games/:slug/activate", async (request, reply) => {
+    const slug = GameSlugSchema.safeParse(request.params.slug);
+    if (!slug.success) return reply.code(400).send({ error: "invalid_slug" });
+    const game = await getGame(examplesRoot, slug.data);
+    if (!game) return reply.code(404).send({ error: "game_not_found" });
+    let raw: unknown;
+    try {
+      raw = await readGameMandate(examplesRoot, game);
+    } catch {
+      return reply.code(404).send({ error: "mandate_file_not_found" });
+    }
+    const parsed = AgentMandateSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issues = parsed.error.issues.slice(0, 10).map((issue) => ({
+        path: issue.path.join(".") || "(root)",
+        message: issue.message,
+      }));
+      return reply.code(400).send({ error: "invalid_mandate", issues });
+    }
+    const definition = normalizeAgentMandate(
+      raw as { rules: Array<{ ruleId: string }> },
+    ) as Record<string, unknown>;
+    const version =
+      typeof (definition as { version?: unknown }).version === "number"
+        ? (definition as { version: number }).version
+        : 1;
+    const mandateHash = await saveActiveDefinition(
+      game.applicationId,
+      MANDATE_POLICY_ID,
+      version,
+      definition,
+    );
+    return reply.code(201).send({
+      game,
+      mandateId: String(definition.mandateId),
+      version,
+      policyHash: mandateHash,
+      ruleCount: Array.isArray(definition.rules) ? definition.rules.length : 0,
+      issues: lintMandate(parsed.data),
+    });
+  });
 
   return app;
 }

@@ -2,10 +2,11 @@ import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
 import { APP_ID, api, type HealthView, type PolicyView } from "./api.js";
 import { AgentView } from "./AgentView.js";
+import { GamesView } from "./GamesView.js";
 import { OwnerView } from "./OwnerView.js";
 import "./style.css";
 
-type View = "owner" | "agent";
+type View = "owner" | "agent" | "games";
 
 function App() {
   const [view, setView] = useState<View>("owner");
@@ -66,6 +67,13 @@ function App() {
           >
             Agent · Activity
           </button>
+          <button
+            type="button"
+            className={`tab ${view === "games" ? "active" : ""}`}
+            onClick={() => setView("games")}
+          >
+            Games · Mandates
+          </button>
         </nav>
       </header>
 
@@ -80,8 +88,10 @@ function App() {
             setError(null);
           }}
         />
-      ) : (
+      ) : view === "agent" ? (
         <AgentView policy={policy} apiOk={apiOk === true} />
+      ) : (
+        <GamesView apiOk={apiOk === true} />
       )}
     </div>
   );

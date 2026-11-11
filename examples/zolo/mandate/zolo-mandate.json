@@ -1,0 +1,106 @@
+{
+  "mandateId": "zolo_mandate_v1",
+  "version": 1,
+  "agent": "zolo-agent",
+  "defaultEffect": "DENY",
+  "validFrom": 1789990000000,
+  "validUntil": 1900000000000,
+  "rules": [
+    {
+      "ruleId": "a_forbid_wild_draw_four",
+      "effect": "FORBID",
+      "action": "APP_ACTION",
+      "predicates": [
+        {
+          "field": "context.name",
+          "operator": "EQ",
+          "value": "play_card"
+        },
+        {
+          "field": "context.param",
+          "name": "cardValue",
+          "operator": "GT",
+          "value": "104"
+        }
+      ]
+    },
+    {
+      "ruleId": "a_permit_game_actions",
+      "effect": "PERMIT",
+      "action": "APP_ACTION",
+      "predicates": [
+        {
+          "field": "resource.app",
+          "operator": "EQ",
+          "value": "zolo"
+        },
+        {
+          "field": "context.name",
+          "operator": "IN",
+          "values": [
+            "draw_card",
+            "play_card"
+          ]
+        },
+        {
+          "field": "context.paramBool",
+          "name": "onTurn",
+          "operator": "EQ",
+          "value": true
+        }
+      ]
+    },
+    {
+      "ruleId": "forbid_off_turn",
+      "effect": "FORBID",
+      "action": "APP_ACTION",
+      "predicates": [
+        {
+          "field": "context.paramBool",
+          "name": "onTurn",
+          "operator": "EQ",
+          "value": false
+        }
+      ]
+    },
+    {
+      "ruleId": "forbid_wager_over_cap",
+      "effect": "FORBID",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "resource.service",
+          "operator": "EQ",
+          "value": "zolo_wager"
+        },
+        {
+          "field": "context.amount",
+          "operator": "GT",
+          "value": "5000000"
+        }
+      ]
+    },
+    {
+      "ruleId": "permit_wager_near_in_cap",
+      "effect": "PERMIT",
+      "action": "PAYMENT",
+      "predicates": [
+        {
+          "field": "resource.service",
+          "operator": "EQ",
+          "value": "zolo_wager"
+        },
+        {
+          "field": "context.amount",
+          "operator": "LTE",
+          "value": "5000000"
+        },
+        {
+          "field": "context.currency",
+          "operator": "EQ",
+          "value": "USDC"
+        }
+      ]
+    }
+  ]
+}

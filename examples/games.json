@@ -1,0 +1,18 @@
+{
+  "games": [
+    {
+      "slug": "zunno",
+      "displayName": "Zunno",
+      "applicationId": "zunno",
+      "mandatePath": "zunno/mandate/zunno-mandate.json",
+      "createdAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "slug": "zolo",
+      "displayName": "Zolo",
+      "applicationId": "zolo",
+      "mandatePath": "zolo/mandate/zolo-mandate.json",
+      "createdAt": "2026-11-11T09:47:53.187Z"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "swaraj-zolo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Swaraj-governed light scaffold for Zolo: mandate + gateway client.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "register-mandate": "tsx src/registerMandate.ts"
+  },
+  "dependencies": {
+    "@swaraj/rules": "workspace:*",
+    "@swaraj/schemas": "workspace:*",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
