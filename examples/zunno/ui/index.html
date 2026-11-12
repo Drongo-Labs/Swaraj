@@ -162,7 +162,7 @@
   .stamp.show { animation: stamp 2.4s cubic-bezier(.2,.9,.25,1) forwards; }
 
   /* your hand */
-  .seat-you { position: relative; z-index: 2; padding: 0 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .seat-you { position: relative; z-index: 2; padding: 0 20px 0px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
   .you-caption { position: relative; z-index: 60; margin-bottom: -6px; padding: 5px 14px; border-radius: 999px; background: rgba(0,0,0,.5); backdrop-filter: blur(4px); }
   #hand { display: flex; justify-content: center; width: 100%; height: calc(var(--card) * 1.6 + 22px); align-items: flex-end; padding-top: 26px; }
   .card { flex: none; width: var(--card); margin-left: var(--overlap, calc(var(--card) * -0.33)); transform-origin: 50% 120%; transition: transform .18s ease, filter .18s; cursor: pointer; }
@@ -173,6 +173,20 @@
   /* every card stays clickable and looks the same; an illegal pick shakes and explains */
   .card:hover { transform: translateY(-26px) rotate(0deg) !important; z-index: 50 !important; }
   .card.nope img { animation: nope .4s ease; }
+
+  /* the Zunno call: press it with two cards left, before playing one */
+  #zunnoBtn {
+    position: relative; z-index: 61; flex: none; margin-top: 4px;
+    width: clamp(84px, min(9vw, 13vh), 128px); padding: 0; border: 0; background: none; cursor: pointer;
+    filter: drop-shadow(0 10px 16px rgba(0,0,0,.5)); transition: transform .15s, filter .2s, opacity .2s;
+    animation: call 1s ease-in-out infinite;
+  }
+  #zunnoBtn img { width: 100%; display: block; }
+  #zunnoBtn:hover { transform: scale(1.08) rotate(-2deg); animation-play-state: paused; }
+  #zunnoBtn:active { transform: scale(.92); }
+  #zunnoBtn.off { filter: grayscale(1) drop-shadow(0 10px 16px rgba(0,0,0,.5)); opacity: .55; animation: none; }
+  #zunnoBtn.called { animation: none; filter: drop-shadow(0 0 18px var(--allow)); }
+  @keyframes call { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.09) rotate(-3deg); } }
 
   /* ---------- the ledger ---------- */
   aside {
@@ -327,6 +341,7 @@
   <section class="seat-you">
     <div class="who you-caption"><span class="name">You</span><span>only legality applies to you</span></div>
     <div id="hand"></div>
+    <button id="zunnoBtn" class="off" title="Call Zunno with two cards left" aria-label="Call Zunno"><img src="/assets/table/zunno-button.png" alt="Zunno!" /></button>
   </section>
 </main>
 
@@ -362,6 +377,7 @@ const GLOW = { Red: "#e5484d", Green: "#30a46c", Blue: "#3e63dd", Yellow: "#e5c1
 // Remembered per tab: a new game's log does not repeat the "live gateway" line.
 let proofsLive = false;
 try { proofsLive = sessionStorage.getItem("zunnoProofs") === "1"; } catch {}
+let missedCalls = 0;
 let pendingWild = null, lastLogCount = 0, lastBlocked = -1, prevAgentCount = -1, shownWinner = null, lastTop = null;
 
 const $ = (id) => document.getElementById(id);
@@ -460,6 +476,12 @@ function render(state) {
     disc.insertAdjacentHTML("beforeend", `<img src="${spriteSrc(state.top.value)}" alt="${esc(state.top.label)}" />`);
   }
   $("drawPile").classList.toggle("off", state.winner !== null || state.turn !== "human");
+  const canCall = !state.winner && state.turn === "human" && state.yourHand.length === 2 && !state.zunnoCalled;
+  $("zunnoBtn").classList.toggle("off", !canCall && !state.zunnoCalled);
+  $("zunnoBtn").classList.toggle("called", state.zunnoCalled === true);
+  const missed = state.log.filter((e) => /forgot to call Zunno/.test(e.text)).length;
+  if (missed > missedCalls && lastLogCount > 0) toast("You forgot to call Zunno: drew 2 as a penalty.");
+  missedCalls = missed;
 
   const total = state.yourHand.length;
   const fan = Math.min(36, total * 4.5);
@@ -550,6 +572,12 @@ document.querySelectorAll(".swatch").forEach((sw) => sw.addEventListener("click"
   pendingWild = null;
 }));
 $("colorVeil").addEventListener("click", (e) => { if (e.target.id === "colorVeil") { $("colorVeil").classList.remove("open"); pendingWild = null; } });
+$("zunnoBtn").addEventListener("click", () => {
+  if ($("zunnoBtn").classList.contains("called")) return;
+  if ($("zunnoBtn").classList.contains("off")) { toast("Call Zunno on your turn, when you have two cards left."); return; }
+  sound("zunno-sound.mp3");
+  api("/api/zunno", {});
+});
 $("drawPile").addEventListener("click", () => { if (!$("drawPile").classList.contains("off")) api("/api/draw", {}); });
 function newGame() { lastLogCount = 0; lastBlocked = 0; prevAgentCount = -1; lastTop = null; $("winVeil").classList.remove("open"); api("/api/new", {}); }
 $("newBtn").addEventListener("click", newGame);

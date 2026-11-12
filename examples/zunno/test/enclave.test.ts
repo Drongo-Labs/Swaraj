@@ -58,6 +58,28 @@ test("the human's page never shows the agent's hand", () =>
     assert.ok(!JSON.stringify(state.yourHand).includes("105"));
   }));
 
+// A fresh object each time: the engine mutates the hands it is given.
+const twoLeft = () => ({ hands: { human: [52, 53], agent: [11, 105] }, discard: [54], activeColor: 2, turn: "human" as const });
+const post = (url: URL, path: string, body: unknown = {}) =>
+  fetch(new URL(path, url), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+    .then((response) => response.json());
+
+test("playing down to one card without calling Zunno costs two cards", () =>
+  withEnclave(async (url) => {
+    const { state } = await post(url, "/api/play", { handIndex: 0 });
+    assert.equal(state.yourHand.length, 3); // one left, plus the two-card penalty
+    assert.ok(state.log.some((entry: { text: string }) => /forgot to call Zunno/.test(entry.text)));
+  }, twoLeft()));
+
+test("calling Zunno first avoids the penalty, and only works with two cards left", () =>
+  withEnclave(async (url) => {
+    assert.equal((await post(url, "/api/zunno")).state.zunnoCalled, true);
+    const { state } = await post(url, "/api/play", { handIndex: 0 });
+    assert.equal(state.yourHand.length, 1);
+    assert.equal(state.zunnoCalled, false);
+    assert.match((await post(url, "/api/zunno")).error, /two cards left/);
+  }, twoLeft()));
+
 test("the agent's seat needs its token", () =>
   withEnclave(async (url) => {
     for (const authorization of [undefined, "Bearer wrong-token-of-the-same-length-xx"]) {

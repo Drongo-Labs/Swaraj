@@ -41,6 +41,12 @@ export function startServer(options: EnclaveOptions): Promise<{ url: URL; close:
   const newEngine = options.newEngine ?? (() => new UnoEngine());
   const expected = Buffer.from(`Bearer ${options.agentToken}`);
   let engine = newEngine();
+  // Zunno call: with two cards left, the human must call before playing one, or draws two.
+  // The agent is exempt, as the computer player is in the original game.
+  let zunnoCalled = false;
+  // Setup lines the agent marked sticky (engine, Shade Agent, NEAR AI, gateway), repeated in each new game.
+  const setupLines: { text: string; blocked: boolean }[] = [];
+  const humanView = () => ({ ...engine.publicView("human"), zunnoCalled });
 
   const server = createServer((request, response) => {
     const send = (status: number, body: unknown) => {
@@ -84,15 +90,29 @@ export function startServer(options: EnclaveOptions): Promise<{ url: URL; close:
         }
 
         // The human seat: the page's own API. It never returns the agent's hand.
-        if (request.method === "GET" && url.pathname === "/api/state") return send(200, engine.publicView("human"));
-        if (request.method === "POST" && ["/api/new", "/api/play", "/api/draw"].includes(url.pathname)) {
+        if (request.method === "GET" && url.pathname === "/api/state") return send(200, humanView());
+        if (request.method === "POST" && ["/api/new", "/api/play", "/api/draw", "/api/zunno"].includes(url.pathname)) {
           const body = await readBody(request);
           let error: string | null = null;
-          if (url.pathname === "/api/new") engine = newEngine();
-          else if (url.pathname === "/api/play") {
+          if (url.pathname === "/api/new") {
+            engine = newEngine();
+            zunnoCalled = false;
+            for (const line of setupLines) engine.log("agent", line.text, line.blocked);
+          } else if (url.pathname === "/api/zunno") {
+            if (engine.hand("human").length !== 2) error = "Call Zunno when you have two cards left.";
+            else if (!zunnoCalled) {
+              zunnoCalled = true;
+              engine.log("human", "You called Zunno!");
+            }
+          } else if (url.pathname === "/api/play") {
+            const owedCall = engine.hand("human").length === 2 && !zunnoCalled;
             error = engine.play("human", Number(body.handIndex), body.chosenColor !== undefined ? Number(body.chosenColor) : undefined);
+            if (error === null) {
+              if (owedCall) engine.penalize("human", 2, "You forgot to call Zunno.");
+              zunnoCalled = false;
+            }
           } else if (!engine.draw("human")) error = "Cannot draw right now.";
-          return send(error === null ? 200 : 400, { error, state: engine.publicView("human") });
+          return send(error === null ? 200 : 400, { error, state: humanView() });
         }
 
         // The agent seat: token required, own hand only.
@@ -109,7 +129,9 @@ export function startServer(options: EnclaveOptions): Promise<{ url: URL; close:
           }
           if (url.pathname === "/agent/draw") return send(200, { ok: engine.draw("agent") });
           if (url.pathname === "/agent/log") {
-            engine.log("agent", String(body.text ?? "").slice(0, 200), body.blocked === true);
+            const line = { text: String(body.text ?? "").slice(0, 200), blocked: body.blocked === true };
+            if (body.sticky === true && setupLines.length < 16) setupLines.push(line);
+            engine.log("agent", line.text, line.blocked);
             return send(200, { ok: true });
           }
         }

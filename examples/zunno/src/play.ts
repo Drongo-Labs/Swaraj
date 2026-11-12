@@ -58,13 +58,13 @@ if (process.env.ZUNNO_ENCLAVE_URL) {
 const attestation = await checkEnclave(enclave, requireTee);
 const table = remoteTable(enclave, token);
 if (attestation.tee === "none") {
-  await table.log("Rules engine is running outside a TEE (local mode).", false);
+  await table.log("Rules engine is running outside a TEE (local mode).", false, true);
 }
 const shade = shadeConfigFromEnv();
 let agentAccount = process.env.ZUNNO_AGENT_NEAR_ACCOUNT?.trim();
 if (shade) {
   agentAccount = await registerShadeAgent(shade);
-  await table.log(`Agent is Shade Agent ${agentAccount.slice(0, 8)}… on ${shade.contractId} (local mode, mock attestation).`, false);
+  await table.log(`Agent is Shade Agent ${agentAccount.slice(0, 8)}… on ${shade.contractId} (local mode, mock attestation).`, false, true);
   console.log(`Shade Agent: ${agentAccount} registered on ${shade.contractId}`);
 }
 let pickMove: ((view: AgentView) => Promise<ZunnoProposal | undefined>) | undefined;
@@ -73,11 +73,11 @@ if (nearAi) {
   try {
     const attested = await verifyNearAi(nearAi);
     pickMove = (view) => nearAiMove(nearAi, attested, view);
-    await table.log(`Agent thinks with NEAR AI ${nearAi.model}; its TEE attestation checked out.`, false);
+    await table.log(`Agent thinks with NEAR AI ${nearAi.model}; its TEE attestation checked out.`, false, true);
     console.log(`NEAR AI: ${nearAi.model}, attested signer(s) ${[...attested].join(", ")}`);
   } catch (error) {
     // Fail closed: no prompt is sent to a model whose attestation did not verify.
-    await table.log("NEAR AI attestation failed, so the agent uses its built-in moves.", true);
+    await table.log("NEAR AI attestation failed, so the agent uses its built-in moves.", true, true);
     console.error(`NEAR AI attestation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -87,7 +87,7 @@ try {
   const registered = await registerZunnoMandate(config);
   if (registered) {
     policyHash = registered.policyHash;
-    await table.log(`Mandate ${registered.mandateId} on live Swaraj gateway (${config.swarajApiUrl}).`, false);
+    await table.log(`Mandate ${registered.mandateId} on live Swaraj gateway (${config.swarajApiUrl}).`, false, true);
     console.log(`Swaraj gateway: live at ${config.swarajApiUrl} (mandate ${registered.mandateId})`);
   } else {
     console.log("Swaraj gateway: embedded (set ZUNNO_GATEWAY=live + SWARAJ_DEV_TOKEN for live unified-actions)");

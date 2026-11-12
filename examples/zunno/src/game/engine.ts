@@ -93,6 +93,12 @@ export class UnoEngine {
     this.state.log.push({ seat, text, blocked });
   }
 
+  /** A table penalty, such as a missed Zunno call: the seat draws without the turn changing. */
+  penalize(seat: Seat, count: number, why: string): void {
+    const drawn = this.drawCards(seat, count);
+    this.log(seat, `${why} Drew ${drawn.length} as a penalty.`);
+  }
+
   private drawCards(seat: Seat, count: number): number[] {
     const drawn: number[] = [];
     for (let i = 0; i < count; i++) {

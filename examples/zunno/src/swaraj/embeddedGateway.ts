@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { AgentMandateSchema, UnifiedActionSchema, type AgentMandate } from "@swaraj/schemas";
@@ -15,25 +15,35 @@ import type { GatewayDecision } from "./client.js";
  * bridge works against either.
  */
 
+const MANDATE_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "mandate", "zunno-mandate.json");
 let cachedMandate: AgentMandate | undefined;
+let cachedKey = "";
 
-export function loadEmbeddedMandate(): AgentMandate {
-  if (!cachedMandate) {
-    const path = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "mandate", "zunno-mandate.json");
+/**
+ * The mandate on disk, re-read whenever the file changes, so a rule saved from
+ * the dashboard applies to the next move without a restart. A file that no
+ * longer parses throws, and the gateway turns that into a BLOCK.
+ */
+export function loadEmbeddedMandate(path = MANDATE_PATH): AgentMandate {
+  const key = `${path}:${statSync(path).mtimeMs}`;
+  if (!cachedMandate || key !== cachedKey) {
+    cachedMandate = undefined;
     cachedMandate = AgentMandateSchema.parse(JSON.parse(readFileSync(path, "utf-8")));
+    cachedKey = key;
   }
   return cachedMandate;
 }
 
 export class EmbeddedGateway {
-  constructor(private readonly mandate: AgentMandate = loadEmbeddedMandate()) {}
+  /** A mandate passed in is fixed (tests); otherwise the file on disk is followed. */
+  constructor(private readonly fixed?: AgentMandate) {}
 
   /** The gateway boundary speaks the unified-action wire form. */
   async evaluateUnifiedAction(wireAction: unknown): Promise<GatewayDecision> {
     let decision;
     try {
       const action = UnifiedActionSchema.parse(wireAction);
-      decision = evaluateParsedMandate(this.mandate, action);
+      decision = evaluateParsedMandate(this.fixed ?? loadEmbeddedMandate(), action);
     } catch {
       return { outcome: "BLOCK", violatedRuleIds: ["invalid.action"] };
     }

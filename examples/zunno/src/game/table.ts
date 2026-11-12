@@ -20,7 +20,8 @@ export interface AgentTable {
   play(handIndex: number, chosenColor?: number): Promise<string | null>;
   draw(): Promise<boolean>;
   /** Writes to the public game log, e.g. a blocked move. */
-  log(text: string, blocked: boolean): Promise<void>;
+  /** `sticky` lines describe the setup and are repeated at the top of every new game. */
+  log(text: string, blocked: boolean, sticky?: boolean): Promise<void>;
 }
 
 export function agentView(engine: UnoEngine): AgentView {
@@ -57,8 +58,8 @@ export function remoteTable(enclave: URL, token: string, fetchImpl: typeof fetch
     play: async (handIndex, chosenColor) =>
       (await call("/agent/play", { handIndex, chosenColor })).error as string | null,
     draw: async () => (await call("/agent/draw", {})).ok === true,
-    log: async (text, blocked) => {
-      await call("/agent/log", { text, blocked });
+    log: async (text, blocked, sticky) => {
+      await call("/agent/log", { text, blocked, sticky });
     },
   };
 }
