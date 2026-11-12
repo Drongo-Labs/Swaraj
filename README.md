@@ -108,6 +108,7 @@ Setup for the Shade Agent, NEAR AI and the live gateway is in the
 
 ```bash
 pnpm install
+pnpm build          # compile the workspace packages; tests and the demo import their dist/
 # unit tests that need no services: rules engine, schemas, the Zunno demo
 pnpm --filter @swaraj/rules --filter @swaraj/schemas --filter swaraj-zunno test
 # NEAR contract tests (Rust toolchain)

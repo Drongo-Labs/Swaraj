@@ -15,6 +15,7 @@ Agent  ──► typed intent ──► Swaraj gateway (default deny)
 
 ```sh
 pnpm install
+pnpm -w build      # compile the @swaraj packages Zunno imports
 pnpm play          # → http://127.0.0.1:3002
 ```
 
