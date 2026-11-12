@@ -965,6 +965,18 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return stored ?? { revision: 0, certificates: [] };
   };
 
+  /** Dual-engine cross-check (on unless SWARAJ_Z3_CROSSCHECK=0): Z3 must
+   * independently confirm the predicate engine's decision. Disagreement or a
+   * solver failure counts as not confirmed, so callers fail closed. */
+  const z3Confirms = async (mandate: AgentMandate, action: UnifiedAction): Promise<boolean> => {
+    if (process.env.SWARAJ_Z3_CROSSCHECK === "0") return true;
+    try {
+      return (await crossCheckMandateDecision(mandate, action)).agree;
+    } catch {
+      return false;
+    }
+  };
+
   /** Mandate-level checks outside the rule engine. Returns why the action may not proceed. */
   const mandateGateFailure = async (
     applicationId: string,
@@ -1055,6 +1067,11 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       ) {
         await close("STALE");
         return reply.code(409).send({ error: "mandate_changed" });
+      }
+      // The human approves the decision, not the engines: Z3 must still confirm it.
+      if (!(await z3Confirms(mandate.data, action))) {
+        await close("STALE");
+        return reply.code(409).send({ error: "gate_failed", reason: "ENGINE_DISAGREEMENT" });
       }
       const gateFailure = await mandateGateFailure(applicationId, mandate.data, action);
       if (gateFailure !== undefined) {
@@ -1194,30 +1211,15 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             matchedForbidRuleIds: [],
           };
 
-      // Dual-engine cross-check (on unless SWARAJ_Z3_CROSSCHECK=0): Z3 must
-      // independently confirm the predicate engine's decision; disagreement or
-      // solver failure is a fail-closed BLOCK (ENGINE_DISAGREEMENT).
-      if (process.env.SWARAJ_Z3_CROSSCHECK !== "0" && mandateParsed.success) {
-        try {
-          const { agree } = await crossCheckMandateDecision(mandateParsed.data, action);
-          if (!agree) {
-            evaluated = {
-              decision: "BLOCK",
-              reason: "ENGINE_DISAGREEMENT",
-              matchedRuleIds: [],
-              matchedPermitRuleIds: [],
-              matchedForbidRuleIds: [],
-            };
-          }
-        } catch {
-          evaluated = {
-            decision: "BLOCK",
-            reason: "ENGINE_DISAGREEMENT",
-            matchedRuleIds: [],
-            matchedPermitRuleIds: [],
-            matchedForbidRuleIds: [],
-          };
-        }
+      // Disagreement between the engines is a fail-closed BLOCK (ENGINE_DISAGREEMENT).
+      if (mandateParsed.success && !(await z3Confirms(mandateParsed.data, action))) {
+        evaluated = {
+          decision: "BLOCK",
+          reason: "ENGINE_DISAGREEMENT",
+          matchedRuleIds: [],
+          matchedPermitRuleIds: [],
+          matchedForbidRuleIds: [],
+        };
       }
 
       // The mandate window and timestamp predicates read action.timestamp, which
