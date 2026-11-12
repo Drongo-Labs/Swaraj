@@ -18,6 +18,7 @@ const LOCAL_POLICY_HASH = `0x${"0".repeat(64)}`;
 
 export class GameSession {
   private readonly agent: ZunnoAgent;
+  private refusedPosition: string | undefined;
 
   constructor(
     private readonly config: ZunnoAgentConfig = loadConfig(),
@@ -36,13 +37,42 @@ export class GameSession {
     for (;;) {
       const view = await this.table.view();
       if (view.winner !== null || view.turn !== "agent" || guard++ >= 8) return;
-      await this.agent.takeTurn({
+      // A turn the mandate refused outright (even the draw) is not retried until the table changes:
+      // every retry is another decision, receipt and proof.
+      const position = JSON.stringify([view.hand, view.topValue, view.activeColor]);
+      if (position === this.refusedPosition) return;
+      const result = await this.agent.takeTurn({
         hand: view.hand,
         topValue: view.topValue,
         activeColor: view.activeColor,
         proposal: (await this.pickMove?.(view).catch(() => undefined))
           ?? openingProposal(view.hand, view.topValue, view.activeColor),
       });
+      if (result.status !== "EXECUTED") this.refusedPosition = position;
+    }
+  }
+
+  /**
+   * Tells the table when a decision's proof settles on NEAR, so the page can show it.
+   * ponytail: one poll loop per receipt; poll the whole queue in one request if games get long.
+   */
+  private async watchProof(
+    status: (receiptId: string) => Promise<{ status: string; reference?: string }>,
+    receiptId: string,
+    label: string,
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 1440; attempt++) { // 6 hours at 15s
+      await new Promise((resolve) => setTimeout(resolve, 15_000));
+      const receipt = await status(receiptId).catch(() => undefined);
+      if (!receipt || receipt.status === "PENDING") continue;
+      const short = receiptId.slice(0, 8);
+      await this.table.log(
+        receipt.status === "PROVED"
+          ? `Proved on NEAR: ${label} · receipt ${short}${receipt.reference ? ` · ${receipt.reference.split(":")[1] ?? ""}` : ""}`
+          : `Proof ended ${receipt.status}: ${label} · receipt ${short}`,
+        false,
+      ).catch(() => undefined);
+      return;
     }
   }
 
@@ -51,11 +81,14 @@ export class GameSession {
     const loggingGateway = {
       evaluateUnifiedAction: async (wireAction: unknown): Promise<GatewayDecision> => {
         const decision = await gateway.evaluateUnifiedAction(wireAction);
+        const wire = wireAction as { action?: string; context?: { name?: string } };
+        const what = wire.action === "APP_ACTION"
+          ? (wire.context?.name ?? "app_action")
+          : (wire.action ?? "action").toLowerCase();
+        if (decision.receiptId && gateway.receiptStatus) {
+          void this.watchProof(gateway.receiptStatus.bind(gateway), decision.receiptId, `${decision.outcome} ${what}`);
+        }
         if (decision.outcome === "BLOCK") {
-          const wire = wireAction as { action?: string; context?: { name?: string } };
-          const what = wire.action === "APP_ACTION"
-            ? (wire.context?.name ?? "app_action")
-            : (wire.action ?? "action").toLowerCase();
           const rules = decision.violatedRuleIds.join(", ") || "default_deny";
           await this.table.log(`Agent tried ${what} — BLOCKED by ${rules}`, true);
         }
@@ -75,7 +108,8 @@ export class GameSession {
         return { txHash: "draw" };
       },
     };
-    const deps: AgentDeps = { config: this.config, client: loggingGateway, executor };
+    // 8 wilds is the most forbidden cards a hand can hold; the draw after them is one more.
+    const deps: AgentDeps = { config: this.config, client: loggingGateway, executor, maxFallbacks: 9 };
     return new ZunnoAgent(deps, this.policyHash);
   }
 }

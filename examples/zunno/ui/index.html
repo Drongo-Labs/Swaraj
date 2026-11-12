@@ -6,7 +6,7 @@
 <title>Zunno · the governed table</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root {
     --ink: #0b0d10;
@@ -30,7 +30,8 @@
     --paper-ink: #231f1a;
     --display: "Unbounded", "Arial Black", sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, monospace;
-    --sans: "IBM Plex Sans", system-ui, sans-serif;
+    --sans: "Manrope", system-ui, sans-serif;
+    --brand: #ff4900;            /* Swaraj: everything the gate says is in this orange */
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; height: 100dvh; }
@@ -63,9 +64,9 @@
   header, main { min-width: 0; max-width: 100vw; }
   .seal {
     display: flex; align-items: center; gap: 8px;
-    padding: 6px 11px 6px 9px; border-radius: 8px;
-    background: var(--ink-2); border: 1px solid var(--line);
-    font-family: var(--mono); font-size: 11px; white-space: nowrap;
+    padding: 7px 13px 7px 10px; border-radius: 999px;
+    background: #000; border: 1px solid var(--line-2);
+    font-family: var(--mono); font-size: 12px; white-space: nowrap;
     opacity: 0; transform: translateY(-4px);
     animation: rise .5s ease forwards;
   }
@@ -78,12 +79,13 @@
   .seal .v { color: var(--text); }
   .actions { display: flex; gap: 8px; }
   .btn {
-    font-family: var(--mono); font-size: 12px; font-weight: 500;
-    color: var(--text); background: var(--ink-3);
-    border: 1px solid var(--line-2); border-radius: 8px;
-    padding: 8px 14px; cursor: pointer; transition: background .15s, border-color .15s, transform .1s;
+    font-family: var(--sans); font-size: 13px; font-weight: 700;
+    color: var(--text); background: linear-gradient(to bottom, #262626, #171717);
+    border: 1px solid var(--line-2); border-radius: 999px;
+    padding: 8px 16px; cursor: pointer; transition: background .15s, border-color .15s, transform .1s;
   }
-  .btn:hover { background: #222a33; border-color: rgba(255,255,255,.22); }
+  .btn:hover { border-color: rgba(255,255,255,.3); }
+  .btn.primary { background: linear-gradient(to bottom, #fff, #f1f1f1); color: #161616; border-color: rgba(255,255,255,.2); }
   .btn:active { transform: translateY(1px); }
 
   /* ---------- the table ---------- */
@@ -102,21 +104,22 @@
 
   /* opponent seat */
   .seat-agent { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; padding: 22px 20px 0; gap: 10px; }
-  .who { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
-  .who .name { font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--text); letter-spacing: .01em; }
-  .who .tag { padding: 3px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--gold) 50%, transparent); color: var(--gold); font-size: 10px; letter-spacing: .1em; }
+  .who { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 13px; color: rgba(255,255,255,.72); }
+  .who .name { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--text); letter-spacing: .01em; }
+  .who .tag { padding: 4px 10px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: .1em; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
   #oppHand { display: flex; height: calc(var(--opp) * 1.48); }
   #oppHand { filter: drop-shadow(0 8px 12px rgba(0,0,0,.5)); }
   #oppHand img { width: var(--opp); margin-left: calc(var(--opp) * -0.58); transition: transform .3s; }
   #oppHand img:first-child { margin-left: 0; }
   .thinking {
-    height: 22px; display: flex; align-items: center; gap: 10px;
-    font-family: var(--mono); font-size: 11px; color: var(--muted);
+    height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+    border-radius: 999px; background: rgba(0,0,0,.5); border: 1px solid var(--line-2); backdrop-filter: blur(4px);
+    font-family: var(--mono); font-size: 12.5px; color: rgba(255,255,255,.6);
     opacity: 0; transition: opacity .25s;
   }
   .thinking.on { opacity: 1; }
-  .thinking .bar { width: 120px; height: 2px; background: var(--line-2); border-radius: 2px; overflow: hidden; position: relative; }
-  .thinking .bar::after { content: ""; position: absolute; inset: 0; width: 40%; background: var(--gold); animation: scan 1.1s ease-in-out infinite; }
+  .thinking .bar { width: 64px; height: 2px; background: var(--line-2); border-radius: 2px; overflow: hidden; position: relative; }
+  .thinking .bar::after { content: ""; position: absolute; inset: 0; width: 40%; background: var(--brand); animation: scan 1.1s ease-in-out infinite; }
   .thinking .step { color: var(--text); }
 
   /* center: the played card, with the draw deck beneath it */
@@ -136,11 +139,11 @@
   #drawPile.off { filter: grayscale(1); opacity: .7; cursor: default; animation: none; transform: none; }
   .status {
     display: flex; align-items: center; gap: 10px; margin-top: 4px;
-    font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.75);
-    padding: 7px 14px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1px solid var(--line-2); backdrop-filter: blur(4px);
+    font-family: var(--mono); font-size: 12.5px; color: rgba(255,255,255,.8);
+    padding: 8px 16px; border-radius: 999px; background: rgba(0,0,0,.5); border: 1px solid var(--line-2); backdrop-filter: blur(4px);
   }
   .status i { width: 9px; height: 9px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 10px var(--glow); }
-  .turn { font-family: var(--display); font-weight: 700; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .turn { font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
   .turn.you { color: var(--allow); }
   .turn.agent { color: var(--gold); }
 
@@ -148,17 +151,19 @@
   .stamp {
     position: absolute; left: 50%; top: 46%; z-index: 6; pointer-events: none;
     transform: translate(-50%, -50%) rotate(-8deg) scale(1.6); opacity: 0;
-    border: 4px solid var(--block); color: var(--block); border-radius: 10px;
-    padding: 10px 22px 12px; text-align: center;
-    background: rgba(20, 6, 8, .72); backdrop-filter: blur(2px);
+    border: 5px solid var(--block); color: var(--block); border-radius: 14px;
+    padding: 12px 28px 14px; text-align: center; white-space: nowrap;
+    background: rgba(20, 6, 8, .82); backdrop-filter: blur(3px);
+    box-shadow: 0 20px 60px rgba(0,0,0,.55);
   }
-  .stamp b { display: block; font-family: var(--display); font-weight: 900; font-size: clamp(24px, 5vw, 44px); letter-spacing: .06em; line-height: 1; }
-  .stamp span { display: block; margin-top: 6px; font-family: var(--mono); font-size: 13px; letter-spacing: .04em; }
+  .stamp b { display: block; font-family: var(--display); font-weight: 900; font-size: clamp(30px, 5.4vw, 60px); letter-spacing: .06em; line-height: 1; }
+  .stamp small { display: block; margin-bottom: 8px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .18em; color: #fff; opacity: .85; }
+  .stamp span { display: block; margin-top: 8px; font-family: var(--mono); font-size: clamp(13px, 1.3vw, 16px); font-weight: 600; letter-spacing: .03em; color: #ffd2d7; }
   .stamp.show { animation: stamp 2.4s cubic-bezier(.2,.9,.25,1) forwards; }
 
   /* your hand */
   .seat-you { position: relative; z-index: 2; padding: 0 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  .you-caption { position: relative; z-index: 60; margin-bottom: -6px; padding: 4px 12px; border-radius: 999px; background: rgba(0,0,0,.35); backdrop-filter: blur(4px); }
+  .you-caption { position: relative; z-index: 60; margin-bottom: -6px; padding: 5px 14px; border-radius: 999px; background: rgba(0,0,0,.5); backdrop-filter: blur(4px); }
   #hand { display: flex; justify-content: center; width: 100%; height: calc(var(--card) * 1.6 + 22px); align-items: flex-end; padding-top: 26px; }
   .card { flex: none; width: var(--card); margin-left: var(--overlap, calc(var(--card) * -0.33)); transform-origin: 50% 120%; transition: transform .18s ease, filter .18s; cursor: pointer; }
   .card:first-child { margin-left: 0; }
@@ -173,7 +178,7 @@
   aside {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 15;
     width: min(380px, 92vw); display: flex; flex-direction: column;
-    border-left: 1px solid var(--line-2); background: var(--ink-2);
+    border-left: 1px solid var(--line-2); background: #000;
     box-shadow: -30px 0 60px rgba(0,0,0,.45);
     transform: translateX(100%); transition: transform .32s cubic-bezier(.2,.8,.2,1);
   }
@@ -187,29 +192,42 @@
   .ledger-btn .count { font-family: var(--mono); font-size: 11px; display: flex; gap: 6px; }
   .ledger-btn .count .a { color: var(--allow); } .ledger-btn .count .b { color: var(--block); }
   .ledger-btn.pulse { animation: pulse 1.2s ease 2; border-color: color-mix(in srgb, var(--block) 70%, transparent); }
-  .ledger-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
-  .ledger-head h2 { font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: .02em; }
-  .ledger-head p { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
-  .tally { display: flex; gap: 8px; margin-top: 12px; font-family: var(--mono); font-size: 11px; }
-  .tally div { flex: 1; padding: 8px 10px; border-radius: 8px; background: var(--ink); border: 1px solid var(--line); }
-  .tally b { display: block; font-family: var(--display); font-size: 18px; margin-top: 2px; }
+  .ledger-head { padding: 18px 20px 16px; border-bottom: 1px solid var(--line-2); }
+  .ledger-head img { height: 26px; width: auto; display: block; margin-bottom: 14px; }
+  .ledger-head h2 { font-family: var(--mono); font-weight: 600; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .ledger-head p { margin-top: 8px; font-size: 13.5px; font-weight: 500; line-height: 1.5; color: #d4d4d4; }
+  .ledger-head p b { color: #fff; font-weight: 700; }
+  .tally { display: flex; gap: 8px; margin-top: 14px; font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .tally div { flex: 1; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+  .tally .a { background: rgba(2,44,34,.3); border-color: rgba(16,185,129,.22); }
+  .tally .b { background: rgba(76,5,25,.3); border-color: rgba(244,63,94,.22); }
+  .tally b { display: block; font-family: var(--sans); font-weight: 800; font-size: 26px; letter-spacing: -.03em; margin-top: 2px; }
   .tally .a b { color: var(--allow); } .tally .b b { color: var(--block); }
   #ledger { flex: 1; overflow-y: auto; padding: 14px 16px 22px; display: flex; flex-direction: column; gap: 9px; scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+  /* decisions read like the home page's "Within policy · ALLOWED" rows */
   .slip {
-    position: relative; padding: 10px 12px 10px 14px; border-radius: 6px;
-    background: var(--paper); color: var(--paper-ink);
-    font-family: var(--mono); font-size: 11.5px; line-height: 1.45;
-    box-shadow: 0 6px 16px rgba(0,0,0,.35);
+    padding: 10px 12px; border-radius: 14px;
+    background: rgba(2,44,34,.3); border: 1px solid rgba(16,185,129,.22); color: #d1fae5;
+    font-family: var(--mono); font-size: 12px; line-height: 1.5;
     animation: print .35s ease-out;
   }
-  .slip::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 2px; background: var(--allow); }
-  .slip .verdict { display: inline-block; font-weight: 600; font-size: 10px; letter-spacing: .14em; padding: 2px 7px; border: 1.5px solid currentColor; border-radius: 4px; transform: rotate(-2deg); margin-bottom: 5px; color: #15803d; }
-  .slip.blocked::before { background: var(--block); }
-  .slip.blocked .verdict { color: #c81e33; }
-  .slip.paid::before { background: var(--gold); }
-  .slip.paid .verdict { color: #a16207; }
-  .slip .rule { display: block; margin-top: 3px; color: #c81e33; font-weight: 600; }
-  .note { font-family: var(--mono); font-size: 11px; color: var(--faint); padding: 2px 4px; line-height: 1.45; animation: print .35s ease-out; }
+  .slip .verdict { display: inline-block; margin-bottom: 5px; padding: 2px 8px; border-radius: 4px; background: #16a34a; color: #fff; font-weight: 600; font-size: 10px; letter-spacing: .12em; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .slip.blocked { background: rgba(76,5,25,.34); border-color: rgba(244,63,94,.3); color: #fecdd3; }
+  .slip.blocked .verdict { background: #dc2626; }
+  .slip.paid { background: rgba(255,73,0,.1); border-color: rgba(255,73,0,.3); color: #fed7aa; }
+  .slip.paid .verdict, .slip.proved .verdict { background: var(--brand); }
+  .slip.proved { background: rgba(255,73,0,.1); border-color: rgba(255,73,0,.3); color: #fed7aa; }
+  .tally .p { background: rgba(255,73,0,.1); border-color: rgba(255,73,0,.28); }
+  .tally .p b { color: var(--brand); }
+  .tally .p.off { background: rgba(255,255,255,.03); border-color: rgba(255,255,255,.06); }
+  .tally .p.off b { color: var(--faint); }
+  .proofline { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-family: var(--mono); font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+  .proofline i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .proofline.busy i { background: var(--brand); animation: blink 1s ease-in-out infinite; }
+  .proofline.done i { background: var(--allow); }
+  @keyframes blink { 50% { opacity: .25; } }
+  .slip .rule { display: block; margin-top: 4px; color: #fff; font-weight: 600; }
+  .note { font-family: var(--mono); font-size: 11.5px; color: var(--faint); padding: 2px 4px; line-height: 1.45; animation: print .35s ease-out; }
   .note.you { color: var(--muted); }
   .note.sys { color: #9aa7b3; border-left: 2px solid var(--line-2); padding-left: 8px; }
 
@@ -240,6 +258,14 @@
     100% { opacity: 0; transform: translate(-50%, -50%) rotate(-8deg) scale(1); }
   }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition: none !important; } }
+
+  /* wide screens: the ledger is the second half of the story, so it stays on screen */
+  @media (min-width: 1100px) {
+    body { grid-template-columns: minmax(0, 1fr) 360px; grid-template-areas: "top top" "table ledger"; }
+    aside { grid-area: ledger; position: static; width: auto; transform: none; box-shadow: none; min-height: 0; }
+    .scrim, .close, #ledgerBtn { display: none; }
+    main { max-width: none; }
+  }
 
   @media (max-width: 760px) {
     .brand span { display: none; }
@@ -279,7 +305,7 @@
   </div>
   <div class="actions">
     <button class="btn ledger-btn" id="ledgerBtn" aria-controls="ledgerDrawer" aria-expanded="false">Ledger <span class="count"><span class="a" id="cAllow">0 ✓</span><span class="b" id="cBlock">0 ✕</span></span></button>
-    <button class="btn" id="newBtn">New game</button>
+    <button class="btn primary" id="newBtn">New game</button>
   </div>
 </header>
 
@@ -295,7 +321,7 @@
     <div id="discard"></div>
     <button id="drawPile" title="Draw a card" aria-label="Draw a card"><img src="/assets/table/draw.png" alt="" /></button>
     <div class="status"><i></i><span id="colorName">—</span><span>·</span><span class="turn" id="turn">…</span></div>
-    <div class="stamp" id="stamp"><b>BLOCKED</b><span id="stampRule">by the mandate</span></div>
+    <div class="stamp" id="stamp"><small>SWARAJ MANDATE</small><b>BLOCKED</b><span id="stampRule">by the mandate</span></div>
   </section>
 
   <section class="seat-you">
@@ -308,9 +334,11 @@
 <aside id="ledgerDrawer" aria-label="Mandate ledger">
   <div class="ledger-head">
     <button class="close" id="closeLedger" aria-label="Close ledger">×</button>
+    <img src="/assets/swaraj-logo.png" alt="Swaraj" />
     <h2>Mandate ledger</h2>
-    <p>Every move the agent proposes is checked against its mandate before it touches the table. Blocked moves name the rule.</p>
-    <div class="tally"><div class="a">allowed<b id="nAllow">0</b></div><div class="b">blocked<b id="nBlock">0</b></div></div>
+    <p>Every move the agent proposes is checked against its mandate <b>before</b> it touches the table. A blocked move names the rule.</p>
+    <div class="tally"><div class="a">allowed<b id="nAllow">0</b></div><div class="b">blocked<b id="nBlock">0</b></div><div class="p off" id="proofTile">proved<b id="nProved">—</b></div></div>
+    <div class="proofline" id="proofLine"><i></i><span id="proofText">Proofs are off: this game uses the embedded gateway.</span></div>
   </div>
   <div id="ledger"></div>
 </aside>
@@ -331,6 +359,9 @@
 
 <script>
 const GLOW = { Red: "#e5484d", Green: "#30a46c", Blue: "#3e63dd", Yellow: "#e5c100" };
+// Remembered per tab: a new game's log does not repeat the "live gateway" line.
+let proofsLive = false;
+try { proofsLive = sessionStorage.getItem("zunnoProofs") === "1"; } catch {}
 let pendingWild = null, lastLogCount = 0, lastBlocked = -1, prevAgentCount = -1, shownWinner = null, lastTop = null;
 
 const $ = (id) => document.getElementById(id);
@@ -388,6 +419,7 @@ function ledgerItem(e) {
     if (m) return `<div class="slip blocked"><span class="verdict">BLOCKED</span><br>tried ${esc(m[1])}<span class="rule">rule · ${esc(m[2])}</span></div>`;
     return `<div class="slip blocked"><span class="verdict">BLOCKED</span><br>${t}</div>`;
   }
+  if (/^Proved on NEAR/.test(e.text)) return `<div class="slip proved"><span class="verdict">PROVED ON NEAR</span><br>${t.replace(/^Proved on NEAR: /, "")}</div>`;
   if (/^Pot paid to/.test(e.text)) return `<div class="slip paid"><span class="verdict">PAID ON NEAR</span><br>${t}</div>`;
   if (e.seat === "agent" && /^Agent (played|drew)/.test(e.text)) return `<div class="slip"><span class="verdict">ALLOWED</span><br>${t.replace(/^Agent /, "")}</div>`;
   if (e.seat === "agent") return `<div class="note sys">${t}</div>`;
@@ -450,6 +482,18 @@ function render(state) {
     const allowed = state.log.filter((e) => e.seat === "agent" && /^Agent (played|drew)/.test(e.text)).length;
     $("nBlock").textContent = blocked.length;
     $("nAllow").textContent = allowed;
+    // Proofs exist only when moves go through the live Swaraj API, one receipt per decision.
+    if (state.log.some((e) => /on live Swaraj gateway|^Proved on NEAR/.test(e.text))) { proofsLive = true; try { sessionStorage.setItem("zunnoProofs", "1"); } catch {} }
+    if (proofsLive) {
+      const proved = state.log.filter((e) => /^Proved on NEAR/.test(e.text)).length;
+      const waiting = Math.max(0, allowed + blocked.length - proved);
+      $("proofTile").classList.remove("off");
+      $("nProved").textContent = proved;
+      $("proofLine").className = "proofline " + (waiting ? "busy" : "done");
+      $("proofText").textContent = waiting
+        ? `${waiting} decision${waiting === 1 ? "" : "s"} waiting for a proof · about 7 min each, one at a time`
+        : proved ? "Every decision in this game is proved on NEAR." : "Proofs on: each decision is proved on NEAR.";
+    }
     $("cAllow").textContent = `${allowed} ✓`;
     $("cBlock").textContent = `${blocked.length} ✕`;
     // lastBlocked starts at -1 so a page opened mid-game doesn't stamp old blocks.

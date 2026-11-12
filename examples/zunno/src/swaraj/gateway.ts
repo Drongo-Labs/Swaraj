@@ -8,6 +8,8 @@ import type { ZunnoAgentConfig } from "../config.js";
 
 export type GatewayClient = {
   evaluateUnifiedAction(wireAction: unknown): Promise<GatewayDecision>;
+  /** Live gateway only. */
+  receiptStatus?(receiptId: string): Promise<{ status: string; reference?: string }>;
 };
 
 /**

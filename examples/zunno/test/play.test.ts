@@ -92,6 +92,40 @@ test("governed play: a forbidden Wild+4 is blocked by the mandate and the agent 
   assert.equal(engine.state.turn, "human"); // turn passed
 });
 
+test("governed play: two forbidden cards in hand are each refused once, then the agent draws", async () => {
+  const engine = rigged({
+    hands: { human: [1], agent: [105, 106] }, // both playable, both forbidden
+    drawPile: [50, 51, 52, 53],
+    discard: [11],
+    activeColor: 0,
+    turn: "agent",
+    winner: null,
+    log: [],
+  });
+  const session = new GameSession(config, localTable(engine));
+  await session.agentTick();
+  assert.equal(engine.state.log.filter((entry) => entry.blocked).length, 2); // not an endless retry
+  assert.equal(engine.hand("agent").length, 3); // kept both, drew one
+  assert.equal(engine.state.turn, "human");
+});
+
+test("governed play: a hand full of forbidden cards still ends in one draw", async () => {
+  const engine = rigged({
+    hands: { human: [1], agent: [105, 106, 107, 108] },
+    drawPile: [50, 51, 52, 53],
+    discard: [11],
+    activeColor: 0,
+    turn: "agent",
+    winner: null,
+    log: [],
+  });
+  const session = new GameSession(config, localTable(engine));
+  await session.agentTick();
+  assert.equal(engine.state.log.filter((entry) => entry.blocked).length, 4);
+  assert.equal(engine.hand("agent").length, 5);
+  assert.equal(engine.state.turn, "human");
+});
+
 test("governed play: a legal non-wild card passes the mandate and plays", async () => {
   const engine = rigged({
     hands: { human: [1], agent: [11, 105] },

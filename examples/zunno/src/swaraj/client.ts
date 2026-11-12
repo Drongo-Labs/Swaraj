@@ -5,6 +5,8 @@ export interface GatewayDecision {
   violatedRuleIds: string[];
   matchedPermitRuleIds?: string[];
   decisionId?: string;
+  /** Live gateway only: the receipt the proof worker will prove on NEAR. */
+  receiptId?: string;
 }
 
 /**
@@ -89,7 +91,17 @@ export class SwarajClient {
       result.matchedPermitRuleIds = mandate.matchedPermitRuleIds;
     }
     if (typeof json.activityId === "string") result.decisionId = json.activityId;
+    if (typeof json.receiptId === "string") result.receiptId = json.receiptId;
     return result;
+  }
+
+  /** A receipt's proof state: PENDING until its proof settles on NEAR. */
+  async receiptStatus(receiptId: string): Promise<{ status: string; reference?: string }> {
+    const response = await this.fetchImpl(this.url(`/receipts/${encodeURIComponent(receiptId)}`), {
+      headers: { authorization: `Bearer ${this.token}` },
+    });
+    const json = (await response.json()) as { status?: string; proof?: { reference?: string } };
+    return { status: json.status ?? "UNKNOWN", ...(json.proof?.reference ? { reference: json.proof.reference } : {}) };
   }
 }
 

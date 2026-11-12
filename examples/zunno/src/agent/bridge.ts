@@ -87,20 +87,22 @@ export class ZunnoAgent {
     if (input.proposal.kind === "STAKE" || input.proposal.kind === "WAGER") {
       return { policy: "ABSTAIN", toWireAction };
     }
+    // Every card refused this turn stays refused, or two forbidden cards retry each other forever.
+    const refused = new Set<number>();
     return {
       policy: "RETRY",
       toWireAction,
-      fallback: (blocked) => nextCompliantProposal(blocked, input),
+      fallback: (blocked) => nextCompliantProposal(blocked, input, refused),
     };
   }
 }
 
-/** First legal card in hand order (excluding the blocked one), else draw. */
-function nextCompliantProposal(blocked: ZunnoProposal, input: TurnInput): ZunnoProposal | null {
+/** First legal card in hand order (excluding every card refused this turn), else draw. */
+function nextCompliantProposal(blocked: ZunnoProposal, input: TurnInput, refused: Set<number>): ZunnoProposal | null {
   if (blocked.kind === "STAKE" || blocked.kind === "WAGER") return null; // stakes/wagers use ABSTAIN
-  const blockedCard = blocked.kind === "PLAY_CARD" ? blocked.cardValue : null;
+  if (blocked.kind === "PLAY_CARD") refused.add(blocked.cardValue);
   for (const [index, value] of input.hand.entries()) {
-    if (value === blockedCard) continue;
+    if (refused.has(value)) continue;
     if (isPlayable(value, input.topValue, input.activeColor)) {
       return { kind: "PLAY_CARD", handIndex: index, cardValue: value, chosenColor: 4 };
     }
