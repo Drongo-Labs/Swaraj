@@ -1173,10 +1173,10 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             matchedForbidRuleIds: [],
           };
 
-      // Dual-engine cross-check (opt-in): Z3 must independently confirm the
-      // predicate engine's decision; disagreement or solver failure is a
-      // fail-closed BLOCK (ENGINE_DISAGREEMENT).
-      if (process.env.SWARAJ_Z3_CROSSCHECK === "1" && mandateParsed.success) {
+      // Dual-engine cross-check (on unless SWARAJ_Z3_CROSSCHECK=0): Z3 must
+      // independently confirm the predicate engine's decision; disagreement or
+      // solver failure is a fail-closed BLOCK (ENGINE_DISAGREEMENT).
+      if (process.env.SWARAJ_Z3_CROSSCHECK !== "0" && mandateParsed.success) {
         try {
           const { agree } = await crossCheckMandateDecision(mandateParsed.data, action);
           if (!agree) {

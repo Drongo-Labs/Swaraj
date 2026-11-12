@@ -2,14 +2,16 @@ import { readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { AgentMandateSchema, UnifiedActionSchema, type AgentMandate } from "@swaraj/schemas";
-import { evaluateParsedMandate } from "@swaraj/rules";
+import { crossCheckMandateDecision, evaluateParsedMandate } from "@swaraj/rules";
 import type { GatewayDecision } from "./client.js";
 
 /**
  * Embedded Swaraj gateway: the vendored mandate engine runs in-process against
  * the mandate fixture — same default-deny, forbid-wins, fail-closed semantics
  * as the HTTP gateway, with zero external services. Any parse or evaluation
- * error is a BLOCK (fail closed), never a silent pass.
+ * error is a BLOCK (fail closed), never a silent pass. Z3 independently
+ * confirms every decision (off only with SWARAJ_Z3_CROSSCHECK=0); a
+ * disagreement or solver failure is a BLOCK too.
  *
  * The SwarajClient (src/swaraj/client.ts) is the remote drop-in: the agent
  * bridge works against either.
@@ -41,11 +43,24 @@ export class EmbeddedGateway {
   /** The gateway boundary speaks the unified-action wire form. */
   async evaluateUnifiedAction(wireAction: unknown): Promise<GatewayDecision> {
     let decision;
+    let action;
+    let mandate;
     try {
-      const action = UnifiedActionSchema.parse(wireAction);
-      decision = evaluateParsedMandate(this.fixed ?? loadEmbeddedMandate(), action);
+      action = UnifiedActionSchema.parse(wireAction);
+      mandate = this.fixed ?? loadEmbeddedMandate();
     } catch {
       return { outcome: "BLOCK", violatedRuleIds: ["invalid.action"] };
+    }
+    try {
+      if (process.env.SWARAJ_Z3_CROSSCHECK === "0") {
+        decision = evaluateParsedMandate(mandate, action);
+      } else {
+        const checked = await crossCheckMandateDecision(mandate, action);
+        if (!checked.agree) return { outcome: "BLOCK", violatedRuleIds: ["engine.disagreement"] };
+        decision = checked.decision;
+      }
+    } catch {
+      return { outcome: "BLOCK", violatedRuleIds: ["engine.disagreement"] };
     }
     if (decision.decision === "ALLOW") {
       return {
