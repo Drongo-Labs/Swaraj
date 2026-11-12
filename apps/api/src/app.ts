@@ -152,6 +152,8 @@ type ApprovalRecord = {
 };
 
 const APPROVAL_DECISION_ROUTE = "/v1/applications/:applicationId/approvals/:approvalId/decision";
+/** How far an action's timestamp may sit from the gateway clock. */
+const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 const ApprovalDecisionSchema = z.strictObject({
   decision: z.enum(["APPROVE", "REJECT"]),
   approver: z.string().regex(/^[A-Za-z0-9._:@-]{1,128}$/),
@@ -1030,7 +1032,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         !mandate.success ||
         !current ||
         hashObject(ObjectType.POLICY_PROFILE, mandateDefinition) !== record.mandateHash ||
-        current.decision !== "NEEDS_APPROVAL"
+        current.decision !== "NEEDS_APPROVAL" ||
+        // The window was checked against the request time; it must still be open now.
+        Date.now() >= mandate.data.validUntil
       ) {
         await close("STALE");
         return reply.code(409).send({ error: "mandate_changed" });
@@ -1199,7 +1203,13 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         }
       }
 
-      const gateFailure = mandateParsed.success ? await mandateGateFailure(applicationId, mandateParsed.data, action) : undefined;
+      // The mandate window and timestamp predicates read action.timestamp, which
+      // the agent chooses: only trust it close to the gateway's own clock.
+      const now = Date.now();
+      const clockFailure =
+        action.expiry <= now ? "ACTION_EXPIRED" : Math.abs(action.timestamp - now) > MAX_CLOCK_SKEW_MS ? "CLOCK_SKEW" : undefined;
+      const gateFailure =
+        clockFailure ?? (mandateParsed.success ? await mandateGateFailure(applicationId, mandateParsed.data, action) : undefined);
       if (gateFailure !== undefined) {
         evaluated = {
           decision: "BLOCK",

@@ -100,6 +100,24 @@ test("oversized unified SPOT_TRADE is blocked by the mandate", async () => {
   await instance.close();
 });
 
+test("the gate judges time by its own clock: backdated or expired actions are blocked", async () => {
+  const instance = await app();
+  const hour = 3_600_000;
+  const backdated = await postAction(
+    instance,
+    spotTradeAction({ intentId: "intent_trade_old", idempotencyKey: "unified-trade-old", timestamp: Date.now() - hour }),
+  );
+  assert.equal(backdated.json().decision, "BLOCK");
+  assert.match(backdated.json().violations[0].reason, /CLOCK_SKEW/);
+  const expired = await postAction(
+    instance,
+    spotTradeAction({ intentId: "intent_trade_exp", idempotencyKey: "unified-trade-exp", timestamp: Date.now() - 120_000, expiry: Date.now() - 1 }),
+  );
+  assert.equal(expired.json().decision, "BLOCK");
+  assert.match(expired.json().violations[0].reason, /ACTION_EXPIRED/);
+  await instance.close();
+});
+
 test("invalid unified action is rejected with 400 and field paths only", async () => {
   const instance = await app();
   const response = await postAction(instance, { intentId: "broken" });

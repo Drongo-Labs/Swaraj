@@ -22,7 +22,12 @@ export type MandateDecisionReason =
   | "UNVERIFIED_PROGRAM"
   /** Dual-engine cross-check failed: the predicate engine and Z3 disagree,
    * or the solver could not settle. Fail closed. */
-  | "ENGINE_DISAGREEMENT";
+  | "ENGINE_DISAGREEMENT"
+  /** The action's expiry has passed on the gateway's clock. */
+  | "ACTION_EXPIRED"
+  /** The action's timestamp is too far from the gateway's clock to trust
+   * for the mandate window and timestamp predicates. */
+  | "CLOCK_SKEW";
 
 export interface MandateDecision {
   decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
