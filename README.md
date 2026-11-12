@@ -88,6 +88,12 @@ move.
   verdict, and it accepts only replies signed by the attested key.
 - **Live gateway mode** sends moves to the real Swaraj API, with mandate rules for
   turn order and the wager cap.
+- In live gateway mode the **mandate ledger shows proofs**: how many decisions
+  are waiting, and a row for each one once its proof settles on NEAR.
+- The mandate is **editable from the dashboard** (Projects → Zunno). In the
+  default mode a saved rule applies to the agent's next move, with no restart.
+- You have to **call Zunno** with two cards left, or draw two. Only game
+  legality applies to you; the mandate governs the agent.
 
 ```bash
 pnpm --filter swaraj-zunno play      # → http://127.0.0.1:3002
@@ -112,6 +118,18 @@ pnpm --filter swaraj-zunno play      # then open http://127.0.0.1:3002
 
 In the demo, a forbidden move (e.g. Wild +4) is blocked with the rule named in
 the game log, and the agent falls back to a legal move.
+
+### Edit the rules from the dashboard — no keys, no database
+
+```bash
+pnpm dev:api:mock     # API on :3000, in memory: no chain, no proofs
+pnpm dev:web          # dashboard → http://127.0.0.1:5173
+```
+
+Open **Projects → Zunno**, change or add a rule, and **Save to disk**. With
+the game running (`pnpm --filter swaraj-zunno play`), the agent's next move is
+checked against the saved mandate. **Activate** publishes the mandate to the
+API, which is what live gateway mode evaluates against.
 
 ### Full setup — database, API, live NEAR (needs Docker; live scenes need testnet keys)
 

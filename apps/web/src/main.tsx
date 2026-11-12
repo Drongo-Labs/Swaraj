@@ -12,13 +12,16 @@ function App() {
   const [view, setView] = useState<View>("projects");
   const [policy, setPolicy] = useState<PolicyView | null>(null);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
+  // Owner and Agent drive the Base trading pipeline, so they appear only when the API runs it live.
+  const [baseLive, setBaseLive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
-        await api<HealthView>("/health");
+        const health = await api<HealthView>("/health");
         setApiOk(true);
+        setBaseLive(health.live === true);
         const next = await api<PolicyView>(`/v1/applications/${APP_ID}/policies/policy_demo`);
         setPolicy(next);
         setError(null);
@@ -37,7 +40,7 @@ function App() {
           <img className="brand-logo" src="/swaraj-logo.png" alt="Swaraj" />
           <span className="brand-sub">Dashboard</span>
         </div>
-        <nav className="view-tabs" aria-label="App views">
+        <nav className="view-tabs" aria-label="App views" hidden={!baseLive}>
           {(["projects", "owner", "agent"] as const).map((id) => (
             <button
               key={id}

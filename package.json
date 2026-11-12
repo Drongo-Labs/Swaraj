@@ -17,6 +17,7 @@
     "example": "pnpm demo",
     "agent": "pnpm live",
     "dev:api": "pnpm --filter @swaraj/api... build && pnpm --filter @swaraj/api start",
+    "dev:api:mock": "pnpm --filter @swaraj/api... build && SWARAJ_FORCE_MOCK=1 SWARAJ_DEV_TOKEN=development-test-token-at-least-32-characters node apps/api/dist/main.js",
     "dev:web": "pnpm --filter @swaraj/web dev",
     "dev:mcp": "pnpm --filter @swaraj/mcp start",
     "db:up": "docker compose up -d postgres",

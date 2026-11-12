@@ -158,6 +158,11 @@ button {
 
 
 /* —— Segmented tabs (home: "Within Policy / Over The Line") —— */
+.view-tabs[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
 .view-tabs,
 .segmented {
   display: inline-flex;
