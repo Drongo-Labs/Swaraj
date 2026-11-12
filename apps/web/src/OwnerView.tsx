@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   APP_ID,
   api,
+  asOwner,
   atomicToUsdc,
   formatAtomicUsdc,
   usdcFieldToAtomic,
@@ -74,6 +75,7 @@ export function OwnerView({ policy, onPolicySaved, apiOk }: Props) {
       };
       const saved = await api<PolicyView>(`/v1/applications/${APP_ID}/policies`, {
         method: "POST",
+        headers: asOwner,
         body: JSON.stringify({
           policyId: policy.policyId,
           version: nextVersion,

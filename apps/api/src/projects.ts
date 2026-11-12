@@ -291,12 +291,12 @@ export class SwarajClient {
     return \`\${this.baseUrl.replace(/\\/$/, "")}/v1/applications/\${encodeURIComponent(this.applicationId)}\${path}\`;
   }
 
-  private async post(path: string, body: unknown): Promise<{ status: number; json: Record<string, unknown> }> {
+  private async post(path: string, body: unknown, auth = this.token): Promise<{ status: number; json: Record<string, unknown> }> {
     const response = await this.fetchImpl(this.url(path), {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: \`Bearer \${this.token}\`,
+        authorization: \`Bearer \${auth}\`,
       },
       body: JSON.stringify(body),
     });
@@ -312,7 +312,8 @@ export class SwarajClient {
   async registerMandate(
     mandate: AgentMandateWire,
   ): Promise<{ mandateId: string; version: number; policyHash: string; ruleCount: number }> {
-    const { status, json } = await this.post("/mandates", mandate);
+    // Mandates are the owner's to set: use the approver token when the API has one.
+    const { status, json } = await this.post("/mandates", mandate, process.env.SWARAJ_APPROVER_TOKEN || this.token);
     if (status !== 201) {
       throw new Error(\`mandate registration failed: \${status} \${JSON.stringify(json).slice(0, 300)}\`);
     }

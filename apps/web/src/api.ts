@@ -1,6 +1,9 @@
 const API = import.meta.env.VITE_SWARAJ_URL ?? "";
 const TOKEN =
   import.meta.env.VITE_SWARAJ_DEV_TOKEN ?? "development-test-token-at-least-32-characters";
+/** Policy changes need the owner token once the API has an approver token set. */
+const OWNER_TOKEN = import.meta.env.VITE_SWARAJ_APPROVER_TOKEN || TOKEN;
+export const asOwner = { authorization: `Bearer ${OWNER_TOKEN}` };
 export const APP_ID = import.meta.env.VITE_SWARAJ_APPLICATION_ID ?? "app_demo";
 
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -245,7 +248,7 @@ export type ProjectActivateView = {
 export const listProjects = () => api<ProjectsListView>("/v1/projects");
 
 export const createProject = (body: { displayName: string; slug?: string; applicationId?: string }) =>
-  api<{ project: ProjectRecord }>("/v1/projects", { method: "POST", body: JSON.stringify(body) });
+  api<{ project: ProjectRecord }>("/v1/projects", { method: "POST", headers: asOwner, body: JSON.stringify(body) });
 
 export const loadProjectMandate = (slug: string) =>
   api<ProjectMandateView>(`/v1/projects/${encodeURIComponent(slug)}/mandate`);
@@ -253,10 +256,12 @@ export const loadProjectMandate = (slug: string) =>
 export const saveProjectMandate = (slug: string, mandate: AgentMandateView) =>
   api<ProjectMandateView>(`/v1/projects/${encodeURIComponent(slug)}/mandate`, {
     method: "PUT",
+    headers: asOwner,
     body: JSON.stringify(mandate),
   });
 
 export const activateProjectMandate = (slug: string) =>
   api<ProjectActivateView>(`/v1/projects/${encodeURIComponent(slug)}/activate`, {
     method: "POST",
+    headers: asOwner,
   });

@@ -25,10 +25,10 @@ type Result = {
   error?: string;
 };
 
-async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function api<T>(method: string, path: string, body?: unknown, auth = token): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    headers: { authorization: `Bearer ${auth}`, "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return (await response.json()) as T;
@@ -77,7 +77,8 @@ const livePayment = (amount: string) => ({
 
 async function registerMandate(applicationId: string, file: string): Promise<void> {
   const mandate = JSON.parse(readFileSync(join(mandates, file), "utf8")) as unknown;
-  await api("POST", `/v1/applications/${applicationId}/mandates`, mandate);
+  // Mandates are the owner's to set: use the approver token when the API has one.
+  await api("POST", `/v1/applications/${applicationId}/mandates`, mandate, process.env.SWARAJ_APPROVER_TOKEN || token);
 }
 
 /** Waits for the proof worker; a receipt that stays allowed is reported as such. */
