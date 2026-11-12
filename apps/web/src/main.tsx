@@ -10,7 +10,6 @@ type View = "projects" | "owner" | "agent";
 
 function App() {
   const [view, setView] = useState<View>("projects");
-  const [health, setHealth] = useState<HealthView | null>(null);
   const [policy, setPolicy] = useState<PolicyView | null>(null);
   const [apiOk, setApiOk] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +17,7 @@ function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const h = await api<HealthView>("/health");
-        setHealth(h);
+        await api<HealthView>("/health");
         setApiOk(true);
         const next = await api<PolicyView>(`/v1/applications/${APP_ID}/policies/policy_demo`);
         setPolicy(next);
@@ -36,19 +34,25 @@ function App() {
       <div className="atmosphere" aria-hidden="true" />
       <header className="topbar">
         <div className="topbar-brand">
-          <p className="brand">Swaraj</p>
+          <img className="brand-logo" src="/swaraj-logo.png" alt="Swaraj" />
           <span className="brand-sub">Dashboard</span>
         </div>
+        <nav className="view-tabs" aria-label="App views">
+          {(["projects", "owner", "agent"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className={`tab ${view === id ? "active" : ""}`}
+              onClick={() => setView(id)}
+            >
+              {id[0]!.toUpperCase() + id.slice(1)}
+            </button>
+          ))}
+        </nav>
         <div className="topbar-meta">
           <p className={`pulse ${apiOk === false ? "down" : apiOk ? "up" : ""}`}>
             {apiOk === null ? "Connecting…" : apiOk ? "API live" : "API offline"}
           </p>
-          {health && (
-            <p className="runtime mono small">
-              {health.mode}
-              {health.network ? ` · ${health.network}` : ""}
-            </p>
-          )}
         </div>
       </header>
 
@@ -68,30 +72,6 @@ function App() {
               : "Propose intents and inspect allow / block decisions with rule reasons."}
         </p>
       </div>
-
-      <nav className="view-tabs" aria-label="App views">
-        <button
-          type="button"
-          className={`tab ${view === "projects" ? "active" : ""}`}
-          onClick={() => setView("projects")}
-        >
-          Projects
-        </button>
-        <button
-          type="button"
-          className={`tab ${view === "owner" ? "active" : ""}`}
-          onClick={() => setView("owner")}
-        >
-          Owner
-        </button>
-        <button
-          type="button"
-          className={`tab ${view === "agent" ? "active" : ""}`}
-          onClick={() => setView("agent")}
-        >
-          Agent
-        </button>
-      </nav>
 
       {error && view === "owner" && !policy && <p className="err">{error}</p>}
 
