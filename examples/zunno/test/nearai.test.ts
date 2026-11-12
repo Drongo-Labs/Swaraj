@@ -116,7 +116,14 @@ test("a model slower than the time limit gives up, so the built-in pick is used"
     new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
     })) as typeof fetch;
-  await assert.rejects(nearAiMove({ ...config, timeoutMs: 20 }, attested, view, hanging));
+  // AbortSignal.timeout does not keep the process alive, so on Node 22 the event loop
+  // empties before it fires and the runner cancels the test. A plain timer holds it open.
+  const keepAlive = setTimeout(() => {}, 5_000);
+  try {
+    await assert.rejects(nearAiMove({ ...config, timeoutMs: 20 }, attested, view, hanging));
+  } finally {
+    clearTimeout(keepAlive);
+  }
 });
 
 test("reasoning is off by default, and the request asks for it that way", async () => {
