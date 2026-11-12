@@ -152,6 +152,17 @@ type ApprovalRecord = {
 };
 
 const APPROVAL_DECISION_ROUTE = "/v1/applications/:applicationId/approvals/:approvalId/decision";
+/** Routes that change what the agent may do. Once an approver token is set
+ * they take only that owner token, so the agent's own token cannot rewrite
+ * its mandate. Without one the API runs in single-operator dev mode. */
+const OWNER_ROUTES = new Set([
+  "POST /v1/applications/:applicationId/mandates",
+  "POST /v1/applications/:applicationId/policies",
+  "POST /v1/applications/:applicationId/program-certificates",
+  "POST /v1/projects",
+  "PUT /v1/projects/:slug/mandate",
+  "POST /v1/projects/:slug/activate",
+]);
 /** How far an action's timestamp may sit from the gateway clock. */
 const MAX_CLOCK_SKEW_MS = 5 * 60_000;
 const ApprovalDecisionSchema = z.strictObject({
@@ -317,6 +328,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       if (!approverExpected) return reply.code(403).send({ error: "approvals_not_configured" });
       if (supplied.length !== approverExpected.length || !timingSafeEqual(supplied, approverExpected)) {
         return reply.code(401).send({ error: "unauthorized" });
+      }
+      return;
+    }
+    if (approverExpected && OWNER_ROUTES.has(`${request.method} ${request.routeOptions.url}`)) {
+      if (supplied.length !== approverExpected.length || !timingSafeEqual(supplied, approverExpected)) {
+        return reply.code(401).send({ error: "owner_token_required" });
       }
       return;
     }

@@ -189,7 +189,7 @@ gitignored and keys must never be committed. Full details: [SETUP.md](SETUP.md).
 |---|---|---|
 | `DATABASE_URL`, `POSTGRES_*` | `pnpm db:up`, API, proof worker | local Docker Postgres (compose defaults in `.env.example`) |
 | `SWARAJ_URL`, `SWARAJ_DEV_TOKEN`, `SWARAJ_APPLICATION_ID` | SDK / MCP / API calls | any ≥32-char random string; the API enforces it as `Authorization: Bearer …` |
-| `SWARAJ_APPROVER_TOKEN` | human Approve/Reject | separate ≥32-char random string; must differ from `SWARAJ_DEV_TOKEN` |
+| `SWARAJ_APPROVER_TOKEN` | owner token: human Approve/Reject and mandate/policy changes (once set, the agent's dev token can no longer change its mandate) | separate ≥32-char random string; must differ from `SWARAJ_DEV_TOKEN` |
 | `BASE_RPC_URL`, `SWARAJ_EXECUTION_PRIVATE_KEY`, `SWARAJ_SIGNER_PRIVATE_KEY` | live Base trades (real spend) | public RPC (mainnet.base.org / sepolia.base.org); a dedicated funded test wallet — never reuse keys |
 | `NEAR_ACCOUNT_ID`, `NEAR_PRIVATE_KEY`, `NEAR_RPC_URL` | live NEAR scenes (`pnpm --filter @swaraj/near near-demo`) | create a testnet account in any NEAR wallet; free testnet NEAR from the faucet (near-faucet.io or `near` CLI); RPC: `https://test.rpc.fastnear.com` |
 | `NEAR_DEMO_RECIPIENT`, `NEAR_FT_CONTRACT`, `NEAR_REF_POOL_ID`, `NEAR_REF_CONTRACT` | NEAR demo scenes | your own testnet recipient; FT contract id; Ref Finance pool id (17 = testnet wNEAR/USDT) |

@@ -173,6 +173,34 @@ test("mandate can be registered and fetched per application", async () => {
   await instance.close();
 });
 
+test("with an approver token set, only the owner can change the mandate", async () => {
+  const owner = "owner-approver-token-at-least-32-characters";
+  const instance = await buildApp(token, {
+    pipelineMode: "mock",
+    receiptStore: createMemoryReceiptStore(),
+    signer: new LocalKeySigner("0x" + "11".repeat(32)),
+    approverToken: owner,
+  });
+  const mandate = {
+    mandateId: "mandate_owner",
+    version: 1,
+    agent: "*",
+    defaultEffect: "DENY",
+    validFrom: 0,
+    validUntil: Date.now() + 3_600_000,
+    rules: [{ ruleId: "permit_all_pay", effect: "PERMIT", action: "PAYMENT", predicates: [] }],
+  };
+  const post = (auth) =>
+    instance.inject({ method: "POST", url: "/v1/applications/app_owner/mandates", headers: { authorization: `Bearer ${auth}` }, payload: mandate });
+  const byAgent = await post(token);
+  assert.equal(byAgent.statusCode, 401);
+  assert.equal(byAgent.json().error, "owner_token_required");
+  assert.equal((await post(owner)).statusCode, 201);
+  // Actions still use the agent token.
+  assert.equal((await postAction(instance, paymentAction())).statusCode, 200);
+  await instance.close();
+});
+
 test("invalid mandate is rejected with 400", async () => {
   const instance = await app();
   const response = await instance.inject({

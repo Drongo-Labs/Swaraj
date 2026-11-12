@@ -68,7 +68,7 @@ async function harness(options = {}) {
   });
   const base = `/v1/applications/${applicationId}`;
   const setMandate = async (...args) =>
-    assert.equal((await app.inject({ method: "POST", url: `${base}/mandates`, headers: agent, payload: mandateBody(...args) })).statusCode, 201);
+    assert.equal((await app.inject({ method: "POST", url: `${base}/mandates`, headers: (options.approverToken ?? approverToken) ? human : agent, payload: mandateBody(...args) })).statusCode, 201);
   await setMandate();
   const submit = async (action) => {
     const res = await app.inject({ method: "POST", url: `${base}/unified-actions`, headers: agent, payload: { action } });
