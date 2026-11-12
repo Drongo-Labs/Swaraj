@@ -70,6 +70,19 @@ async function seedProvableReceipt(): Promise<string> {
   return receipt.receiptId;
 }
 
+test("worker without a ZK prover records the statement but marks the receipt NON_PROVABLE", async () => {
+  await pool.raw.query("DELETE FROM proof_jobs");
+  const receiptId = await seedProvableReceipt();
+  await enqueueProofJob(pool, {
+    receiptId,
+    payload: { policy: toWirePolicy(policy), action, expected: reevaluateGround(policy, action) } satisfies GateJobPayload,
+  });
+  const outcome = await runOneProofJob(pool, { artifactRoot });
+  assert.ok(outcome, "worker processed the job");
+  assert.equal(outcome.proved, false);
+  assert.equal((await findReceipt(pool, receiptId))?.state, "NON_PROVABLE");
+});
+
 test("worker proves a job end to end: artifact, sink reference, PROVED receipt, DONE job", async () => {
   // The lease takes the globally oldest queued job; clear stale rows first.
   await pool.raw.query("DELETE FROM proof_jobs");
@@ -79,11 +92,14 @@ test("worker proves a job end to end: artifact, sink reference, PROVED receipt, 
     payload: { policy: toWirePolicy(policy), action, expected: reevaluateGround(policy, action) } satisfies GateJobPayload,
   });
 
-  const outcome = await runOneProofJob(pool, { artifactRoot });
+  // Stands in for a sink that verifies a real proof (the NEAR receipts contract).
+  const verifyingSink = { submit: async () => ({ ref: `zkv_test_${"0".repeat(32)}`, sink: "test" }) };
+  const outcome = await runOneProofJob(pool, { artifactRoot, sink: verifyingSink });
   assert.ok(outcome, "worker processed the job");
   assert.equal(outcome.receiptId, receiptId);
+  assert.equal(outcome.proved, true);
   assert.match(outcome.statementId, /^stmt_[0-9a-f]{64}$/);
-  assert.match(outcome.proofRef, /^zkv_local_[0-9a-f]{32}$/);
+  assert.match(outcome.proofRef, /^zkv_test_[0-9a-f]{32}$/);
   assert.ok(outcome.artifactPath.includes(receiptId));
 
   const receipt = await findReceipt(pool, receiptId);

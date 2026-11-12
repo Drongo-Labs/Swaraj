@@ -11,6 +11,10 @@ import { runOneProofJob } from "@swaraj/proofs";
 import { verifyReceiptBundle } from "@swaraj/verify";
 import { buildApp } from "../dist/app.js";
 
+// Stands in for a sink that verifies a real proof (NEAR receipts contract): the
+// local sink alone never marks a receipt PROVED.
+const verifyingSink = { submit: async (bundle) => ({ ref: `zkv_test_${bundle.statementId.slice(5, 21)}`, sink: "test" }) };
+
 const url = process.env.SWARAJ_TEST_DATABASE_URL;
 const skip = url ? false : "set SWARAJ_TEST_DATABASE_URL to a disposable database";
 const token = "development-test-token-at-least-32-characters";
@@ -82,7 +86,7 @@ test("final evidence reaches proved, and the proof binds that evidence", { skip 
     let outcome;
     // Jobs left by other tests can fail, so keep leasing until this receipt's job runs.
     for (let i = 0; i < 25 && outcome?.receiptId !== res.receiptId; i += 1) {
-      outcome = await runOneProofJob(pool, { artifactRoot });
+      outcome = await runOneProofJob(pool, { artifactRoot, sink: verifyingSink });
     }
     assert.equal(outcome?.receiptId, res.receiptId, "the proof job ran");
     assert.equal((await receipt(res.receiptId)).productStatus, "proved");

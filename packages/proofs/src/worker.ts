@@ -56,6 +56,8 @@ export interface WorkerOutcome {
   statementId: string;
   proofRef: string;
   artifactPath: string;
+  /** False when the receipt was recorded NON_PROVABLE (no ZK proof made). */
+  proved: boolean;
 }
 
 export interface WorkerOptions {
@@ -65,6 +67,23 @@ export interface WorkerOptions {
   sp1?: Sp1ProverConfig;
   /** When set, the decision guest proves MANDATE jobs with Groth16 before submission. */
   decisionSp1?: DecisionProverConfig;
+}
+
+/** The local sink only hashes the statement. Without a ZK proof behind it the
+ * receipt must not read PROVED: it is recorded as NON_PROVABLE instead. */
+async function settleReceipt(
+  pool: PoolHandle,
+  receiptId: string,
+  attestation: { ref: string; sink: string },
+  proofMade: boolean,
+  note: string,
+): Promise<boolean> {
+  if (attestation.sink === "local" && !proofMade) {
+    await advanceReceipt(pool, receiptId, "NON_PROVABLE", { note: `${note}; no ZK prover configured, not proved` });
+    return false;
+  }
+  await advanceReceipt(pool, receiptId, "PROVED", { proofRef: attestation.ref, note });
+  return true;
 }
 
 async function runMandateJob(
@@ -139,12 +158,9 @@ async function runMandateJob(
       kind: "ZKVERIFY_ATTESTATION",
       content: { ref: attestation.ref, sink: attestation.sink, statementId: id },
     });
-    await advanceReceipt(pool, receiptId, "PROVED", {
-      proofRef: attestation.ref,
-      note: `mandate statement ${id} via ${attestation.sink} sink`,
-    });
+    const proved = await settleReceipt(pool, receiptId, attestation, Boolean(options.decisionSp1), `mandate statement ${id} via ${attestation.sink} sink`);
     await finishProofJob(pool, jobId);
-    return { jobId, receiptId, statementId: id, proofRef: attestation.ref, artifactPath };
+    return { jobId, receiptId, statementId: id, proofRef: attestation.ref, artifactPath, proved };
   } catch (error) {
     await failProofJob(pool, jobId, error instanceof Error ? error.message : String(error));
     return undefined;
@@ -224,13 +240,10 @@ export async function runOneProofJob(
       kind: "ZKVERIFY_ATTESTATION",
       content: { ref: attestation.ref, sink: attestation.sink, statementId: id },
     });
-    await advanceReceipt(pool, receiptId, "PROVED", {
-      proofRef: attestation.ref,
-      note: `statement ${id} via ${attestation.sink} sink`,
-    });
+    const proved = await settleReceipt(pool, receiptId, attestation, Boolean(options.sp1), `statement ${id} via ${attestation.sink} sink`);
     await finishProofJob(pool, job.jobId);
 
-    return { jobId: job.jobId, receiptId, statementId: id, proofRef: attestation.ref, artifactPath };
+    return { jobId: job.jobId, receiptId, statementId: id, proofRef: attestation.ref, artifactPath, proved };
   } catch (err) {
     await failProofJob(pool, job.jobId, String(err));
     return undefined;
