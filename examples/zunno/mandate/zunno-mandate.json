@@ -20,7 +20,7 @@
           "field": "context.param",
           "name": "cardValue",
           "operator": "GT",
-          "value": "100"
+          "value": "104"
         }
       ]
     },
