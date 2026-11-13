@@ -252,9 +252,13 @@ gitignored and keys must never be committed. Full details: [SETUP.md](SETUP.md).
   including BLOCK, on-chain verification, `NearProofSink`, Private Mandates,
   human approvals, verified-programs-only mandates, signed receipt bundles and
   `swaraj-verify`, and everything NEAR in Zunno.
-- **Zunno** started as a separate project on Inco and Base Sepolia and moved
-  into this repository on Nov 7, 2026. Its NEAR work (enclave process, Shade
-  Agent, NEAR AI, live gateway, wager) was built in the window.
+- **Other chains:** the Base/Uniswap trade pipeline (the `UNISWAP_V3_BASE`
+  venue) and the optional zkVerify/Kurier proof sink were built before the
+  window (Oct 14–16) and are not part of the NEAR submission. Both stay off
+  unless their keys are set. NEAR is the judged path: execution, evidence,
+  proofs and settlement for NEAR payments and Ref Finance swaps.
+- **Zunno** moved into this repository on Nov 7, 2026. Its NEAR work (enclave
+  process, Shade Agent, NEAR AI, live gateway, wager) was built in the window.
 - **Third-party code:** SP1 (Succinct), `near-sdk`, the Shade Agent framework's
   unmodified `shade-contract-template`, `@neardefi/shade-agent-js`, Phala's
   `dcap-qvl`, and the verification steps of NEAR's
