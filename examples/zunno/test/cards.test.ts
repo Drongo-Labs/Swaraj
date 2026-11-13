@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { decodeCard, isPlayable, isWild, firstLegalCard } from "../src/zunno/cards.js";
 
-test("card codec matches UnoCards.sol (port of zunno-inco bot)", () => {
+test("card codec matches UnoCards.sol (port of the Zunno bot)", () => {
   // value 1 → id 0 → red 0
   assert.deepEqual(decodeCard(1), { color: 0, kind: 0, number: 0 });
   // value 26 → id 25 → w=0 of color 1 → green 0

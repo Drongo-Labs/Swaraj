@@ -1,7 +1,7 @@
 import { decodeCard, isPlayable, isWild, NUMBER, SKIP, REVERSE, DRAW_TWO, WILD, WILD_DRAW_FOUR } from "../zunno/cards.js";
 
 /**
- * Two-player UNO engine. Same card codec as ZunnoInco.sol / zunno-inco's
+ * Two-player UNO engine. Same UNO card codec (1..108) as the original Zunno
  * cards.js: values 1..108, colors 0..3, wilds 101..104, wild-draw-four
  * 105..108. The engine is authoritative state: it owns both hands, and the
  * UI only ever receives the requesting player's hand plus public state.

@@ -35,7 +35,7 @@ Source: vectors/engine-vectors.json (produced by the REAL TypeScript engine,
 scripts/gen-vectors.ts). Regenerate: pnpm vectors && pnpm lean:sync
 
 Each example is kernel-checked: the Lean model must reproduce the exact
-outcome the TypeScript engine computed — same card codec (ZunnoInco.sol),
+outcome the TypeScript engine computed — same UNO card codec (1..108),
 same legality, same effects, same winner.
 -/
 

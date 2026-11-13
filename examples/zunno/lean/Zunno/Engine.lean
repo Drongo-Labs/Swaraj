@@ -2,7 +2,7 @@
 # Zunno engine model — kernel-checked invariants of the game
 
 This file models the two-player UNO engine (`src/game/engine.ts`,
-card codec shared with `ZunnoInco.sol`) and proves its structural
+UNO card codec, 1..108) and proves its structural
 invariants:
 
 - a play requires the card to be in the mover's hand and legal;

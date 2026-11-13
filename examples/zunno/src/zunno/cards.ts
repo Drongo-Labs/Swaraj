@@ -1,5 +1,5 @@
 /**
- * TS port of zunno-inco `server/bot/cards.js` (itself a port of
+ * UNO card codec (1..108), ported from `server/bot/cards.js` (itself a port of
  * `contracts/src/UnoCards.sol` decode/isPlayable). Keep in sync with the
  * Solidity card codec.
  */

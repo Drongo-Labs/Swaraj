@@ -93,7 +93,7 @@
     grid-area: table; position: relative; overflow: hidden;
     display: grid; grid-template-rows: auto minmax(0, 1fr) auto;   /* the center gives way before the hand */
   }
-  /* the table: zunno-inco's layered art, shifting with the active color and the turn */
+  /* the table: Zunno's layered art, shifting with the active color and the turn */
   .layers { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
   .layers div { position: absolute; inset: 0; background-repeat: no-repeat; background-position: center; transition: opacity .5s ease, background-image .5s ease; }
   .l1 { background: url("/assets/table/bg_primary.webp") center / cover no-repeat; }
@@ -383,7 +383,7 @@ let pendingWild = null, lastLogCount = 0, lastBlocked = -1, prevAgentCount = -1,
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-/** ZunnoInco codec value (1..108) → the Zunno sprite name. */
+/** Card codec value (1..108) → the Zunno sprite name. */
 function sprite(v) {
   const n = v - 1;
   if (v >= 105) return "D4W";
