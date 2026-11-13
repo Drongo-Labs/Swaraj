@@ -254,10 +254,7 @@ carries `draw_card` (empty params) and stakes (typed `PAYMENT`).
 ## Beyond local play
 
 The same bridge runs against a live Swaraj API for durable, proof-backed
-decisions (`SWARAJ_API_URL`, `SWARAJ_DEV_TOKEN`), and executes on-chain via
-viem (`ZUNNO_E2E_LIVE=1 pnpm e2e` — gated stakes broadcast, over-cap stakes
-blocked, receipts promoted to PROVED). On-chain game: the ZunnoInco contract
-on Base Sepolia. See the e2e source for the full live flow.
+decisions (`SWARAJ_API_URL`, `SWARAJ_DEV_TOKEN`).
 
 ```sh
 pnpm test         # unit tests — no services needed

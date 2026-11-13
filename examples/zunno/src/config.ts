@@ -5,7 +5,7 @@ export interface ZunnoAgentConfig {
   applicationId: string;
   /** Zunno agent identifier as it appears in intents (`agent` field). */
   agentId: string;
-  /** ZunnoInco contract address (stake recipient / resource pinning). */
+  /** Game address the agent's stakes are pinned to (mandate resource target). */
   gameAddress: string;
   /** Mandate buy-in cap in wei (atomic decimal string). Must match the mandate fixture. */
   buyInCapWei: string;

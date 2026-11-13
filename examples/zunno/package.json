@@ -3,11 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Swaraj-governed AI agent for Zunno (Inco/Base): every agent move is checked against an Agent Mandate before it executes.",
+  "description": "Swaraj-governed AI agent for Zunno: every agent move is checked against an Agent Mandate before it executes.",
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "e2e": "tsx src/e2e/gatedStake.ts",
     "e2e:gateway": "tsx src/e2e/gatewayWager.ts",
     "play": "tsx src/play.ts",
     "vectors": "tsx scripts/gen-vectors.ts",
@@ -16,7 +15,6 @@
     "settle": "tsx src/swaraj/settleCli.ts"
   },
   "dependencies": {
-    "@inco/lightning-js": "^1.1.0",
     "@neardefi/shade-agent-js": "2.2.0",
     "@noble/hashes": "^1.8.0",
     "@phala/dcap-qvl-node": "0.3.3",
