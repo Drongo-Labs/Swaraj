@@ -247,10 +247,12 @@ gitignored and keys must never be committed. Full details: [SETUP.md](SETUP.md).
   before the Oct 19 announcement is baseline, including the typed schemas,
   canonical hashing, the Z3 gateway, the Postgres receipt lifecycle, the first
   SP1 proof pipeline, the first Lean suite, the MCP bridge and the web demo.
-- **Hackathon diff:** the baseline is tagged
-  [`pre-hackathon`](https://github.com/Drongo-Labs/Swaraj/tree/pre-hackathon)
-  (Oct 19, 2026); everything built for the hackathon is the diff
-  [`pre-hackathon...main`](https://github.com/Drongo-Labs/Swaraj/compare/pre-hackathon...main).
+- **Hackathon diff:** pre-window work lived on two lines that were merged into
+  `main` only after Oct 19: `pre-hackathon` (Swaraj's main line, Oct 18) and
+  Kushagra's core packages (Oct 13–17). The tag
+  [`hackathon-baseline`](https://github.com/Drongo-Labs/Swaraj/tree/hackathon-baseline)
+  combines both, and everything built for the hackathon is the direct diff
+  [`hackathon-baseline..main`](https://github.com/Drongo-Labs/Swaraj/compare/hackathon-baseline..main).
 - **Built in the window:** the NEAR integration (execution, evidence,
   settlement), all four NEAR contracts, Groth16 proofs of mandate decisions
   including BLOCK, on-chain verification, `NearProofSink`, Private Mandates,
