@@ -5,9 +5,9 @@
 An AI agent that can move money needs limits it can't talk its way around.
 Swaraj checks every action an agent proposes against an Agent Mandate before
 anything happens. Anything not explicitly permitted is blocked, with the broken
-rule named. Every decision becomes a receipt, and the decision is proved with a
-Groth16 zero-knowledge proof that a NEAR contract verifies on chain, for blocked
-actions as well as allowed ones.
+rule named. Every decision becomes a receipt, and with the prover running the
+decision is proved with a Groth16 zero-knowledge proof that a NEAR contract
+verifies on chain, for blocked actions as well as allowed ones.
 
 Built at [NEAR HACKATHON](https://nearhackathon.com/) (Nov 2026). Everything
 below runs on **NEAR testnet**; mainnet is untested.
@@ -230,8 +230,8 @@ gitignored and keys must never be committed. Full details: [SETUP.md](SETUP.md).
 
 ## Assurance
 
-- **Lean 4:** kernel-checked theorems in `packages/lean`, listed in
-  [spec/theorems.md](spec/theorems.md). The build rejects `sorry` and added
+- **Lean 4:** 30 kernel-checked theorems in `packages/lean`; the main ones are
+  listed in [spec/theorems.md](spec/theorems.md). The build rejects `sorry` and added
   axioms. Zunno's Lean suite also proves its game rules and imports Swaraj's
   bridge theorem: nothing executes without an ALLOW.
 - **Tests:** about 300 TypeScript tests, the Rust engine and contract tests, and
@@ -252,7 +252,9 @@ gitignored and keys must never be committed. Full details: [SETUP.md](SETUP.md).
   Kushagra's core packages (Oct 13–17). The tag
   [`hackathon-baseline`](https://github.com/Drongo-Labs/Swaraj/tree/hackathon-baseline)
   combines both, and everything built for the hackathon is the direct diff
-  [`hackathon-baseline..main`](https://github.com/Drongo-Labs/Swaraj/compare/hackathon-baseline..main).
+  [`hackathon-baseline..hackathon-submission`](https://github.com/Drongo-Labs/Swaraj/compare/hackathon-baseline..hackathon-submission).
+  The submitted code is tagged
+  [`hackathon-submission`](https://github.com/Drongo-Labs/Swaraj/tree/hackathon-submission).
 - **Built in the window:** the NEAR integration (execution, evidence,
   settlement), all four NEAR contracts, Groth16 proofs of mandate decisions
   including BLOCK, on-chain verification, `NearProofSink`, Private Mandates,
