@@ -157,3 +157,23 @@ test("fixture NEAR execution can never be reported as proved", { skip }, async (
     await app.close();
   }
 });
+
+test("if the proof queue fails after funds move, the receipt is closed, not left pending", { skip }, async () => {
+  const near = settler({ status: "FINAL", evidenceDigest: EVIDENCE, txHash: "0x02", chainTx: "HashQ" });
+  const { app, submit, receipt } = await harness(near);
+  const pool = db.openPool(url);
+  // Make every proof-job insert fail, the way a database outage would.
+  await pool.raw.query("CREATE OR REPLACE FUNCTION swaraj_test_refuse_jobs() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'queue down'; END $$");
+  await pool.raw.query("DROP TRIGGER IF EXISTS swaraj_test_refuse_jobs ON proof_jobs; CREATE TRIGGER swaraj_test_refuse_jobs BEFORE INSERT ON proof_jobs FOR EACH ROW EXECUTE FUNCTION swaraj_test_refuse_jobs()");
+  try {
+    const res = await submit(payment());
+    assert.equal(res.decision, "ALLOW", JSON.stringify(res));
+    assert.equal(near.calls.length, 1, "the transfer itself went through");
+    assert.equal(res.productStatus, "cant_prove", JSON.stringify(res));
+    assert.equal((await receipt(res.receiptId)).productStatus, "cant_prove");
+  } finally {
+    await pool.raw.query("DROP TRIGGER IF EXISTS swaraj_test_refuse_jobs ON proof_jobs; DROP FUNCTION IF EXISTS swaraj_test_refuse_jobs()");
+    await pool.close();
+    await app.close();
+  }
+});

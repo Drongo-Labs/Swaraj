@@ -768,24 +768,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         if (settler.handles(action)) {
           settlement = await settler.settle(action, { applicationId, intentHash, policyHash });
         }
-        if (signedRecordProvider(action) !== undefined) {
-          // The provider does the work; its signed webhook settles this receipt.
-          await saveActiveDefinition(applicationId, pendingJobKey(receiptId), 1, {
-            kind: "MANDATE",
-            mandate: mandateDefinition,
-            action: wireAction,
-            expected: { decision, matchedRuleIds },
-            intentHash,
-            mandateHash: policyHash,
-            ...(approvedBy !== undefined ? { approvedBy } : {}),
-          });
-        } else if (settlement?.status === "NOT_PROVABLE") {
-          await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
-          proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
-        } else {
-          await enqueueProofJob(handle, {
-            receiptId,
-            payload: {
+        // Funds may already have moved on chain, so this receipt must never stay PENDING with no
+        // proof job behind it: retry the queue once, then close the receipt as NON_PROVABLE.
+        try {
+          if (signedRecordProvider(action) !== undefined) {
+            // The provider does the work; its signed webhook settles this receipt.
+            await saveActiveDefinition(applicationId, pendingJobKey(receiptId), 1, {
               kind: "MANDATE",
               mandate: mandateDefinition,
               action: wireAction,
@@ -793,10 +781,39 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
               intentHash,
               mandateHash: policyHash,
               ...(approvedBy !== undefined ? { approvedBy } : {}),
-              ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
-              ...(settlement?.status === "FINAL" && settlement.chainExecution ? { chainExecution: settlement.chainExecution } : {}),
-            },
-          });
+            });
+          } else if (settlement?.status === "NOT_PROVABLE") {
+            await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: settlement.reason });
+            proofReceipt = { id: receiptId, state: "NON_PROVABLE" };
+          } else {
+            const job = {
+              receiptId,
+              payload: {
+                kind: "MANDATE",
+                mandate: mandateDefinition,
+                action: wireAction,
+                expected: { decision, matchedRuleIds },
+                intentHash,
+                mandateHash: policyHash,
+                ...(approvedBy !== undefined ? { approvedBy } : {}),
+                ...(settlement ? { evidenceDigest: settlement.evidenceDigest } : {}),
+                ...(settlement?.status === "FINAL" && settlement.chainExecution ? { chainExecution: settlement.chainExecution } : {}),
+              },
+            };
+            try {
+              await enqueueProofJob(handle, job);
+            } catch {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+              await enqueueProofJob(handle, job);
+            }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const nearTx = settlement?.chainTx ?? settlement?.txHash;
+          log.error({ msg: "receipt bookkeeping failed after settlement", receiptId, nearTx, err: message });
+          await advanceReceipt(handle, receiptId, "NON_PROVABLE", { note: `PROOF_QUEUE_FAILED: ${message}`.slice(0, 500) })
+            .then(() => { proofReceipt = { id: receiptId, state: "NON_PROVABLE" }; })
+            .catch((closeError: unknown) => log.error({ msg: "could not close the receipt", receiptId, err: String(closeError) }));
         }
       } catch (error) {
         log.error(error);
