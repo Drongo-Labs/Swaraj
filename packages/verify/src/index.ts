@@ -54,7 +54,7 @@ export function bundleDigest(bundle: Pick<ReceiptBundle, "receiptId" | "statemen
 
 export async function verifyReceiptBundle(
   bundle: ReceiptBundle,
-  options: { issuer: string; nearRpcUrl?: string; fetchImpl?: typeof fetch },
+  options: { issuer: string; nearRpcUrl?: string; fetchImpl?: typeof fetch; /** Token contract a near_ft_transfer payment must use. */ nearFtContract?: string },
 ): Promise<Verification> {
   const checks: Check[] = [];
   const add = (name: string, ok: boolean, detail?: string) =>
@@ -92,7 +92,7 @@ export async function verifyReceiptBundle(
   }
 
   if (bundle.chainExecution) {
-    add("on-chain target matches the action", action !== undefined && nearExecutionMatchesAction(bundle.chainExecution, action));
+    add("on-chain target matches the action", action !== undefined && nearExecutionMatchesAction(bundle.chainExecution, action, options.nearFtContract ? { ftContract: options.nearFtContract } : {}));
     if (options.nearRpcUrl) {
       try {
         const finality = await nearFinality(bundle.chainExecution, {

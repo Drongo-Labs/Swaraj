@@ -65,6 +65,17 @@ test("a NEAR transaction to someone other than the action's recipient fails", as
   assert.deepEqual(failed(await verify(redirected)), ["on-chain target matches the action"]);
 });
 
+test("a native transfer cannot stand in for a token payment, and the token contract must match", async () => {
+  const ftAction = { ...action, resource: { service: "near_ft_transfer" }, context: { ...action.context, currency: "USDC" } };
+  const ftNear = { ...near, expect: { kind: "ft_transfer", contractId: "usdc.fakes.testnet", receiverId: "v.testnet", amount: "5" } };
+  const native = await bundle({ action: ftAction, intentHash: `0x${sha(serializeUnifiedAction(parseUnifiedAction(ftAction)))}` });
+  assert.deepEqual(failed(await verify(native)), ["on-chain target matches the action"]);
+  const real = await bundle({ action: ftAction, chainExecution: ftNear, intentHash: `0x${sha(serializeUnifiedAction(parseUnifiedAction(ftAction)))}` });
+  assert.deepEqual(failed(await verifyReceiptBundle(real, { issuer: issuer.address, nearFtContract: "usdc.fakes.testnet" })), []);
+  assert.deepEqual(failed(await verifyReceiptBundle(real, { issuer: issuer.address, nearFtContract: "real-usdc.testnet" })), ["on-chain target matches the action"]);
+  assert.deepEqual(failed(await verify(real)), ["on-chain target matches the action"]); // contract unknown: fail closed
+});
+
 test("the optional chain check rejects a transaction that is not final", async () => {
   const stub = async (_u, init) => {
     const { method } = JSON.parse(init.body);
