@@ -61,6 +61,7 @@ async function harness(options = {}) {
     databaseUrl: options.databaseUrl ?? "",
     signer: new LocalKeySigner("0x" + "11".repeat(32)),
     approverToken: options.approverToken ?? approverToken,
+    ...(options.approvalSlaMs !== undefined ? { approvalSlaMs: options.approvalSlaMs } : {}),
     settler: {
       live: true,
       handles: () => true,
@@ -160,6 +161,40 @@ test("an approval dies when the mandate changes or the action expires", async ()
     await new Promise((resolve) => setTimeout(resolve, 60));
     assert.equal((await decide(stale.approvalId, "APPROVE")).error, "approval_expired");
     assert.equal(calls.length, 0);
+  } finally {
+    await app.close();
+  }
+});
+
+test("approval SLA timeout fail-closes to EXPIRED/BLOCK (no hang forever)", async () => {
+  const { app, base, calls, submit, decide } = await harness({ approvalSlaMs: 40 });
+  try {
+    const paused = await submit(payment("500", { expiry: Date.now() + 60_000 }));
+    assert.equal(paused.code, 202);
+    assert.equal(paused.decision, "NEEDS_APPROVAL");
+    assert.equal(typeof paused.expiresAt, "number");
+    assert.ok(paused.expiresAt <= Date.now() + 40 + 20);
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const timedOut = await decide(paused.approvalId, "APPROVE");
+    assert.equal(timedOut.code, 409);
+    assert.equal(timedOut.error, "approval_expired");
+    assert.equal(timedOut.reason, "approval_sla_timeout");
+    assert.equal(timedOut.status, "EXPIRED");
+    assert.equal(timedOut.decision, "BLOCK");
+    assert.equal(timedOut.productStatus, "blocked");
+    assert.equal(calls.length, 0);
+
+    const stored = (
+      await app.inject({
+        method: "GET",
+        url: `${base}/approvals/${paused.approvalId}`,
+        headers: agent,
+      })
+    ).json();
+    assert.equal(stored.status, "EXPIRED");
+    assert.equal(stored.decidedBy, "system:approval_sla");
   } finally {
     await app.close();
   }

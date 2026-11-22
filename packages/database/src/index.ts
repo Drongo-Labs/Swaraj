@@ -58,3 +58,16 @@ export {
   type ProofInputRecord,
   type RuntimeProofJob,
 } from "./runtime.js";
+export {
+  budgetResetsAt,
+  budgetWindowStart,
+  createMemoryBudgetSpendStore,
+  createPostgresBudgetSpendStore,
+  utcDayStartSeconds,
+  type BudgetReserveExceeded,
+  type BudgetReserveInput,
+  type BudgetReserveOk,
+  type BudgetReserveResult,
+  type BudgetSpendStore,
+  type BudgetWindow,
+} from "./budgets.js";

@@ -17,6 +17,7 @@ below runs on **NEAR testnet**; mainnet is untested.
 | | |
 |---|---|
 | **Decide** | A fail-closed gateway evaluates each action against the agent's mandate: FORBID wins, then REQUIRE_APPROVAL, then PERMIT, and anything else is BLOCK. Malformed input blocks. Every decision is then checked independently by the Z3 SMT solver, in the API and in Zunno's embedded gateway; a disagreement or solver failure is a BLOCK (`SWARAJ_Z3_CROSSCHECK=0` turns the check off) |
+| **Budgets** | Optional per-agent `budgets` on the mandate cap PAYMENT / REFUND spend by currency over a fixed UTC daily or weekly window. Crossing the cap is `BUDGET_EXCEEDED` (fail-closed). Usage is at `GET /v1/applications/:id/budgets` |
 | **Act** | Permitted actions execute for real: NEAR transfers, NEP-141 token transfers and Ref Finance swaps. Blocked actions never touch the chain |
 | **Record** | Every decision, receipt and idempotency claim is stored in Postgres. A database trigger makes illegal receipt moves (like PROVED → PENDING) impossible, even from raw SQL |
 | **Prove** | A worker re-derives each decision, proves it with an SP1 Groth16 proof, and settles the receipt on NEAR, where a contract verifies the proof with NEAR's `alt_bn128` host functions |

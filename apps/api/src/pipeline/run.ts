@@ -7,10 +7,12 @@ import {
   type CapabilityService,
   type ExecutionAdapter,
   type ExecutionTrade,
+  type ReservationStore,
 } from "@swaraj/capability";
 import {
   createPostgresCapabilityStore,
   createPostgresReservationStore,
+  utcDayStartSeconds,
 } from "@swaraj/database";
 import type { Pool } from "pg";
 import type { Signer } from "@swaraj/crypto";
@@ -63,6 +65,8 @@ export type PipelineDeps = {
   loadLiveState?: () => Promise<Record<string, unknown>>;
   /** When true (base mode), refuse client fixture state. */
   requireLiveState?: boolean;
+  /** Reservation store used to fill `usedDailyTurnover` from COMMITTED spends. */
+  reservations?: ReservationStore;
   /** The submitted unified action, whose canonical form receipts bind. */
   unifiedAction?: UnifiedAction;
   audit?: (entry: AuditEntry) => void;
@@ -105,6 +109,7 @@ export type PipelineStack = {
   evidence: VenueAdapter;
   capabilities: CapabilityService;
   execution: ExecutionAdapter;
+  reservations: ReservationStore;
   labels: {
     base: "mock" | "rpc" | "rpc:base" | "rpc:base-sepolia";
     execution: "mock" | "uniswap_v3";
@@ -177,6 +182,7 @@ export function createDefaultCapabilityStack(
 ): {
   capabilities: CapabilityService;
   execution: ExecutionAdapter;
+  reservations: ReservationStore;
   capabilityStore: "postgres" | "memory";
 } {
   const capabilityStore = pool ? createPostgresCapabilityStore(pool) : createMemoryCapabilityStore();
@@ -206,6 +212,7 @@ export function createDefaultCapabilityStack(
         routerAddress: router.toLowerCase() as `0x${string}`,
         feeTier: Number.isFinite(feeTier) && feeTier > 0 ? feeTier : 500,
       }),
+      reservations: reservationStore,
       capabilityStore: pool ? "postgres" : "memory",
     };
   }
@@ -213,6 +220,7 @@ export function createDefaultCapabilityStack(
   return {
     capabilities,
     execution: createMockExecutionAdapter(capabilities),
+    reservations: reservationStore,
     capabilityStore: pool ? "postgres" : "memory",
   };
 }
@@ -221,12 +229,13 @@ export function createPipelineStack(
   mode: PipelineMode = resolvePipelineMode(),
   pool?: Pool,
 ): PipelineStack {
-  const { capabilities, execution, capabilityStore } = createDefaultCapabilityStack(mode, pool);
+  const { capabilities, execution, capabilityStore, reservations } = createDefaultCapabilityStack(mode, pool);
   return {
     mode,
     evidence: createDefaultEvidenceAdapter(mode),
     capabilities,
     execution,
+    reservations,
     labels:
       mode === "base"
         ? {
@@ -382,7 +391,25 @@ export async function runPipeline(
   request: ActionRequest,
   deps: PipelineDeps,
 ): Promise<PipelineResult> {
-  const gatewayInput = await resolvePolicyStateIntent(applicationId, request, deps);
+  let gatewayInput = await resolvePolicyStateIntent(applicationId, request, deps);
+  // Fill usedDailyTurnover from COMMITTED reservations for the UTC day (trade-cap fix).
+  if (deps.reservations) {
+    const intentObj = asObject(gatewayInput.intent) ?? {};
+    const accountRef =
+      typeof intentObj.accountRef === "string"
+        ? intentObj.accountRef
+        : "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const now = Math.floor(Date.now() / 1000);
+    const used = await deps.reservations.sumCommittedSince(
+      applicationId,
+      accountRef,
+      utcDayStartSeconds(now),
+    );
+    gatewayInput = {
+      ...gatewayInput,
+      state: { ...(asObject(gatewayInput.state) ?? {}), usedDailyTurnover: used.toString() },
+    };
+  }
   const decision = await deps.checkPolicy(gatewayInput);
 
   deps.audit?.({

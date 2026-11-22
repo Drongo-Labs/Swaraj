@@ -127,6 +127,15 @@ export const MandateRuleSchema = z.strictObject({
   }
 });
 
+/** Per-agent spend cap for PAYMENT / REFUND. Optional; existing mandates omit it. */
+export const MandateBudgetSchema = z.strictObject({
+  budgetId: BoundedId,
+  action: z.enum(["PAYMENT", "REFUND"]),
+  currency: z.string().min(1).max(64),
+  window: z.enum(["DAILY", "WEEKLY"]),
+  limit: AtomicAmount,
+});
+
 export const AgentMandateSchema = z.strictObject({
   mandateId: BoundedId,
   version: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -139,23 +148,43 @@ export const AgentMandateSchema = z.strictObject({
   validFrom: UnixMilliseconds,
   validUntil: UnixMilliseconds,
   rules: z.array(MandateRuleSchema).max(512),
+  /** Daily/weekly spend caps; budgetIds must be strictly ascending. */
+  budgets: z.array(MandateBudgetSchema).max(16).optional(),
 }).superRefine((mandate, ctx) => {
   if (mandate.validUntil <= mandate.validFrom) {
     ctx.addIssue({ code: "custom", path: ["validUntil"], message: "validUntil must be after validFrom" });
   }
   const ids = mandate.rules.map((rule) => rule.ruleId);
   requireStrictlyAscending(ids, ctx, ["rules"], "rule ids");
+  if (mandate.budgets) {
+    requireStrictlyAscending(
+      mandate.budgets.map((budget) => budget.budgetId),
+      ctx,
+      ["budgets"],
+      "budget ids",
+    );
+  }
 });
 
 export type MandateRuleEffect = z.infer<typeof MandateRuleEffect>;
 export type MandatePredicate = z.output<typeof MandatePredicateSchema>;
 export type MandateRule = z.output<typeof MandateRuleSchema>;
+export type MandateBudget = z.output<typeof MandateBudgetSchema>;
 export type AgentMandate = z.output<typeof AgentMandateSchema>;
 export type AgentMandateJson = z.input<typeof AgentMandateSchema>;
 
 export const parseAgentMandate = (input: unknown): AgentMandate =>
   parseWith(AgentMandateSchema, input, "AgentMandate");
 
-export function normalizeAgentMandate<T extends { rules: Array<{ ruleId: string }> }>(raw: T): T {
-  return { ...raw, rules: [...raw.rules].sort((left, right) => compareStrings(left.ruleId, right.ruleId)) };
+export function normalizeAgentMandate<
+  T extends { rules: Array<{ ruleId: string }>; budgets?: Array<{ budgetId: string }> },
+>(raw: T): T {
+  const next: T = {
+    ...raw,
+    rules: [...raw.rules].sort((left, right) => compareStrings(left.ruleId, right.ruleId)),
+  };
+  if (raw.budgets) {
+    next.budgets = [...raw.budgets].sort((left, right) => compareStrings(left.budgetId, right.budgetId));
+  }
+  return next;
 }

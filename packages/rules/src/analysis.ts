@@ -170,6 +170,9 @@ export function diffMandates(before: AgentMandate, after: AgentMandate): Mandate
     rulesChanged: [...newRules.keys()].filter((id) => oldRules.has(id) && oldRules.get(id) !== newRules.get(id)),
     scopeChanged: (["agent", "agentSigner", "programCertifier", "validFrom", "validUntil"] as const).filter((key) => before[key] !== after[key]),
   };
+  if (jsonKey(before.budgets ?? []) !== jsonKey(after.budgets ?? [])) {
+    diff.scopeChanged.push("budgets");
+  }
 
   const timestamp = Math.min(
     Math.max(before.validFrom, after.validFrom),
