@@ -76,7 +76,8 @@ async function harness(options = {}) {
         await app.inject({
           method: "POST",
           url: `${base}/mandates`,
-          headers: agent,
+          // Owner routes require the approver token once it is configured.
+          headers: human,
           payload: mandateBody(budgets, version, extras),
         })
       ).statusCode,
