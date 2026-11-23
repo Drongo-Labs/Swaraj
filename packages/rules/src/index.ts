@@ -27,7 +27,11 @@ export type MandateDecisionReason =
   | "ACTION_EXPIRED"
   /** The action's timestamp is too far from the gateway's clock to trust
    * for the mandate window and timestamp predicates. */
-  | "CLOCK_SKEW";
+  | "CLOCK_SKEW"
+  /** The mandate has provenance rules and the action carries no provenance. */
+  | "MISSING_PROVENANCE"
+  /** The action claims clean provenance but the application has read untrusted content. */
+  | "PROVENANCE_MISMATCH";
 
 export interface MandateDecision {
   decision: "ALLOW" | "BLOCK" | "NEEDS_APPROVAL";
@@ -57,6 +61,7 @@ function fieldValue(action: UnifiedAction, predicate: MandatePredicate): Compara
     case "agent": return action.agent;
     case "timestamp": return action.timestamp;
     case "expiry": return action.expiry;
+    case "provenance.untrusted": return action.provenance?.untrusted;
     case "resource.venue": return action.action === "SPOT_TRADE" ? action.resource.venue : undefined;
     case "resource.service": return action.action === "PAYMENT" || action.action === "DELETE" || action.action === "REFUND"
       ? action.resource.service : undefined;

@@ -36,7 +36,7 @@ export const MandateStringField = z.enum([
 
 export const MandateAtomicField = z.literal("context.amount");
 export const MandateIntegerField = z.enum(["context.slippageBps", "timestamp", "expiry"]);
-export const MandateBooleanField = z.literal("context.hardDelete");
+export const MandateBooleanField = z.enum(["context.hardDelete", "provenance.untrusted"]);
 
 const PredicateString = z.string().min(1).max(256);
 const StringEqualsPredicate = z.strictObject({
@@ -99,7 +99,7 @@ export const MandatePredicateSchema = z.union([
   ParamBoolPredicate,
 ]);
 
-const commonFields = new Set(["agent", "timestamp", "expiry"]);
+const commonFields = new Set(["agent", "timestamp", "expiry", "provenance.untrusted"]);
 const fieldsByAction: Record<z.infer<typeof UnifiedActionType>, ReadonlySet<string>> = {
   SPOT_TRADE: new Set(["resource.venue", "context.amount", "context.assetIn", "context.assetOut", "context.slippageBps"]),
   PAYMENT: new Set(["resource.service", "context.amount", "context.currency", "context.recipient"]),
