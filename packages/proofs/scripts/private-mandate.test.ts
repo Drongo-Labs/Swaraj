@@ -69,6 +69,9 @@ const cases: Array<[string, unknown, unknown]> = [
   ["string param", mandate([rule("a", "PERMIT", "APP_ACTION", [{ field: "context.paramString", name: "s", operator: "EQ", value: "x" }])]), appAction({ s: "x" })],
   ["bool param", mandate([rule("a", "PERMIT", "APP_ACTION", [{ field: "context.paramBool", name: "b", operator: "EQ", value: true }])]), appAction({ b: true })],
   ["missing param", mandate([rule("a", "PERMIT", "APP_ACTION", [{ field: "context.paramString", name: "s", operator: "EQ", value: "x" }])]), appAction({})],
+  ["clean provenance", mandate([rule("a", "PERMIT", "PAYMENT", [{ field: "provenance.untrusted", operator: "EQ", value: false }])]), { ...payment("1"), provenance: { untrusted: false } }],
+  ["untrusted provenance", mandate([rule("a", "PERMIT", "PAYMENT", [{ field: "provenance.untrusted", operator: "EQ", value: false }])]), { ...payment("1"), provenance: { untrusted: true } }],
+  ["missing provenance", mandate([rule("a", "PERMIT", "PAYMENT", [{ field: "provenance.untrusted", operator: "EQ", value: false }])]), payment("1")],
 ];
 
 test("the Rust guest and the rules engine agree, and only ALLOW yields a statement", { skip }, async () => {
