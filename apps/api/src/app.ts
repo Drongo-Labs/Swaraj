@@ -159,6 +159,7 @@ const OWNER_ROUTES = new Set([
   "POST /v1/applications/:applicationId/mandates",
   "POST /v1/applications/:applicationId/policies",
   "POST /v1/applications/:applicationId/program-certificates",
+  "POST /v1/applications/:applicationId/provenance/clear",
   "POST /v1/projects",
   "PUT /v1/projects/:slug/mandate",
   "POST /v1/projects/:slug/activate",
@@ -974,6 +975,66 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     });
   });
 
+  // ponytail: taint is per application, not per agent, so an agent cannot dodge it by
+  // naming another agent id; a multi-agent app is over-tainted, which fails closed.
+  const PROVENANCE_ID = "provenance";
+  type ProvenanceRecord = { revision: number; untrusted: boolean; sources: string[]; since?: number };
+  const ProvenanceSourceSchema = z.strictObject({ source: z.string().regex(/^[A-Za-z0-9._:@/+-]{1,128}$/) });
+  const loadProvenance = async (applicationId: string): Promise<ProvenanceRecord> =>
+    ((await loadActivePolicy(applicationId, PROVENANCE_ID)) as ProvenanceRecord | undefined) ??
+    { revision: 0, untrusted: false, sources: [] };
+  const mandateReadsProvenance = (mandate: AgentMandate) =>
+    mandate.rules.some((rule) => rule.predicates.some((predicate) => predicate.field === "provenance.untrusted"));
+
+  app.get<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/provenance",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application_id" });
+      }
+      const { untrusted, sources, since } = await loadProvenance(request.params.applicationId);
+      return { untrusted, sources, ...(since !== undefined ? { since } : {}) };
+    },
+  );
+
+  /** Records that untrusted content reached the agent. Agent token is enough: it can only tighten. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/provenance/untrusted",
+    async (request, reply) => {
+      const { applicationId } = request.params;
+      const body = ProvenanceSourceSchema.safeParse(request.body);
+      if (!Identifier.safeParse(applicationId).success || !body.success) {
+        return reply.code(400).send({ error: "invalid_provenance" });
+      }
+      const current = await loadProvenance(applicationId);
+      const sources = current.sources.includes(body.data.source)
+        ? current.sources
+        : [...current.sources, body.data.source].slice(-16);
+      if (current.untrusted && sources === current.sources) return reply.code(200).send({ untrusted: true, sources });
+      // ponytail: read-modify-write; a clear racing this write can drop the new taint. Add a row lock if that matters.
+      const revision = current.revision + 1;
+      await saveActiveDefinition(applicationId, PROVENANCE_ID, revision, {
+        revision,
+        untrusted: true,
+        sources,
+        since: current.since ?? Date.now(),
+      });
+      return reply.code(200).send({ untrusted: true, sources });
+    },
+  );
+
+  /** The owner vouches that the agent's context is clean again (e.g. a fresh session). */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/provenance/clear",
+    async (request, reply) => {
+      const { applicationId } = request.params;
+      if (!Identifier.safeParse(applicationId).success) return reply.code(400).send({ error: "invalid_application_id" });
+      const revision = (await loadProvenance(applicationId)).revision + 1;
+      await saveActiveDefinition(applicationId, PROVENANCE_ID, revision, { revision, untrusted: false, sources: [] });
+      return reply.code(200).send({ untrusted: false, sources: [] });
+    },
+  );
+
   const CERTIFICATES_ID = "program_certificates";
   const loadCertificates = async (applicationId: string) => {
     const stored = (await loadActivePolicy(applicationId, CERTIFICATES_ID)) as
@@ -999,7 +1060,13 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     applicationId: string,
     mandate: AgentMandate,
     action: UnifiedAction,
-  ): Promise<"INVALID_SIGNATURE" | "UNVERIFIED_PROGRAM" | undefined> => {
+  ): Promise<"INVALID_SIGNATURE" | "UNVERIFIED_PROGRAM" | "MISSING_PROVENANCE" | "PROVENANCE_MISMATCH" | undefined> => {
+    // Without a label, a provenance rule would silently not match: fail closed instead.
+    if (action.provenance === undefined && mandateReadsProvenance(mandate)) return "MISSING_PROVENANCE";
+    // Only a clean claim can loosen a decision, so only a clean claim is checked against the record.
+    if (action.provenance?.untrusted === false && (await loadProvenance(applicationId)).untrusted) {
+      return "PROVENANCE_MISMATCH";
+    }
     if (mandate.agentSigner !== undefined && !(await agentSignatureValid(action, mandate.agentSigner))) {
       return "INVALID_SIGNATURE";
     }
