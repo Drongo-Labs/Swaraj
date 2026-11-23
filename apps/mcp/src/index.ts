@@ -19,4 +19,4 @@ export {
   type ToolCallResult,
   type ToolDefinition,
 } from "./tools.js";
-export { authorizeToolCall, gatewayLine, toolCallAction, type GatewayOptions } from "./gateway.js";
+export { authorizeToolCall, createGateway, toolCallAction, type GatewayOptions } from "./gateway.js";

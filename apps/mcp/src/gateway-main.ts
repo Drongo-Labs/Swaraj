@@ -3,11 +3,12 @@ import { createInterface } from "node:readline";
 import { LocalKeySigner, type Hex } from "@swaraj/crypto";
 import { parseUnifiedAction, unifiedActionSigningPayload } from "@swaraj/schemas";
 import { SwarajApiClient } from "./api-client.js";
-import { gatewayLine, type GatewayOptions } from "./gateway.js";
+import { createGateway, type GatewayOptions } from "./gateway.js";
 
 /**
  * Proxies an MCP server: SWARAJ_UPSTREAM_NAME=github swaraj-mcp-gateway -- npx some-mcp-server
- * Also needs SWARAJ_URL, SWARAJ_DEV_TOKEN, SWARAJ_APPLICATION_ID. Optional: SWARAJ_AGENT, SWARAJ_AGENT_KEY.
+ * Also needs SWARAJ_URL, SWARAJ_DEV_TOKEN, SWARAJ_APPLICATION_ID. Optional: SWARAJ_AGENT, SWARAJ_AGENT_KEY,
+ * SWARAJ_TRUSTED_TOOLS (comma-separated tools whose results are not outside content).
  */
 
 function required(name: string): string {
@@ -33,6 +34,7 @@ const options: GatewayOptions = {
   applicationId: required("SWARAJ_APPLICATION_ID"),
   agent: process.env.SWARAJ_AGENT ?? "agent:mcp",
   upstream: required("SWARAJ_UPSTREAM_NAME"),
+  trustedTools: new Set((process.env.SWARAJ_TRUSTED_TOOLS ?? "").split(",").map((name) => name.trim()).filter(Boolean)),
   ...(signer
     ? {
         sign: (digest: `0x${string}`) => signer.signDigest(digest),
@@ -47,11 +49,14 @@ upstream.on("error", (error) => {
   process.exit(1);
 });
 upstream.on("exit", (code) => process.exit(code ?? 1));
-upstream.stdout.pipe(process.stdout);
+const gateway = createGateway(options);
+createInterface({ input: upstream.stdout }).on("line", (line) => {
+  void gateway.fromUpstream(line).then((out) => process.stdout.write(`${out}\n`));
+});
 
 createInterface({ input: process.stdin })
   .on("line", (line) => {
-    void gatewayLine(options, line).then(({ toUpstream, toAgent }) => {
+    void gateway.fromAgent(line).then(({ toUpstream, toAgent }) => {
       if (toUpstream !== undefined) upstream.stdin.write(`${toUpstream}\n`);
       if (toAgent !== undefined) process.stdout.write(`${toAgent}\n`);
     });

@@ -59,6 +59,14 @@ export class SwarajApiClient {
     return this.call("GET", `${app(applicationId)}/mandates`);
   }
 
+  getProvenance(applicationId: string): Promise<{ untrusted: boolean; sources: string[] }> {
+    return this.call("GET", `${app(applicationId)}/provenance`);
+  }
+
+  markUntrusted(applicationId: string, source: string): Promise<{ untrusted: boolean; sources: string[] }> {
+    return this.call("POST", `${app(applicationId)}/provenance/untrusted`, { source });
+  }
+
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = { authorization: `Bearer ${this.token}` };
     if (body !== undefined) headers["content-type"] = "application/json";
