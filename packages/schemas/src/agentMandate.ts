@@ -8,7 +8,7 @@ import {
   parseWith,
   requireStrictlyAscending,
 } from "./primitives.js";
-import { UnifiedActionType } from "./unifiedAction.js";
+import { CurrencyCode, UnifiedActionType } from "./unifiedAction.js";
 
 /** FORBID beats REQUIRE_APPROVAL, which beats PERMIT. */
 export const MandateRuleEffect = z.enum(["PERMIT", "FORBID", "REQUIRE_APPROVAL"]);
@@ -131,7 +131,7 @@ export const MandateRuleSchema = z.strictObject({
 export const MandateBudgetSchema = z.strictObject({
   budgetId: BoundedId,
   action: z.enum(["PAYMENT", "REFUND"]),
-  currency: z.string().min(1).max(64),
+  currency: CurrencyCode,
   window: z.enum(["DAILY", "WEEKLY"]),
   limit: AtomicAmount,
 });

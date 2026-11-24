@@ -14,10 +14,24 @@ const DEFAULT_RPC_URL = "https://test.rpc.fastnear.com";
 const DEFAULT_REF_CONTRACT = "ref-finance-101.testnet";
 const CAPABILITY_TTL_SECONDS = 120;
 
-export function isNearAction(action: UnifiedAction): boolean {
+/** True when the action is a NEAR payment/swap whose currency label matches what we would actually send. */
+export function isNearAction(
+  action: UnifiedAction,
+  opts: { ftCurrency?: string } = {},
+): boolean {
   if (action.action === "SPOT_TRADE") return action.resource.venue === REF_FINANCE_VENUE;
-  return action.action === "PAYMENT"
-    && (action.resource.service === NEAR_TRANSFER_SERVICE || action.resource.service === NEAR_FT_TRANSFER_SERVICE);
+  if (action.action !== "PAYMENT") return false;
+  if (action.resource.service === NEAR_TRANSFER_SERVICE) {
+    // Native transfers always move NEAR; refuse a mismatched label so a budget
+    // on NEAR cannot be skipped by renaming the currency.
+    return action.context.currency === "NEAR";
+  }
+  if (action.resource.service === NEAR_FT_TRANSFER_SERVICE) {
+    const ftCurrency = opts.ftCurrency?.trim();
+    // Without a configured label we cannot know what the agent claimed; refuse.
+    return Boolean(ftCurrency) && action.context.currency === ftCurrency;
+  }
+  return false;
 }
 
 /** The exact on-chain effect a permitted payment is allowed to have. Swaps are quoted live instead. */
@@ -38,6 +52,7 @@ export function createNearSettler(
   const privateKey = env.NEAR_PRIVATE_KEY?.trim();
   const rpcUrl = env.NEAR_RPC_URL?.trim() || DEFAULT_RPC_URL;
   const ftContract = env.NEAR_FT_CONTRACT?.trim() || undefined;
+  const ftCurrency = env.NEAR_FT_CURRENCY?.trim() || undefined;
   const refContract = env.NEAR_REF_CONTRACT?.trim() || DEFAULT_REF_CONTRACT;
   const refPool = env.NEAR_REF_POOL_ID?.trim() ? Number(env.NEAR_REF_POOL_ID) : undefined;
   const live = Boolean(accountId && privateKey);
@@ -48,7 +63,7 @@ export function createNearSettler(
 
   return {
     live,
-    handles: isNearAction,
+    handles: (action) => isNearAction(action, ftCurrency ? { ftCurrency } : {}),
     async settle(action, { applicationId, intentHash, policyHash }): Promise<Settlement> {
       if (action.action !== "PAYMENT" && action.action !== "SPOT_TRADE") {
         return { status: "NOT_PROVABLE", reason: "NOT_A_NEAR_ACTION" };

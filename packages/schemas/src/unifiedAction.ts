@@ -22,7 +22,8 @@ export const UnifiedActionType = z.enum([
 
 const AgentIdentifier = z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/);
 const ResourceIdentifier = z.string().min(1).max(256).regex(/^[A-Za-z0-9][A-Za-z0-9._:@/+\-]*$/);
-const CurrencyCode = z.string().regex(/^[A-Z][A-Z0-9]{1,11}$/);
+/** Uppercase currency / token codes as used on PAYMENT and REFUND actions. */
+export const CurrencyCode = z.string().regex(/^[A-Z][A-Z0-9]{1,11}$/);
 const CommitHash = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/);
 
 const common = {

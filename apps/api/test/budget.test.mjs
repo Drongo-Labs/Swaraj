@@ -155,7 +155,7 @@ test("replay of an ALLOWed payment → not charged twice", async () => {
 });
 
 test("approval granted after the budget is used up → BLOCK", async () => {
-  const { app, submit, decide } = await harness({ approvalOver: "80" });
+  const { app, base, submit, decide } = await harness({ approvalOver: "80" });
   try {
     const paused = await submit(payment("90"));
     assert.equal(paused.decision, "NEEDS_APPROVAL");
@@ -163,6 +163,27 @@ test("approval granted after the budget is used up → BLOCK", async () => {
     const decided = await decide(paused.approvalId, "APPROVE");
     assert.equal(decided.decision, "BLOCK");
     assert.equal(decided.mandate?.reason, "BUDGET_EXCEEDED");
+    // Must not leave the approval as APPROVED when the payment cannot run.
+    const stored = await app.inject({
+      method: "GET",
+      url: `${base}/approvals/${paused.approvalId}`,
+      headers: agent,
+    });
+    if (stored.statusCode === 200) {
+      assert.equal(stored.json().status, "BUDGET_EXCEEDED");
+    }
+  } finally {
+    await app.close();
+  }
+});
+
+test("no database: settler never runs (retries cannot double-send)", async () => {
+  const { app, submit, calls } = await harness();
+  try {
+    const key = `budget-nosettle-${randomUUID()}`;
+    assert.equal((await submit(payment("40", { idempotencyKey: key }))).decision, "ALLOW");
+    assert.equal((await submit(payment("40", { idempotencyKey: key }))).decision, "ALLOW");
+    assert.equal(calls.length, 0);
   } finally {
     await app.close();
   }
@@ -185,12 +206,12 @@ test("mandate with no budgets → behavior unchanged", async () => {
   const { app, submit, calls } = await harness({ budgets: null });
   try {
     // Under the approval threshold so PERMIT applies; no budget to stop large spends.
+    // No-database mode still does not settle (same as main).
     const ok = await submit(payment("50"));
     assert.equal(ok.decision, "ALLOW");
-    assert.equal(calls.length, 1);
     const again = await submit(payment("70"));
     assert.equal(again.decision, "ALLOW");
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, 0);
   } finally {
     await app.close();
   }
