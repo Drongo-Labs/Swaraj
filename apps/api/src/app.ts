@@ -26,7 +26,7 @@ import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMan
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
 import type { ActionSettler, Settlement } from "@swaraj/capability";
 import { createNearSettler } from "@swaraj/near";
-import { bundleDigest } from "@swaraj/verify";
+import { bundleDigest, permitDigest, type Permit } from "@swaraj/verify";
 import {
   githubDeploymentMatches,
   githubReceiptId,
@@ -669,6 +669,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
 
   const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || undefined;
   const githubSecret = process.env.GITHUB_WEBHOOK_SECRET?.trim() || undefined;
+  const PERMIT_TTL_MS = 5 * 60_000;
   const pendingJobKey = (receiptId: string) => `pending_job_${receiptId}`;
   /** Which provider's signed record settles this action; undefined when none is configured. */
   const signedRecordProvider = (action: UnifiedAction): "stripe" | "github" | undefined => {
@@ -695,6 +696,27 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     const at = Math.floor(Date.now() / 1000);
     const intentHash = unifiedActionHash(action);
     const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+    /** Proof-carrying request: a counterparty accepts this action only with this signed permit. */
+    const issuePermit = async (receiptId?: string): Promise<Permit> => {
+      const unsigned = {
+        applicationId,
+        intentHash,
+        mandateHash: policyHash,
+        decision: "ALLOW" as const,
+        matchedRuleIds,
+        ...(approvedBy !== undefined ? { approvedBy } : {}),
+        ...(receiptId !== undefined ? { receiptId } : {}),
+        // The agent picks the action's expiry, so the permit's lifetime is capped.
+        expiresAt: Math.min(action.expiry, Date.now() + PERMIT_TTL_MS),
+      };
+      return {
+        version: "swaraj/permit/v1",
+        ...unsigned,
+        action: wireAction,
+        issuer: signer.address,
+        signature: await signer.signDigest(permitDigest(unsigned)),
+      };
+    };
     // Permitted non-Base actions: durable
     // PENDING receipt + optional mandate proof job (pool mode). Fixture
     // execution adapters live in @swaraj/capability / @swaraj/evidence.
@@ -718,6 +740,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             policyHash,
             receipt: { id: replay.receiptId, state: replay.state },
             receiptId: replay.receiptId,
+            permit: await issuePermit(replay.receiptId),
           });
         }
         const receiptId = randomUUID();
@@ -848,6 +871,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       policyHash,
       activityId: activity.id,
       ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
+      permit: await issuePermit(proofReceipt?.id),
       ...(settlement
         ? {
             execution: {

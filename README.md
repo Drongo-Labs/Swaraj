@@ -22,6 +22,7 @@ below runs on **NEAR testnet**; mainnet is untested.
 | **Record** | Every decision, receipt and idempotency claim is stored in Postgres. A database trigger makes illegal receipt moves (like PROVED → PENDING) impossible, even from raw SQL |
 | **Prove** | A worker re-derives each decision, proves it with an SP1 Groth16 proof, and settles the receipt on NEAR, where a contract verifies the proof with NEAR's `alt_bn128` host functions |
 | **Check** | `swaraj-verify` checks a signed receipt bundle with no Swaraj service, including the NEAR transaction behind it |
+| **Proof-carrying requests** | Every ALLOW returns a signed `permit` for that exact action, valid for at most 5 minutes. A counterparty that runs the action itself (an API, a merchant, a tool server) calls `checkPermit` from `@swaraj/verify`, or mounts the `requirePermit` Express middleware with the permit in the `swaraj-permit` header, and refuses any request whose permit is missing, forged, expired, already used, or for a different action. A request that skipped the gateway has no permit, so it is refused |
 | **Formal guarantees** | The decision rules are proved in Lean 4 (default deny, forbid always wins, approvals never widen a mandate) |
 
 ## How it uses NEAR
