@@ -76,3 +76,27 @@ test("z3 cross-check: bool params, resource.service, typed params, window and su
     assert.ok(agree, `${action.intentId}: engine ${decision.decision}, z3 ${z3}`);
   }
 });
+
+test("provenance.untrusted: held for approval only when labeled untrusted; both engines agree", async () => {
+  const mandate = parseAgentMandate({
+    mandateId: "m_provenance", version: 1, agent: "*", defaultEffect: "DENY", ...mandateWindow,
+    rules: [
+      { ruleId: "a_tainted_pay", effect: "REQUIRE_APPROVAL", action: "PAYMENT", predicates: [{ field: "provenance.untrusted", operator: "EQ", value: true }] },
+      { ruleId: "p_pay", effect: "PERMIT", action: "PAYMENT", predicates: [] },
+    ],
+  });
+  const wire = payment("pv", "1", "ETH", "0x82b2cce9a52c7e56838a5c46833067f9eb006911");
+  const cases = [
+    [{ ...wire, provenance: { untrusted: true } }, "NEEDS_APPROVAL", "BLOCK"],
+    [{ ...wire, provenance: { untrusted: false } }, "ALLOW", "ALLOW"],
+    // Absent label: the rule does not match here; the API gate blocks it as MISSING_PROVENANCE.
+    [wire, "ALLOW", "ALLOW"],
+  ];
+  for (const [input, expected, z3Expected] of cases) {
+    const action = parseUnifiedAction(input);
+    const { decision, z3, agree } = await crossCheckMandateDecision(mandate, action);
+    assert.equal(decision.decision, expected);
+    assert.equal(z3, z3Expected);
+    assert.ok(agree);
+  }
+});

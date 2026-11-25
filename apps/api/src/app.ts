@@ -26,7 +26,7 @@ import { crossCheckMandateDecision, diffMandates, evaluateParsedMandate, lintMan
 import { createAmountSolver, createPolicyGateway } from "@swaraj/smt";
 import type { ActionSettler, Settlement } from "@swaraj/capability";
 import { createNearSettler } from "@swaraj/near";
-import { bundleDigest } from "@swaraj/verify";
+import { bundleDigest, permitDigest, type Permit } from "@swaraj/verify";
 import {
   githubDeploymentMatches,
   githubReceiptId,
@@ -178,6 +178,7 @@ const OWNER_ROUTES = new Set([
   "POST /v1/applications/:applicationId/mandates",
   "POST /v1/applications/:applicationId/policies",
   "POST /v1/applications/:applicationId/program-certificates",
+  "POST /v1/applications/:applicationId/provenance/clear",
   "POST /v1/projects",
   "PUT /v1/projects/:slug/mandate",
   "POST /v1/projects/:slug/activate",
@@ -700,6 +701,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
 
   const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim() || undefined;
   const githubSecret = process.env.GITHUB_WEBHOOK_SECRET?.trim() || undefined;
+  const PERMIT_TTL_MS = 5 * 60_000;
   const pendingJobKey = (receiptId: string) => `pending_job_${receiptId}`;
   /** Which provider's signed record settles this action; undefined when none is configured. */
   const signedRecordProvider = (action: UnifiedAction): "stripe" | "github" | undefined => {
@@ -825,7 +827,12 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     );
   };
 
-  /** Persist BUDGET_EXCEEDED like other mandate blocks (decision receipt + durable receipt when DB is on). */
+  /**
+   * Persist BUDGET_EXCEEDED as a signed decision receipt + decision log.
+   * Do not insert a mandate receipt or claim the idempotency key: a budget block
+   * comes from stored spend, not mandate rules, and claiming the key would make
+   * a retry look like an ALLOW replay (and hand out a permit).
+   */
   const replyBudgetBlock = async (ctx: {
     applicationId: string;
     action: UnifiedAction;
@@ -836,12 +843,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     at: number;
     reply: FastifyReply;
     log: { error: (message: unknown) => void };
-    wireAction?: unknown;
   }) => {
     const { applicationId, action, mandateDefinition, budgetBlock, intentHash, policyHash, at, reply, log } = ctx;
-    const wireAction =
-      ctx.wireAction ??
-      JSON.parse(JSON.stringify(action, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
     const block = {
       decision: "BLOCK" as const,
       violations: budgetBlock.violations,
@@ -862,52 +865,23 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       log.error(error);
       return { status: "NON_PROVABLE" as const, reasonCode: "NOT_RECORDED" };
     });
-    let blockProofReceipt: { id: string; state: string } | undefined;
     if (pool) {
       const handle = { raw: pool, close: async () => {} };
       try {
-        const replay = await findReceiptByIdempotencyKey(handle, applicationId, action.idempotencyKey);
-        if (replay) {
-          blockProofReceipt = { id: replay.receiptId, state: replay.state };
-        } else {
-          await handle.raw.query(
-            "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
-            [applicationId],
-          );
-          const mandate = AgentMandateSchema.safeParse(mandateDefinition);
-          const logged = await insertDecision(handle, {
-            appId: applicationId,
-            intentDigest: intentHash,
-            policyId: MANDATE_POLICY_ID,
-            policyRevision: mandate.success ? mandate.data.version : 1,
-            outcome: "BLOCK",
-            violatedRules: ["BUDGET"],
-            smtScript: "",
-          });
-          const receiptId = randomUUID();
-          await insertReceipt(handle, {
-            receiptId,
-            appId: applicationId,
-            intentDigest: intentHash,
-            decisionId: Number(logged.decisionId),
-            claim: {
-              kind: "MANDATE_DECISION_V1",
-              action: wireAction,
-              decision: "BLOCK",
-              matchedRuleIds: ["BUDGET"],
-              intentHash,
-              mandateHash: policyHash,
-              budget: budgetBlock.violations[0]?.budget,
-            },
-          });
-          await claimIdempotencyKey(handle, {
-            appId: applicationId,
-            idemKey: action.idempotencyKey,
-            intentDigest: intentHash,
-            receiptId,
-          });
-          blockProofReceipt = { id: receiptId, state: "PENDING" };
-        }
+        await handle.raw.query(
+          "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
+          [applicationId],
+        );
+        const mandate = AgentMandateSchema.safeParse(mandateDefinition);
+        await insertDecision(handle, {
+          appId: applicationId,
+          intentDigest: intentHash,
+          policyId: MANDATE_POLICY_ID,
+          policyRevision: mandate.success ? mandate.data.version : 1,
+          outcome: "BLOCK",
+          violatedRules: ["BUDGET"],
+          smtScript: "",
+        });
       } catch (error) {
         log.error(error);
       }
@@ -925,7 +899,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       policyHash,
       productStatus,
       decisionReceipt: decisionReceipt as Record<string, unknown>,
-      ...(blockProofReceipt ? { receiptId: blockProofReceipt.id } : {}),
     };
     activityLog.push(activity);
     return reply.code(200).send({
@@ -937,7 +910,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       policyHash,
       decisionReceipt,
       activityId: activity.id,
-      ...(blockProofReceipt ? { receipt: blockProofReceipt, receiptId: blockProofReceipt.id } : {}),
     });
   };
 
@@ -959,6 +931,27 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     const at = Math.floor(Date.now() / 1000);
     const intentHash = unifiedActionHash(action);
     const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+    /** Proof-carrying request: a counterparty accepts this action only with this signed permit. */
+    const issuePermit = async (receiptId?: string): Promise<Permit> => {
+      const unsigned = {
+        applicationId,
+        intentHash,
+        mandateHash: policyHash,
+        decision: "ALLOW" as const,
+        matchedRuleIds,
+        ...(approvedBy !== undefined ? { approvedBy } : {}),
+        ...(receiptId !== undefined ? { receiptId } : {}),
+        // The agent picks the action's expiry, so the permit's lifetime is capped.
+        expiresAt: Math.min(action.expiry, Date.now() + PERMIT_TTL_MS),
+      };
+      return {
+        version: "swaraj/permit/v1",
+        ...unsigned,
+        action: wireAction,
+        issuer: signer.address,
+        signature: await signer.signDigest(permitDigest(unsigned)),
+      };
+    };
     // Permitted non-Base actions: durable
     // PENDING receipt + optional mandate proof job (pool mode). Fixture
     // execution adapters live in @swaraj/capability / @swaraj/evidence.
@@ -982,6 +975,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             policyHash,
             receipt: { id: replay.receiptId, state: replay.state },
             receiptId: replay.receiptId,
+            permit: await issuePermit(replay.receiptId),
           });
         }
         const receiptId = randomUUID();
@@ -1003,7 +997,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
             at,
             reply,
             log,
-            wireAction,
           });
         }
         // Log the decision (authz_decisions) — the receipt's decision_id
@@ -1146,6 +1139,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       policyHash,
       activityId: activity.id,
       ...(proofReceipt ? { receipt: proofReceipt, receiptId: proofReceipt.id } : {}),
+      permit: await issuePermit(proofReceipt?.id),
       ...(settlement
         ? {
             execution: {
@@ -1305,6 +1299,66 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     });
   });
 
+  // ponytail: taint is per application, not per agent, so an agent cannot dodge it by
+  // naming another agent id; a multi-agent app is over-tainted, which fails closed.
+  const PROVENANCE_ID = "provenance";
+  type ProvenanceRecord = { revision: number; untrusted: boolean; sources: string[]; since?: number };
+  const ProvenanceSourceSchema = z.strictObject({ source: z.string().regex(/^[A-Za-z0-9._:@/+-]{1,128}$/) });
+  const loadProvenance = async (applicationId: string): Promise<ProvenanceRecord> =>
+    ((await loadActivePolicy(applicationId, PROVENANCE_ID)) as ProvenanceRecord | undefined) ??
+    { revision: 0, untrusted: false, sources: [] };
+  const mandateReadsProvenance = (mandate: AgentMandate) =>
+    mandate.rules.some((rule) => rule.predicates.some((predicate) => predicate.field === "provenance.untrusted"));
+
+  app.get<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/provenance",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application_id" });
+      }
+      const { untrusted, sources, since } = await loadProvenance(request.params.applicationId);
+      return { untrusted, sources, ...(since !== undefined ? { since } : {}) };
+    },
+  );
+
+  /** Records that untrusted content reached the agent. Agent token is enough: it can only tighten. */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/provenance/untrusted",
+    async (request, reply) => {
+      const { applicationId } = request.params;
+      const body = ProvenanceSourceSchema.safeParse(request.body);
+      if (!Identifier.safeParse(applicationId).success || !body.success) {
+        return reply.code(400).send({ error: "invalid_provenance" });
+      }
+      const current = await loadProvenance(applicationId);
+      const sources = current.sources.includes(body.data.source)
+        ? current.sources
+        : [...current.sources, body.data.source].slice(-16);
+      if (current.untrusted && sources === current.sources) return reply.code(200).send({ untrusted: true, sources });
+      // ponytail: read-modify-write; a clear racing this write can drop the new taint. Add a row lock if that matters.
+      const revision = current.revision + 1;
+      await saveActiveDefinition(applicationId, PROVENANCE_ID, revision, {
+        revision,
+        untrusted: true,
+        sources,
+        since: current.since ?? Date.now(),
+      });
+      return reply.code(200).send({ untrusted: true, sources });
+    },
+  );
+
+  /** The owner vouches that the agent's context is clean again (e.g. a fresh session). */
+  app.post<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/provenance/clear",
+    async (request, reply) => {
+      const { applicationId } = request.params;
+      if (!Identifier.safeParse(applicationId).success) return reply.code(400).send({ error: "invalid_application_id" });
+      const revision = (await loadProvenance(applicationId)).revision + 1;
+      await saveActiveDefinition(applicationId, PROVENANCE_ID, revision, { revision, untrusted: false, sources: [] });
+      return reply.code(200).send({ untrusted: false, sources: [] });
+    },
+  );
+
   const CERTIFICATES_ID = "program_certificates";
   const loadCertificates = async (applicationId: string) => {
     const stored = (await loadActivePolicy(applicationId, CERTIFICATES_ID)) as
@@ -1330,7 +1384,13 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     applicationId: string,
     mandate: AgentMandate,
     action: UnifiedAction,
-  ): Promise<"INVALID_SIGNATURE" | "UNVERIFIED_PROGRAM" | undefined> => {
+  ): Promise<"INVALID_SIGNATURE" | "UNVERIFIED_PROGRAM" | "MISSING_PROVENANCE" | "PROVENANCE_MISMATCH" | undefined> => {
+    // Without a label, a provenance rule would silently not match: fail closed instead.
+    if (action.provenance === undefined && mandateReadsProvenance(mandate)) return "MISSING_PROVENANCE";
+    // Only a clean claim can loosen a decision, so only a clean claim is checked against the record.
+    if (action.provenance?.untrusted === false && (await loadProvenance(applicationId)).untrusted) {
+      return "PROVENANCE_MISMATCH";
+    }
     if (mandate.agentSigner !== undefined && !(await agentSignatureValid(action, mandate.agentSigner))) {
       return "INVALID_SIGNATURE";
     }
@@ -1464,7 +1524,6 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           at: Math.floor(Date.now() / 1000),
           reply,
           log: request.log,
-          wireAction: record.action,
         });
       }
       await close("APPROVED");

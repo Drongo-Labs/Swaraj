@@ -196,3 +196,46 @@ test("every action the gateway builds is a valid unified action, whatever the ar
   const spoof = toolCallAction(options, "t", { argsDigest: "spoof" }) as { context: { params: { argsDigest: string } } };
   assert.notEqual(spoof.context.params.argsDigest, "spoof");
 });
+
+test("after a tool result reaches the agent, a payment rule on untrusted input blocks every gateway of the app", async () => {
+  const clear = () => api.inject({ method: "POST", url: `/v1/applications/${applicationId}/provenance/clear`, headers: { authorization: `Bearer ${token}` } });
+  const now = Date.now();
+  const posted = await api.inject({
+    method: "POST",
+    url: `/v1/applications/${applicationId}/mandates`,
+    headers: { authorization: `Bearer ${token}` },
+    payload: {
+      mandateId: "mandate_gateway", version: 4, agent: "*", defaultEffect: "DENY", validFrom: now - 1000, validUntil: now + 3_600_000,
+      rules: [
+        { ruleId: "forbid_tainted_pay", effect: "FORBID", action: "APP_ACTION", predicates: [
+          { field: "resource.target", operator: "EQ", value: "send_payment" },
+          { field: "provenance.untrusted", operator: "EQ", value: true },
+        ] },
+        { ruleId: "permit_github", effect: "PERMIT", action: "APP_ACTION", predicates: [{ field: "resource.app", operator: "EQ", value: "github" }] },
+      ],
+    },
+  });
+  assert.equal(posted.statusCode, 201, posted.body);
+  const payments = startGateway(url, { SWARAJ_TRUSTED_TOOLS: "send_payment" });
+  const trusting = startGateway(url, { SWARAJ_TRUSTED_TOOLS: "read_file" });
+  try {
+    await clear();
+    assert.equal((await payments.call("send_payment", { amount: 5 })).result.isError, undefined);
+
+    // A trusted tool's result does not taint.
+    assert.equal((await trusting.call("read_file", { path: "a.md" })).result.isError, undefined);
+    assert.equal((await payments.call("send_payment", { amount: 5 })).result.isError, undefined);
+
+    // Outside content read through one gateway taints the payment gateway too.
+    assert.equal((await agent.call("read_file", { path: "tweet.txt" })).result.isError, undefined);
+    assert.match((await payments.call("send_payment", { amount: 5 })).result.content?.[0]?.text ?? "", /FORBID_MATCH/);
+
+    await clear();
+    assert.equal((await trusting.call("send_payment", { amount: 5 })).result.isError, undefined);
+  } finally {
+    await payments.close();
+    await trusting.close();
+    await clear();
+    await setMandate(5);
+  }
+});

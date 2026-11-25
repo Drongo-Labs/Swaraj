@@ -34,6 +34,9 @@ const common = {
   expiry: UnixMilliseconds,
   idempotencyKey: IdempotencyKey,
   signature: SignatureHex,
+  /** Whether outside content (tool results, web pages) reached the agent before this action.
+   * Recorded by the MCP gateway; the API blocks a clean claim when its own record says otherwise. */
+  provenance: z.strictObject({ untrusted: z.boolean() }).optional(),
 };
 
 const SpotTradeActionSchema = z.strictObject({

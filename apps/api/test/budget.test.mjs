@@ -56,7 +56,7 @@ async function harness(options = {}) {
   let clock = options.clockMs ?? Date.now();
   const app = await buildApp(token, {
     pipelineMode: "mock",
-    databaseUrl: "",
+    databaseUrl: options.databaseUrl ?? "",
     signer: new LocalKeySigner("0x" + "11".repeat(32)),
     approverToken,
     nowMs: () => clock,
@@ -169,13 +169,46 @@ test("approval granted after the budget is used up → BLOCK", async () => {
       url: `${base}/approvals/${paused.approvalId}`,
       headers: agent,
     });
-    if (stored.statusCode === 200) {
-      assert.equal(stored.json().status, "BUDGET_EXCEEDED");
-    }
+    assert.equal(stored.statusCode, 200);
+    assert.equal(stored.json().status, "BUDGET_EXCEEDED");
   } finally {
     await app.close();
   }
 });
+
+async function assertBlockedRetryStaysBlocked(submit) {
+  assert.equal((await submit(payment("100"))).decision, "ALLOW");
+  const key = `budget-block-retry-${randomUUID()}`;
+  const first = await submit(payment("100", { idempotencyKey: key }));
+  assert.equal(first.decision, "BLOCK");
+  assert.equal(first.permit, undefined);
+  const retry = await submit(payment("100", { idempotencyKey: key }));
+  assert.equal(retry.decision, "BLOCK", JSON.stringify(retry));
+  assert.equal(retry.mandate?.reason, "BUDGET_EXCEEDED");
+  assert.equal(retry.permit, undefined);
+}
+
+test("retried budget BLOCK stays BLOCK with no permit", async () => {
+  const { app, submit } = await harness();
+  try {
+    await assertBlockedRetryStaysBlocked(submit);
+  } finally {
+    await app.close();
+  }
+});
+
+test(
+  "Postgres: retried budget BLOCK stays BLOCK with no permit",
+  { skip: process.env.SWARAJ_TEST_DATABASE_URL ? false : "set SWARAJ_TEST_DATABASE_URL to a disposable database" },
+  async () => {
+    const { app, submit } = await harness({ databaseUrl: process.env.SWARAJ_TEST_DATABASE_URL });
+    try {
+      await assertBlockedRetryStaysBlocked(submit);
+    } finally {
+      await app.close();
+    }
+  },
+);
 
 test("no database: settler never runs (retries cannot double-send)", async () => {
   const { app, submit, calls } = await harness();

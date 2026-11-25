@@ -63,6 +63,7 @@ function actionBinding(action: UnifiedAction): Binding {
   put("agent", action.agent);
   put("timestamp", action.timestamp);
   put("expiry", action.expiry);
+  put("provenance.untrusted", action.provenance?.untrusted);
   const parts = { resource: action.resource as Record<string, unknown>, context: action.context as Record<string, unknown> };
   for (const field of ACTION_FIELDS[action.action]) {
     const [part, key] = field.split(".") as ["resource" | "context", string];
