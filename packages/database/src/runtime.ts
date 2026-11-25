@@ -187,6 +187,15 @@ export function createPostgresReservationStore(pool: pg.Pool) {
       );
       return BigInt(result.rows[0]?.total ?? "0");
     },
+    async sumCommittedSince(applicationId: string, accountRef: string, since: number): Promise<bigint> {
+      const result = await pool.query<{ total: string }>(
+        `SELECT COALESCE(sum(amount), 0)::text AS total FROM runtime_reservations
+         WHERE application_id=$1 AND account_ref=$2 AND status='COMMITTED'
+           AND updated_at >= to_timestamp($3)`,
+        [applicationId, accountRef, since],
+      );
+      return BigInt(result.rows[0]?.total ?? "0");
+    },
   };
 }
 

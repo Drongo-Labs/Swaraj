@@ -19,6 +19,8 @@ export type ReservationStore = {
   put(reservation: Reservation): Promise<void>;
   update(reservation: Reservation): Promise<void>;
   sumHeld(applicationId: string, accountRef: string): Promise<bigint>;
+  /** Sum of COMMITTED amounts whose commit time (`updatedAt`) is >= `since` (unix seconds). */
+  sumCommittedSince(applicationId: string, accountRef: string, since: number): Promise<bigint>;
 };
 
 export function createMemoryCapabilityStore(): CapabilityStore {
@@ -73,6 +75,20 @@ export function createMemoryReservationStore(): ReservationStore {
       let total = 0n;
       for (const row of byId.values()) {
         if (row.applicationId === applicationId && row.accountRef === accountRef && row.status === "HELD") {
+          total += BigInt(row.amount);
+        }
+      }
+      return total;
+    },
+    async sumCommittedSince(applicationId, accountRef, since) {
+      let total = 0n;
+      for (const row of byId.values()) {
+        if (
+          row.applicationId === applicationId &&
+          row.accountRef === accountRef &&
+          row.status === "COMMITTED" &&
+          row.updatedAt >= since
+        ) {
           total += BigInt(row.amount);
         }
       }

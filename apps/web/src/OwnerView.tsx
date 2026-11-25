@@ -42,15 +42,34 @@ type Props = {
   apiOk: boolean;
 };
 
+type BudgetUsage = {
+  budgetId: string;
+  action: string;
+  currency: string;
+  window: string;
+  limit: string;
+  used: string;
+  remaining: string;
+  resetsAt: string;
+};
+
 export function OwnerView({ policy, onPolicySaved, apiOk }: Props) {
   const [form, setForm] = useState<OwnerForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [budgets, setBudgets] = useState<BudgetUsage[]>([]);
 
   useEffect(() => {
     if (policy) setForm(formFromPolicy(policy));
   }, [policy]);
+
+  useEffect(() => {
+    if (!apiOk) return;
+    void api<{ budgets: BudgetUsage[] }>(`/v1/applications/${APP_ID}/budgets`)
+      .then((res) => setBudgets(res.budgets ?? []))
+      .catch(() => setBudgets([]));
+  }, [apiOk, policy]);
 
   async function activate() {
     if (!policy || !form) return;
@@ -140,6 +159,19 @@ export function OwnerView({ policy, onPolicySaved, apiOk }: Props) {
               {String((policy.definition.allowedVenues as string[] | undefined)?.join(", ") ?? "—")}
             </strong>
           </div>
+          {budgets.length > 0 ? (
+            <div className="span-2">
+              <span className="label">Mandate budgets</span>
+              <strong className="mono small">
+                {budgets
+                  .map(
+                    (b) =>
+                      `${b.budgetId}: ${b.used}/${b.limit} ${b.currency} ${b.window.toLowerCase()} (resets ${b.resetsAt})`,
+                  )
+                  .join(" · ")}
+              </strong>
+            </div>
+          ) : null}
         </div>
       </section>
 

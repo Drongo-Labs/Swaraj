@@ -45,6 +45,40 @@ test("issues capability only within budget and is idempotent", async () => {
   );
 });
 
+test("sumCommittedSince counts only COMMITTED reservations in the window", async () => {
+  const reservations = createMemoryReservationStore();
+  const svc = createCapabilityService({
+    capabilities: createMemoryCapabilityStore(),
+    reservations,
+  });
+  const signer = new LocalKeySigner(KEY);
+  const accountRef = HASH("a");
+  const base = {
+    applicationId: "app_demo",
+    policyHash: HASH(2),
+    accountRef,
+    budgetLimit: "100",
+    usedBudget: "0",
+    now: 1_000,
+  };
+  const a = await svc.issue({ ...base, intentHash: HASH(1), idempotencyKey: "c1", amount: "40" }, signer);
+  const b = await svc.issue({ ...base, intentHash: HASH(2), idempotencyKey: "c2", amount: "30" }, signer);
+  await svc.commitReservation(a.token.capabilityId);
+  await svc.commitReservation(b.token.capabilityId);
+  assert.equal(await reservations.sumCommittedSince("app_demo", accountRef, 0), 70n);
+  const future = Math.floor(Date.now() / 1000) + 60;
+  assert.equal(await reservations.sumCommittedSince("app_demo", accountRef, future), 0n);
+  // usedBudget from sumCommittedSince + new amount must not exceed the cap
+  await assert.rejects(
+    () =>
+      svc.issue(
+        { ...base, intentHash: HASH(3), idempotencyKey: "c3", amount: "50", usedBudget: "70" },
+        signer,
+      ),
+    /budget reservation/,
+  );
+});
+
 test("rejects replayed, expired, altered, and wrong-account capabilities", async () => {
   const svc = service();
   const signer = new LocalKeySigner(KEY);

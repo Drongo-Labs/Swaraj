@@ -51,6 +51,11 @@ import {
   ensureApplication,
   getActivePolicy,
   upsertActivePolicy,
+  budgetResetsAt,
+  budgetWindowStart,
+  createMemoryBudgetSpendStore,
+  createPostgresBudgetSpendStore,
+  type BudgetSpendStore,
 } from "@swaraj/database";
 import type { Pool } from "pg";
 import { buildTradeProofBundle } from "@swaraj/proofs/proof-bundles";
@@ -102,7 +107,7 @@ export type ActivityItem = {
   approvalId?: string;
   intentHash?: string;
   policyHash?: string;
-  violations?: Array<{ ruleId: string; reason: string }>;
+  violations?: Array<{ ruleId: string; reason: string; budget?: Record<string, string> }>;
   receiptId?: string;
   capabilityId?: string;
   status?: string;
@@ -126,6 +131,10 @@ export type BuildAppOptions = {
   proofJobs?: Pick<ReturnType<typeof createProofJobQueue>, "getByReceipt">;
   /** Bearer token for approval decisions; defaults to SWARAJ_APPROVER_TOKEN. */
   approverToken?: string;
+  /** Max wait for a human decision before PENDING → EXPIRED (fail-closed BLOCK). */
+  approvalSlaMs?: number;
+  /** Injected clock (ms) for budget window tests. Defaults to Date.now. */
+  nowMs?: () => number;
   /** The integration that executes permitted actions. Defaults to NEAR. */
   settler?: ActionSettler<UnifiedAction>;
 };
@@ -141,15 +150,25 @@ type StoredPolicy = {
 
 type ApprovalRecord = {
   approvalId: string;
-  status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "STALE";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED" | "STALE" | "BUDGET_EXCEEDED";
   revision: number;
   action: unknown;
   mandateHash: string;
   matchedRuleIds: string[];
   requestedAt: number;
+  /** Fail-closed SLA deadline: min(action.expiry, requestedAt + approvalSlaMs). */
+  expiresAt: number;
   decidedBy?: string;
   decidedAt?: number;
 };
+
+type BudgetBlockResult = {
+  violations: Array<{ ruleId: string; reason: string; budget?: Record<string, string> }>;
+  mandateReason: string;
+};
+
+/** Default 15m. Override with SWARAJ_APPROVAL_SLA_MS or BuildAppOptions.approvalSlaMs. */
+const DEFAULT_APPROVAL_SLA_MS = 15 * 60 * 1000;
 
 const APPROVAL_DECISION_ROUTE = "/v1/applications/:applicationId/approvals/:approvalId/decision";
 /** Routes that change what the agent may do. Once an approver token is set
@@ -189,6 +208,14 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   }
   if (approverToken === token) throw new Error("SWARAJ_APPROVER_TOKEN must differ from SWARAJ_DEV_TOKEN");
   const approverExpected = approverToken ? Buffer.from(`Bearer ${approverToken}`) : undefined;
+  const approvalSlaMs = (() => {
+    if (typeof options.approvalSlaMs === "number" && Number.isFinite(options.approvalSlaMs) && options.approvalSlaMs > 0) {
+      return Math.floor(options.approvalSlaMs);
+    }
+    const fromEnv = Number(process.env.SWARAJ_APPROVAL_SLA_MS);
+    if (Number.isFinite(fromEnv) && fromEnv > 0) return Math.floor(fromEnv);
+    return DEFAULT_APPROVAL_SLA_MS;
+  })();
 
   let pool: Pool | undefined;
   let proofJobs = options.proofJobs;
@@ -227,7 +254,11 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const mandateGateway = createMandatePolicyGate({ base: policyGateway, signer });
   const receipts = createReceiptEngine(receiptStore);
   const stack = createPipelineStack(pipelineMode, pool);
-  const { evidence, capabilities, execution, labels } = stack;
+  const { evidence, capabilities, execution, labels, reservations } = stack;
+  const budgetSpends: BudgetSpendStore = pool
+    ? createPostgresBudgetSpendStore(pool)
+    : createMemoryBudgetSpendStore();
+  const nowMs = options.nowMs ?? (() => Date.now());
   const settler = options.settler ?? createNearSettler(capabilities, signer);
   const liveState: LiveStateOracle | undefined =
     pipelineMode === "base"
@@ -290,6 +321,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     capabilities,
     execution,
     loadActivePolicy,
+    reservations,
     ...(liveState
       ? {
           requireLiveState: true as const,
@@ -678,6 +710,209 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
     return undefined;
   };
 
+  const matchingBudgets = (mandateDefinition: unknown, action: UnifiedAction) => {
+    if (action.action !== "PAYMENT" && action.action !== "REFUND") return [];
+    const mandate = AgentMandateSchema.safeParse(mandateDefinition);
+    const budgets = mandate.success ? mandate.data.budgets ?? [] : [];
+    return budgets.filter(
+      (budget) => budget.action === action.action && budget.currency === action.context.currency,
+    );
+  };
+
+  /** Read-only: would this action cross a budget? Does not insert spend rows. */
+  const previewBudgetBlock = async (
+    applicationId: string,
+    action: UnifiedAction,
+    mandateDefinition: unknown,
+  ): Promise<BudgetBlockResult | undefined> => {
+    if (action.action !== "PAYMENT" && action.action !== "REFUND") return undefined;
+    const matching = matchingBudgets(mandateDefinition, action);
+    if (matching.length === 0) return undefined;
+    const amount = BigInt(action.context.amount.toString());
+    const clock = nowMs();
+    try {
+      for (const budget of matching) {
+        const windowStart = budgetWindowStart(budget.window, clock);
+        const used = await budgetSpends.sumUsed(applicationId, budget.budgetId, windowStart);
+        const limit = budget.limit;
+        if (used + amount > limit) {
+          const remaining = limit > used ? limit - used : 0n;
+          return {
+            mandateReason: "BUDGET_EXCEEDED",
+            violations: [
+              {
+                ruleId: "BUDGET",
+                reason: `BUDGET_EXCEEDED (${budget.budgetId})`,
+                budget: {
+                  budgetId: budget.budgetId,
+                  limit: limit.toString(),
+                  used: used.toString(),
+                  requested: amount.toString(),
+                  remaining: remaining.toString(),
+                  resetsAt: budgetResetsAt(budget.window, clock),
+                },
+              },
+            ],
+          };
+        }
+      }
+    } catch {
+      return {
+        mandateReason: "BUDGET_EXCEEDED",
+        violations: [{ ruleId: "BUDGET", reason: "BUDGET_EXCEEDED (unavailable)" }],
+      };
+    }
+    return undefined;
+  };
+
+  /** Charge matching mandate budgets fail-closed. Returns a BLOCK result, or undefined on success. */
+  const reserveBudgetsForAction = async (
+    applicationId: string,
+    action: UnifiedAction,
+    mandateDefinition: unknown,
+    receiptId: string,
+  ): Promise<BudgetBlockResult | undefined> => {
+    if (action.action !== "PAYMENT" && action.action !== "REFUND") return undefined;
+    const matching = matchingBudgets(mandateDefinition, action);
+    if (matching.length === 0) return undefined;
+    const amount = action.context.amount.toString();
+    const clock = nowMs();
+    try {
+      for (const budget of matching) {
+        const windowStart = budgetWindowStart(budget.window, clock);
+        const reserved = await budgetSpends.tryReserve({
+          receiptId: `${receiptId}:${budget.budgetId}`,
+          appId: applicationId,
+          budgetId: budget.budgetId,
+          amount,
+          limit: budget.limit.toString(),
+          windowStart,
+          createdAtMs: clock,
+        });
+        if (!reserved.ok) {
+          const resetsAt = budgetResetsAt(budget.window, clock);
+          return {
+            mandateReason: "BUDGET_EXCEEDED",
+            violations: [
+              {
+                ruleId: "BUDGET",
+                reason: `BUDGET_EXCEEDED (${budget.budgetId})`,
+                budget: {
+                  budgetId: budget.budgetId,
+                  limit: reserved.limit,
+                  used: reserved.used,
+                  requested: reserved.requested,
+                  remaining: reserved.remaining,
+                  resetsAt,
+                },
+              },
+            ],
+          };
+        }
+      }
+    } catch {
+      return {
+        mandateReason: "BUDGET_EXCEEDED",
+        violations: [{ ruleId: "BUDGET", reason: "BUDGET_EXCEEDED (unavailable)" }],
+      };
+    }
+    return undefined;
+  };
+
+  const releaseBudgetsForReceipt = async (receiptId: string, mandateDefinition: unknown) => {
+    const mandate = AgentMandateSchema.safeParse(mandateDefinition);
+    const budgets = mandate.success ? mandate.data.budgets ?? [] : [];
+    await Promise.all(
+      budgets.map((budget) => budgetSpends.release(`${receiptId}:${budget.budgetId}`).catch(() => undefined)),
+    );
+  };
+
+  /**
+   * Persist BUDGET_EXCEEDED as a signed decision receipt + decision log.
+   * Do not insert a mandate receipt or claim the idempotency key: a budget block
+   * comes from stored spend, not mandate rules, and claiming the key would make
+   * a retry look like an ALLOW replay (and hand out a permit).
+   */
+  const replyBudgetBlock = async (ctx: {
+    applicationId: string;
+    action: UnifiedAction;
+    mandateDefinition: unknown;
+    budgetBlock: BudgetBlockResult;
+    intentHash: string;
+    policyHash: string;
+    at: number;
+    reply: FastifyReply;
+    log: { error: (message: unknown) => void };
+  }) => {
+    const { applicationId, action, mandateDefinition, budgetBlock, intentHash, policyHash, at, reply, log } = ctx;
+    const block = {
+      decision: "BLOCK" as const,
+      violations: budgetBlock.violations,
+      intentHash,
+      policyHash,
+      solverStatus: "invalid" as const,
+      violatedRuleIds: [],
+      proveContext: {
+        intent: JSON.parse(JSON.stringify(action, (_k, v) => (typeof v === "bigint" ? v.toString() : v))) as Record<
+          string,
+          unknown
+        >,
+        policy: mandateDefinition as Record<string, unknown>,
+        state: {},
+      },
+    };
+    const decisionReceipt = await proofs.recordBlockDecision(applicationId, block).catch((error: unknown) => {
+      log.error(error);
+      return { status: "NON_PROVABLE" as const, reasonCode: "NOT_RECORDED" };
+    });
+    if (pool) {
+      const handle = { raw: pool, close: async () => {} };
+      try {
+        await handle.raw.query(
+          "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
+          [applicationId],
+        );
+        const mandate = AgentMandateSchema.safeParse(mandateDefinition);
+        await insertDecision(handle, {
+          appId: applicationId,
+          intentDigest: intentHash,
+          policyId: MANDATE_POLICY_ID,
+          policyRevision: mandate.success ? mandate.data.version : 1,
+          outcome: "BLOCK",
+          violatedRules: ["BUDGET"],
+          smtScript: "",
+        });
+      } catch (error) {
+        log.error(error);
+      }
+    }
+    const productStatus = productStatusFromDecision("BLOCK");
+    const activity: ActivityItem = {
+      id: `activity_${action.idempotencyKey}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64),
+      at,
+      applicationId,
+      action: action.action,
+      idempotencyKey: action.idempotencyKey,
+      decision: "BLOCK",
+      violations: budgetBlock.violations,
+      intentHash,
+      policyHash,
+      productStatus,
+      decisionReceipt: decisionReceipt as Record<string, unknown>,
+    };
+    activityLog.push(activity);
+    return reply.code(200).send({
+      decision: "BLOCK",
+      productStatus,
+      mandate: { reason: budgetBlock.mandateReason, matchedRuleIds: [] },
+      violations: budgetBlock.violations,
+      intentHash,
+      policyHash,
+      decisionReceipt,
+      activityId: activity.id,
+    });
+  };
+
   /** Records, executes and queues proof for an action cleared to run, automatically or by a person. */
   const settleAllowed = async (ctx: {
     applicationId: string;
@@ -750,6 +985,20 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           "INSERT INTO applications (app_id, display_name) VALUES ($1, $1) ON CONFLICT (app_id) DO NOTHING",
           [applicationId],
         );
+        const budgetBlock = await reserveBudgetsForAction(applicationId, action, mandateDefinition, receiptId);
+        if (budgetBlock) {
+          return replyBudgetBlock({
+            applicationId,
+            action,
+            mandateDefinition,
+            budgetBlock,
+            intentHash,
+            policyHash,
+            at,
+            reply,
+            log,
+          });
+        }
         // Log the decision (authz_decisions) — the receipt's decision_id
         // references it.
         const logged = await insertDecision(handle, {
@@ -784,6 +1033,7 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         });
         if (!claimed) {
           await advanceReceipt(handle, receiptId, "INVALIDATED", { note: "lost the idempotency race" });
+          await releaseBudgetsForReceipt(receiptId, mandateDefinition);
           return reply.code(409).send({ error: "idempotency_conflict" });
         }
         proofReceipt = { id: receiptId, state: "PENDING" };
@@ -841,6 +1091,24 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
         }
       } catch (error) {
         log.error(error);
+      }
+    } else {
+      // Demo / no-database: enforce budgets only. Never settle here — main has
+      // no idempotency ledger without a DB, so a retry would send money twice.
+      const receiptId = `mem_${createHash("sha256").update(`${applicationId}\0${action.idempotencyKey}`).digest("hex").slice(0, 32)}`;
+      const budgetBlock = await reserveBudgetsForAction(applicationId, action, mandateDefinition, receiptId);
+      if (budgetBlock) {
+        return replyBudgetBlock({
+          applicationId,
+          action,
+          mandateDefinition,
+          budgetBlock,
+          intentHash,
+          policyHash,
+          at,
+          reply,
+          log,
+        });
       }
     }
     const engineStatus: EngineReceiptStatus = proofReceipt
@@ -922,6 +1190,38 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
   const loadApproval = async (applicationId: string, approvalId: string) =>
     (await loadActivePolicy(applicationId, approvalKey(approvalId))) as ApprovalRecord | undefined;
 
+  /** Lazy fail-closed expiry: PENDING past expiresAt becomes EXPIRED (no hang forever). */
+  const materializeApprovalExpiry = async (
+    applicationId: string,
+    record: ApprovalRecord,
+  ): Promise<ApprovalRecord> => {
+    if (record.status !== "PENDING") return record;
+    const deadline =
+      typeof record.expiresAt === "number" && Number.isFinite(record.expiresAt)
+        ? record.expiresAt
+        : (() => {
+            try {
+              const action = UnifiedActionSchema.parse(record.action);
+              return Math.min(action.expiry, record.requestedAt + approvalSlaMs);
+            } catch {
+              return record.requestedAt + approvalSlaMs;
+            }
+          })();
+    if (Date.now() < deadline) {
+      return typeof record.expiresAt === "number" ? record : { ...record, expiresAt: deadline };
+    }
+    const expired: ApprovalRecord = {
+      ...record,
+      expiresAt: deadline,
+      status: "EXPIRED",
+      revision: record.revision + 1,
+      decidedBy: "system:approval_sla",
+      decidedAt: Date.now(),
+    };
+    await saveApproval(applicationId, expired);
+    return expired;
+  };
+
   app.get<{ Params: { applicationId: string; approvalId: string } }>(
     "/v1/applications/:applicationId/approvals/:approvalId",
     async (request, reply) => {
@@ -929,9 +1229,9 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(approvalId).success) {
         return reply.code(400).send({ error: "invalid_approval_id" });
       }
-      const record = await loadApproval(applicationId, approvalId);
-      if (!record) return reply.code(404).send({ error: "approval_not_found" });
-      return record;
+      const loaded = await loadApproval(applicationId, approvalId);
+      if (!loaded) return reply.code(404).send({ error: "approval_not_found" });
+      return materializeApprovalExpiry(applicationId, loaded);
     },
   );
 
@@ -1137,9 +1437,20 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       if (!Identifier.safeParse(applicationId).success || !Identifier.safeParse(approvalId).success || !body.success) {
         return reply.code(400).send({ error: "invalid_approval_decision" });
       }
-      const record = await loadApproval(applicationId, approvalId);
-      if (!record) return reply.code(404).send({ error: "approval_not_found" });
+      const loaded = await loadApproval(applicationId, approvalId);
+      if (!loaded) return reply.code(404).send({ error: "approval_not_found" });
+      const record = await materializeApprovalExpiry(applicationId, loaded);
       if (record.status !== "PENDING") {
+        if (record.status === "EXPIRED") {
+          return reply.code(409).send({
+            error: "approval_expired",
+            reason: "approval_sla_timeout",
+            status: "EXPIRED",
+            expiresAt: record.expiresAt,
+            decision: "BLOCK",
+            productStatus: "blocked",
+          });
+        }
         return reply.code(409).send({ error: "approval_already_decided", status: record.status });
       }
       const close = async (status: ApprovalRecord["status"]) => {
@@ -1157,9 +1468,16 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       }
 
       const action = UnifiedActionSchema.parse(record.action);
-      if (Date.now() >= action.expiry) {
+      if (Date.now() >= action.expiry || Date.now() >= record.expiresAt) {
         await close("EXPIRED");
-        return reply.code(409).send({ error: "approval_expired" });
+        return reply.code(409).send({
+          error: "approval_expired",
+          reason: Date.now() >= record.expiresAt ? "approval_sla_timeout" : "action_expiry",
+          status: "EXPIRED",
+          expiresAt: record.expiresAt,
+          decision: "BLOCK",
+          productStatus: "blocked",
+        });
       }
       // The approval covers the mandate it was requested under, never a later one.
       const mandateDefinition = await loadActivePolicy(applicationId, MANDATE_POLICY_ID);
@@ -1189,6 +1507,24 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       // ponytail: the Base pipeline re-gates on ALLOW only, so it cannot run an approved action yet.
       if (action.action === "SPOT_TRADE" && isBaseSpotVenue(action.resource.venue)) {
         return reply.code(409).send({ error: "approval_unsupported_for_venue" });
+      }
+      // Budget may have been spent while waiting; do not mark APPROVED if the payment cannot run.
+      const budgetBlock = await previewBudgetBlock(applicationId, action, mandateDefinition);
+      if (budgetBlock) {
+        await close("BUDGET_EXCEEDED");
+        const intentHash = unifiedActionHash(action);
+        const policyHash = hashObject(ObjectType.POLICY_PROFILE, mandateDefinition);
+        return replyBudgetBlock({
+          applicationId,
+          action,
+          mandateDefinition,
+          budgetBlock,
+          intentHash,
+          policyHash,
+          at: Math.floor(Date.now() / 1000),
+          reply,
+          log: request.log,
+        });
       }
       await close("APPROVED");
       return settleAllowed({
@@ -1277,6 +1613,43 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
       if (!definition) return reply.code(404).send({ error: "mandate_not_found" });
       const { policyHash, ...rest } = definition as { policyHash?: string };
       return { mandate: rest, policyHash };
+    },
+  );
+
+  /** Read-only budget usage for the active mandate (used / remaining / resetsAt). */
+  app.get<{ Params: { applicationId: string } }>(
+    "/v1/applications/:applicationId/budgets",
+    async (request, reply) => {
+      if (!Identifier.safeParse(request.params.applicationId).success) {
+        return reply.code(400).send({ error: "invalid_application" });
+      }
+      const definition = await loadActivePolicy(request.params.applicationId, MANDATE_POLICY_ID);
+      const mandate = AgentMandateSchema.safeParse(definition);
+      if (!mandate.success) return reply.code(404).send({ error: "mandate_not_found" });
+      const clock = nowMs();
+      const budgets = [];
+      for (const budget of mandate.data.budgets ?? []) {
+        const windowStart = budgetWindowStart(budget.window, clock);
+        let used = 0n;
+        try {
+          used = await budgetSpends.sumUsed(request.params.applicationId, budget.budgetId, windowStart);
+        } catch {
+          return reply.code(503).send({ error: "budget_unavailable" });
+        }
+        const limit = budget.limit;
+        const remaining = limit > used ? limit - used : 0n;
+        budgets.push({
+          budgetId: budget.budgetId,
+          action: budget.action,
+          currency: budget.currency,
+          window: budget.window,
+          limit: limit.toString(),
+          used: used.toString(),
+          remaining: remaining.toString(),
+          resetsAt: budgetResetsAt(budget.window, clock),
+        });
+      }
+      return { budgets };
     },
   );
 
@@ -1374,7 +1747,22 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
 
       if (evaluated.decision === "NEEDS_APPROVAL") {
         const approvalId = `appr_${intentHash.slice(2, 34)}`;
-        const existing = await loadApproval(applicationId, approvalId);
+        const existingRaw = await loadApproval(applicationId, approvalId);
+        const existing = existingRaw
+          ? await materializeApprovalExpiry(applicationId, existingRaw)
+          : undefined;
+        if (existing?.status === "EXPIRED") {
+          return reply.code(409).send({
+            error: "approval_expired",
+            reason: "approval_sla_timeout",
+            status: "EXPIRED",
+            approvalId,
+            expiresAt: existing.expiresAt,
+            decision: "BLOCK",
+            productStatus: "blocked",
+          });
+        }
+        const requestedAt = Date.now();
         const record: ApprovalRecord = existing ?? {
           approvalId,
           status: "PENDING",
@@ -1382,7 +1770,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           action: (request.body as { action?: unknown })?.action,
           mandateHash: policyHash,
           matchedRuleIds: evaluated.matchedRuleIds,
-          requestedAt: Date.now(),
+          requestedAt,
+          expiresAt: Math.min(action.expiry, requestedAt + approvalSlaMs),
         };
         if (!existing) await saveApproval(applicationId, record);
         const productStatus = productStatusFromDecision("NEEDS_APPROVAL");
@@ -1406,6 +1795,8 @@ export async function buildApp(token: string, options: BuildAppOptions = {}) {
           policyHash,
           approvalId,
           approvalStatus: record.status,
+          expiresAt: record.expiresAt,
+          approvalSlaMs,
         });
       }
 
