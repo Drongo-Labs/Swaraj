@@ -1,0 +1,55 @@
+name: Publish @swaraj/sdk to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: 'npm tag (e.g. latest, beta)'
+        required: true
+        default: 'latest'
+  push:
+    tags:
+      - 'v*'
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build monorepo
+        run: pnpm build
+
+      - name: Typecheck monorepo
+        run: pnpm typecheck
+
+      - name: Verify SDK packaging
+        run: |
+          pnpm dlx publint packages/sdk
+          pnpm dlx @arethetypeswrong/cli --pack packages/sdk
+
+      - name: Publish @swaraj/sdk
+        run: |
+          TAG="${{ github.event.inputs.publish_tag || 'latest' }}"
+          pnpm --filter @swaraj/sdk publish --access public --no-git-checks --tag "$TAG"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

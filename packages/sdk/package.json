@@ -1,21 +1,65 @@
 {
   "name": "@swaraj/sdk",
   "version": "0.0.0",
-  "description": "Prototype TypeScript client for the Swaraj verification service",
+  "description": "TypeScript client for the Swaraj verification service",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "license": "MIT",
+  "author": "Drongo Labs",
+  "homepage": "https://github.com/Drongo-Labs/Swaraj/tree/main/packages/sdk#readme",
+  "bugs": {
+    "url": "https://github.com/Drongo-Labs/Swaraj/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Drongo-Labs/Swaraj.git",
+    "directory": "packages/sdk"
+  },
+  "keywords": [
+    "swaraj",
+    "sdk",
+    "verification",
+    "zk",
+    "permits"
+  ],
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test test/*.test.mjs",
     "prepack": "pnpm build"
   },
-  "dependencies": { "@swaraj/contracts": "workspace:*", "zod": "^4.1.0" }
+  "dependencies": {
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@swaraj/contracts": "workspace:*",
+    "tsup": "^9.0.0"
+  }
 }

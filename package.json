@@ -30,9 +30,13 @@
     "execute:sp1": "pnpm --filter @swaraj/proofs execute:sp1",
     "prove:sp1": "pnpm --filter @swaraj/proofs prove:sp1",
     "proofs:worker": "pnpm --filter @swaraj/proofs worker:once",
-    "check:contracts": "cargo test --manifest-path contracts/Cargo.toml"
+    "check:contracts": "cargo test --manifest-path contracts/Cargo.toml",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
     "@types/node": "^22.19.0",
     "typescript": "^5.9.3"
   }

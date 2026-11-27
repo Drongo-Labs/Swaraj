@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@swaraj/api",
+    "@swaraj/contracts",
+    "@swaraj/example",
+    "@swaraj/mcp",
+    "@swaraj/web",
+    "swaraj-zolo",
+    "swaraj-zunno",
+    "@swaraj/near",
+    "@swaraj/agent",
+    "@swaraj/capability",
+    "@swaraj/crypto",
+    "@swaraj/database",
+    "@swaraj/evidence",
+    "@swaraj/lean",
+    "@swaraj/proofs",
+    "@swaraj/receipts",
+    "@swaraj/rules",
+    "@swaraj/schemas",
+    "@swaraj/smt",
+    "@swaraj/verify"
+  ]
+}

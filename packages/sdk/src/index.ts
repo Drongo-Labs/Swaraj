@@ -5,13 +5,12 @@ import {
   ActionResultSchema as actionResult,
   ReceiptSchema as receipt,
   PolicyRecordSchema as policyRecord,
-  type ActionRequest,
-  type ActionResult,
-  type Receipt,
-  type PolicyRecord,
 } from "@swaraj/contracts";
 
-export type { ActionRequest, ActionResult, Receipt, PolicyRecord } from "@swaraj/contracts";
+export type ActionRequest = z.infer<typeof actionRequest>;
+export type ActionResult = z.infer<typeof actionResult>;
+export type Receipt = z.infer<typeof receipt>;
+export type PolicyRecord = z.infer<typeof policyRecord>;
 
 /** Signed ALLOW permit from the gateway. Counterparties verify with `checkPermit` from `@swaraj/verify`. */
 export type Permit = {
